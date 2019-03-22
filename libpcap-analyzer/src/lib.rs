@@ -13,6 +13,7 @@ extern crate rand;
 
 mod pcapng_extra;
 
+mod duration;
 mod five_tuple;
 mod flow;
 mod packet_data;

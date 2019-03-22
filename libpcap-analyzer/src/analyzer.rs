@@ -28,6 +28,8 @@ use crate::packet_data::PacketData;
 
 use crate::plugins::Plugins;
 
+use crate::duration::Duration;
+
 enum PcapType {
     // Unknown,
     Pcap,
@@ -37,6 +39,10 @@ enum PcapType {
 struct ParseContext {
     if_info: InterfaceInfo,
     link_type: Linktype,
+
+    pcap_index: usize,
+
+    first_packet_ts: Duration,
 }
 
 pub struct Analyzer<'a> {
@@ -67,7 +73,9 @@ impl<'a> Analyzer<'a> {
 
         let mut context = ParseContext{
             if_info: InterfaceInfo::new(),
-            link_type: Linktype(0)
+            link_type: Linktype(0),
+            pcap_index: 1,
+            first_packet_ts: Duration::new(0,0),
         };
 
         let (length,in_pcap_type) = {
@@ -84,7 +92,6 @@ impl<'a> Analyzer<'a> {
         // println!("consumed {} bytes", length);
         b.consume(length);
 
-        let mut block_count = 1usize;
         let mut consumed = length;
         let mut last_incomplete_offset = 0;
 
@@ -105,12 +112,15 @@ impl<'a> Analyzer<'a> {
                     // read block
                     match get_next_packet(b.data(), &mut context) {
                         Ok((remaining,opt_packet)) => {
-                            block_count += 1;
-                            // eprintln!("parse_block ok, count {}", block_count);
+                            // eprintln!("parse_block ok, index {}", pcap_index);
                             // println!("parsed packet: {:?}", packet);
 
                             if let Some(packet) = opt_packet {
+                                if context.pcap_index == 1 {
+                                    context.first_packet_ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
+                                }
                                 self.handle_packet(&packet, &context);
+                                context.pcap_index += 1;
                             }
 
                             b.data().offset(remaining)
@@ -172,8 +182,6 @@ impl<'a> Analyzer<'a> {
 
         // XXX expire remaining flows
 
-        let _ = block_count;
-
         self.plugins.list.values_mut().for_each(|plugin| plugin.post_process());
 
         Ok(())
@@ -186,17 +194,17 @@ impl<'a> Analyzer<'a> {
         match ctx.link_type {
             Linktype::NULL => {
                 // XXX read first u32 in *host order*: 2 if IPv4, etc.
-                self.handle_l3(&packet, &packet.data[4..], EtherTypes::Ipv4); // XXX overflow
+                self.handle_l3(&packet, &ctx, &packet.data[4..], EtherTypes::Ipv4); // XXX overflow
             }
             Linktype::RAW => {
                 // XXX may be IPv4 or IPv6, check IP header ...
-                self.handle_l3(&packet, &packet.data, EtherTypes::Ipv4);
+                self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4);
             }
             Linktype::ETHERNET => {
-                self.handle_l2(&packet);
+                self.handle_l2(&packet, &ctx);
             }
             Linktype(10) /* FDDI */ => {
-                self.handle_l3(&packet, &packet.data[21..], EtherTypes::Ipv4);
+                self.handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4);
             }
             Linktype::NFLOG => {
                 // first byte is family
@@ -212,14 +220,14 @@ impl<'a> Analyzer<'a> {
                     };
                     let data = pcap_parser::data::get_data_nflog(&packet);
                     // XXX could not be IPv4. We should look at address family
-                    self.handle_l3(&packet, &data, ethertype);
+                    self.handle_l3(&packet, &ctx, &data, ethertype);
                 }
             }
             l => warn!("Unsupported link type {}", l)
         }
     }
 
-    fn handle_l2(&mut self, packet: &pcap_parser::Packet) {
+    fn handle_l2(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) {
         info!("handle_l2");
 
         // resize slice to remove padding
@@ -237,13 +245,16 @@ impl<'a> Analyzer<'a> {
         }
 
         if packet.data.len() > 14 {
-            self.handle_l3(&packet, &data[14..], eth.get_ethertype());
+            self.handle_l3(&packet, &ctx, &data[14..], eth.get_ethertype());
         } // else XXX
     }
 
-    fn handle_l3(&mut self, packet: &pcap_parser::Packet, data: &[u8], ethertype: EtherType) {
-        info!("handle_l3");
+    fn handle_l3(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+        info!("handle_l3 (idx={})", ctx.pcap_index);
         debug!("    time  : {} / {}", packet.header.ts_sec, packet.header.ts_usec);
+        let ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
+        let rel_ts = ts - ctx.first_packet_ts; // an underflow is weird but not critical
+        debug!("    reltime  : {}.{}", rel_ts.secs, rel_ts.micros);
         if data.is_empty() { return; }
 
         for p in self.plugins.list.values_mut() {
