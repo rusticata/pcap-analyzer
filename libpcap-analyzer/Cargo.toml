@@ -1,0 +1,18 @@
+[package]
+name = "libpcap-analyzer"
+version = "0.1.0"
+authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
+edition = "2018"
+
+[dependencies]
+circular = "0.2"
+env_logger = "0.6"
+lazy_static = "1.2"
+log = "0.4"
+nom = "4.2"
+pnet = "0.22.0"
+rand="0.6"
+
+[dependencies.pcap-parser]
+version = "0.4"
+features = ["data"]

@@ -1,0 +1,5 @@
+[workspace]
+members = [
+  "libpcap-analyzer",
+  "pcap-analyzer",
+]
