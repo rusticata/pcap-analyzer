@@ -257,6 +257,19 @@ impl<'a> Analyzer<'a> {
         debug!("    reltime  : {}.{}", rel_ts.secs, rel_ts.micros);
         if data.is_empty() { return; }
 
+        // remove padding
+        let data = match ethertype {
+            EtherTypes::Ipv4 => {
+                let ipv4 = &Ipv4Packet::new(data).expect("IPv4"); // XXX
+                if (ipv4.get_total_length() as usize) < data.len() {
+                    &data[..ipv4.get_total_length() as usize]
+                } else {
+                    data
+                }
+            }
+            _ => data
+        };
+
         for p in self.plugins.list.values_mut() {
             let _ = p.handle_l3(data, ethertype.0);
         }
