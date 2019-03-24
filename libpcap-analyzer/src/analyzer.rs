@@ -180,7 +180,15 @@ impl<'a> Analyzer<'a> {
             }
         }
 
-        // XXX expire remaining flows
+        // expire remaining flows
+        debug!("{} flows remaining in table", self.flows.len());
+        for f in self.flows.values() {
+            for p in self.plugins.list.values_mut() {
+                p.flow_terminate(&f);
+            }
+        }
+        self.flows.clear();
+        self.flows_id.clear();
 
         self.plugins.list.values_mut().for_each(|plugin| plugin.post_process());
 
