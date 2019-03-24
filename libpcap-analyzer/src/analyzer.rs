@@ -119,6 +119,7 @@ impl<'a> Analyzer<'a> {
                                 if context.pcap_index == 1 {
                                     context.first_packet_ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
                                 }
+                                debug!("**************************************************************");
                                 self.handle_packet(&packet, &context);
                                 context.pcap_index += 1;
                             }
