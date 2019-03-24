@@ -1,7 +1,9 @@
 use super::{Plugin,PluginBuilder};
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
-use crate::flow::Flow;
+use crate::flow::{FlowID,Flow};
+
+use std::collections::HashMap;
 
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::tcp::TcpFlags;
@@ -37,9 +39,8 @@ struct TcpContext {
 
 #[derive(Default)]
 pub struct TcpStates {
-    // XXX will be a map indexed by flow_id
-    client_ctx: TcpContext,
-    server_ctx: TcpContext,
+    /// Client and Server states, indexed by flow ID
+    ctx_map: HashMap<FlowID,(TcpContext,TcpContext)>,
 }
 
 default_plugin_builder!(TcpStates, TcpStatesBuilder);
@@ -60,6 +61,8 @@ impl Plugin for TcpStates {
             }
         };
 
+        let e = self.ctx_map.entry(flow.flow_id).or_default();
+
         let tcp = TcpPacket::new(pdata.l3_data).expect("TcpPacket");
         let tcp_flags = tcp.get_flags();
         let seq = tcp.get_sequence();
@@ -68,14 +71,14 @@ impl Plugin for TcpStates {
         debug!("    Tcp flags: 0x{:x}", tcp_flags);
         debug!("    Tcp seq 0x{:x}", seq);
         debug!("    Tcp ack 0x{:x}", ack);
-        debug!("    Tcp state(before) direct {:?} / rev {:?}", self.client_ctx.state, self.server_ctx.state);
+        debug!("    Tcp state(before) direct {:?} / rev {:?}", e.0.state, e.1.state);
 
         // XXX store tcp state, last seq & ack values for client and server, key flowid
 
         let (mut conn, mut rev_conn) = if pdata.to_server {
-            (&mut self.client_ctx, &mut self.server_ctx)
+            (&mut e.0, &mut e.1)
         } else {
-            (&mut self.server_ctx, &mut self.client_ctx)
+            (&mut e.1, &mut e.0)
         };
         debug!("    Tcp rel seq {}", seq.wrapping_sub(conn.syn_seq));
         debug!("    Tcp rel ack {}", ack.wrapping_sub(rev_conn.syn_seq));
@@ -185,7 +188,8 @@ debug!("SYN");
     }
 
     fn flow_terminate(&mut self, flow: &Flow) {
-        info!("flow_terminate id={}", flow.flow_id);
+        debug!("flow_terminate id={}", flow.flow_id);
+        self.ctx_map.remove(&flow.flow_id);
     }
 
     fn post_process(&mut self) {
