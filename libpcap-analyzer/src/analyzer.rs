@@ -12,7 +12,7 @@ use nom::{Needed,Offset,IResult};
 
 use pnet::packet::Packet;
 use pnet::packet::ethernet::{EthernetPacket,EtherType,EtherTypes};
-use pnet::packet::ipv4::Ipv4Packet;
+use pnet::packet::ipv4::{Ipv4Packet,Ipv4Flags};
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
@@ -43,6 +43,7 @@ struct ParseContext {
     pcap_index: usize,
 
     first_packet_ts: Duration,
+    rel_ts: Duration,
 }
 
 pub struct Analyzer<'a> {
@@ -50,6 +51,9 @@ pub struct Analyzer<'a> {
     flows_id: HashMap<FiveTuple, FlowID>,
     plugins: &'a mut Plugins,
     trng: ThreadRng,
+
+    // XXX we need to store all fragments, with offsets
+    ipv4_fragments: HashMap<u16,Vec<u8>>,
 }
 
 
@@ -60,6 +64,7 @@ impl<'a> Analyzer<'a> {
             flows_id: HashMap::new(),
             plugins,
             trng: rand::thread_rng(),
+            ipv4_fragments: HashMap::new(),
         }
     }
 
@@ -76,6 +81,7 @@ impl<'a> Analyzer<'a> {
             link_type: Linktype(0),
             pcap_index: 1,
             first_packet_ts: Duration::new(0,0),
+            rel_ts: Duration::new(0,0),
         };
 
         let (length,in_pcap_type) = {
@@ -116,10 +122,14 @@ impl<'a> Analyzer<'a> {
                             // println!("parsed packet: {:?}", packet);
 
                             if let Some(packet) = opt_packet {
+                                debug!("**************************************************************");
                                 if context.pcap_index == 1 {
                                     context.first_packet_ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
                                 }
-                                debug!("**************************************************************");
+                                debug!("    time  : {} / {}", packet.header.ts_sec, packet.header.ts_usec);
+                                let ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
+                                context.rel_ts = ts - context.first_packet_ts; // an underflow is weird but not critical
+                                debug!("    reltime  : {}.{}", context.rel_ts.secs, context.rel_ts.micros);
                                 self.handle_packet(&packet, &context);
                                 context.pcap_index += 1;
                             }
@@ -260,10 +270,6 @@ impl<'a> Analyzer<'a> {
 
     fn handle_l3(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
         info!("handle_l3 (idx={})", ctx.pcap_index);
-        debug!("    time  : {} / {}", packet.header.ts_sec, packet.header.ts_usec);
-        let ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
-        let rel_ts = ts - ctx.first_packet_ts; // an underflow is weird but not critical
-        debug!("    reltime  : {}.{}", rel_ts.secs, rel_ts.micros);
         if data.is_empty() { return; }
 
         // remove padding
@@ -279,12 +285,67 @@ impl<'a> Analyzer<'a> {
             _ => data
         };
 
+        // handle l3
         for p in self.plugins.list.values_mut() {
             let _ = p.handle_l3(data, ethertype.0);
         }
 
-        // now, prepare data for handle_l4
+        // check IP fragmentation before calling handle_l4
+        let maybe_ipv4 = &Ipv4Packet::new(data);
+        let mut keep_f = Vec::new();
+        let (frag,data) = match ethertype {
+            EtherTypes::Ipv4 => {
+                let ipv4 = maybe_ipv4.as_ref().expect("ipv4");
+                let id = ipv4.get_identification();
+                if ipv4.get_flags() & Ipv4Flags::MoreFragments != 0 {
+                    debug!("more fragments {}", id);
+                    if ipv4.get_fragment_offset() == 0 {
+                        // first fragment
+                        debug!("first fragment");
+                        let v = data.to_vec();
+                        warn!("inserting defrag buffer key={} len={}", id, data.len());
+                        // insert ipv4 *data* but keep ipv4 header for the first packet
+                        self.ipv4_fragments.insert(id, v);
+                    } else {
+                        match self.ipv4_fragments.get_mut(&id) {
+                            Some(f) => f.extend_from_slice(ipv4.payload()),
+                            None    => warn!("could not get first fragment buffer for ID {}", id),
+                        }
+                    }
+                    (1,data)
+                } else {
+                    // last fragment
+                    if ipv4.get_fragment_offset() > 0 {
+                        debug!("last fragment {}", id);
+                        match self.ipv4_fragments.remove(&id) {
+                            Some(f) => {
+                                keep_f = f;
+                                keep_f.extend_from_slice(ipv4.payload());
+                                warn!("extracting defrag buffer id={} len={}", id, keep_f.len());
+                                (2,data)
+                            },
+                            None    => { warn!("could not get first fragment buffer for ID {}", id); (1,data) },
+                        }
+                    } else {
+                        (0,data)
+                    }
+                }
+            }
+            _ => (0,data)
+        };
+        let data = match frag {
+            0 => data, // no fragmentation
+            1 => { return; } // partial data
+            _ => {
+                warn!("Using defrag buffer len={}", keep_f.len());
+                &keep_f
+            }
+        };
+        self.handle_l4(packet, ctx, data, ethertype)
+    }
 
+    fn handle_l4(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+        info!("handle_l4 (idx={})", ctx.pcap_index);
         let mut l3_data_offset = 0;
         let mut l4_proto = IpNextHeaderProtocol(0);
 
@@ -380,7 +441,8 @@ impl<'a> Analyzer<'a> {
 
         let to_server = flow.five_tuple == five_tuple;
 
-        // handle L4
+        // get L4 data
+        // XXX handle TCP defrag
         debug!("    l3_data_offset: {}", l3_data_offset);
         if l3_data_offset == 0 {
             debug!("no data in l3 layer, so no trying to handle l4");
@@ -412,6 +474,7 @@ impl<'a> Analyzer<'a> {
             },
             _ => None
         };
+        // handle L4
         debug!("    l3_data len: {}", l3_data.len());
         debug!("    l4_proto: {}", l4_proto);
         let pdata = PacketData{
