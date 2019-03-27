@@ -16,7 +16,7 @@ use pnet::packet::ipv4::{Ipv4Packet,Ipv4Flags};
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
-use pnet::packet::ip::{IpNextHeaderProtocol,IpNextHeaderProtocols};
+use pnet::packet::ip::IpNextHeaderProtocols;
 
 use pcap_parser::*;
 
@@ -34,6 +34,13 @@ enum PcapType {
     // Unknown,
     Pcap,
     PcapNG
+}
+
+struct L3Info<'a> {
+    ethertype: EtherType,
+    src: IpAddr,
+    dst: IpAddr,
+    data: &'a [u8],
 }
 
 struct ParseContext {
@@ -247,42 +254,64 @@ impl<'a> Analyzer<'a> {
     }
 
     fn handle_l2(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) {
-        info!("handle_l2");
+        debug!("handle_l2 (idx={})", ctx.pcap_index);
 
         // resize slice to remove padding
         let datalen = min(packet.header.caplen as usize, packet.data.len());
         let data = &packet.data[..datalen];
 
-        let eth = EthernetPacket::new(data).expect("ethernet");
-
-        debug!("    ethertype: {}", eth.get_ethertype().0);
-        // debug!("    source: {}", eth.get_source());
-        // debug!("    dest  : {}", eth.get_destination());
-
         for p in self.plugins.list.values_mut() {
             let _ = p.handle_l2(&data);
         }
 
-        if packet.data.len() > 14 {
-            self.handle_l3(&packet, &ctx, &data[14..], eth.get_ethertype());
-        } // else XXX
+        match EthernetPacket::new(data) {
+            Some(eth) => {
+                debug!("    ethertype: {}", eth.get_ethertype().0);
+                // debug!("    source: {}", eth.get_source());
+                // debug!("    dest  : {}", eth.get_destination());
+
+                self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype());
+            },
+            None => {
+                // packet too small to be ethernet
+            }
+        }
     }
 
     fn handle_l3(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
-        info!("handle_l3 (idx={})", ctx.pcap_index);
+        debug!("handle_l3 (idx={})", ctx.pcap_index);
         if data.is_empty() { return; }
 
-        // remove padding
-        let data = match ethertype {
+        match ethertype {
             EtherTypes::Ipv4 => {
-                let ipv4 = &Ipv4Packet::new(data).expect("IPv4"); // XXX
-                if (ipv4.get_total_length() as usize) < data.len() {
-                    &data[..ipv4.get_total_length() as usize]
-                } else {
-                    data
-                }
+                self.handle_l3_ipv4(packet, ctx, data, ethertype);
+            },
+            EtherTypes::Ipv6 => {
+                self.handle_l3_ipv6(packet, ctx, data, ethertype);
+            },
+            _ => {
+                warn!("Unsupported ethertype {}", ethertype);
+                self.handle_l3_generic(packet, ctx, data, ethertype);
             }
-            _ => data
+        }
+    }
+
+    fn handle_l3_ipv4(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+        let ipv4 = match Ipv4Packet::new(data) {
+            Some(ipv4) => ipv4,
+            None       => {
+                warn!("Could not build IPv4 packet from data");
+                return;
+            }
+        };
+
+        // remove padding
+        let data = {
+            if (ipv4.get_total_length() as usize) < data.len() {
+                &data[..ipv4.get_total_length() as usize]
+            } else {
+                data
+            }
         };
 
         // handle l3
@@ -291,47 +320,42 @@ impl<'a> Analyzer<'a> {
         }
 
         // check IP fragmentation before calling handle_l4
-        let maybe_ipv4 = &Ipv4Packet::new(data);
         let mut keep_f = Vec::new();
-        let (frag,data) = match ethertype {
-            EtherTypes::Ipv4 => {
-                let ipv4 = maybe_ipv4.as_ref().expect("ipv4");
-                let id = ipv4.get_identification();
-                if ipv4.get_flags() & Ipv4Flags::MoreFragments != 0 {
-                    debug!("more fragments {}", id);
-                    if ipv4.get_fragment_offset() == 0 {
-                        // first fragment
-                        debug!("first fragment");
-                        let v = data.to_vec();
-                        warn!("inserting defrag buffer key={} len={}", id, data.len());
-                        // insert ipv4 *data* but keep ipv4 header for the first packet
-                        self.ipv4_fragments.insert(id, v);
-                    } else {
-                        match self.ipv4_fragments.get_mut(&id) {
-                            Some(f) => f.extend_from_slice(ipv4.payload()),
-                            None    => warn!("could not get first fragment buffer for ID {}", id),
-                        }
-                    }
-                    (1,data)
+        let (frag,data) = {
+            let id = ipv4.get_identification();
+            if ipv4.get_flags() & Ipv4Flags::MoreFragments != 0 {
+                debug!("more fragments {}", id);
+                if ipv4.get_fragment_offset() == 0 {
+                    // first fragment
+                    debug!("first fragment");
+                    let v = data.to_vec();
+                    warn!("inserting defrag buffer key={} len={}", id, data.len());
+                    // insert ipv4 *data* but keep ipv4 header for the first packet
+                    self.ipv4_fragments.insert(id, v);
                 } else {
-                    // last fragment
-                    if ipv4.get_fragment_offset() > 0 {
-                        debug!("last fragment {}", id);
-                        match self.ipv4_fragments.remove(&id) {
-                            Some(f) => {
-                                keep_f = f;
-                                keep_f.extend_from_slice(ipv4.payload());
-                                warn!("extracting defrag buffer id={} len={}", id, keep_f.len());
-                                (2,data)
-                            },
-                            None    => { warn!("could not get first fragment buffer for ID {}", id); (1,data) },
-                        }
-                    } else {
-                        (0,data)
+                    match self.ipv4_fragments.get_mut(&id) {
+                        Some(f) => f.extend_from_slice(ipv4.payload()),
+                        None    => warn!("could not get first fragment buffer for ID {}", id),
                     }
                 }
+                (1,data)
+            } else {
+                // last fragment
+                if ipv4.get_fragment_offset() > 0 {
+                    debug!("last fragment {}", id);
+                    match self.ipv4_fragments.remove(&id) {
+                        Some(f) => {
+                            keep_f = f;
+                            keep_f.extend_from_slice(ipv4.payload());
+                            warn!("extracting defrag buffer id={} len={}", id, keep_f.len());
+                            (2,data)
+                        },
+                        None    => { warn!("could not get first fragment buffer for ID {}", id); (1,data) },
+                    }
+                } else {
+                    (0,data)
+                }
             }
-            _ => (0,data)
         };
         let data = match frag {
             0 => data, // no fragmentation
@@ -341,89 +365,111 @@ impl<'a> Analyzer<'a> {
                 &keep_f
             }
         };
-        self.handle_l4(packet, ctx, data, ethertype)
-    }
 
-    fn handle_l4(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
-        info!("handle_l4 (idx={})", ctx.pcap_index);
-        let mut l3_data_offset = 0;
-        let mut l4_proto = IpNextHeaderProtocol(0);
-
-        // build 5-tuple and store offsets for data layers
-        let five_tuple = {
-            let mut five_tuple = FiveTuple::default();
-            match ethertype {
-                EtherTypes::Ipv4 => {
-                    let ipv4 = &Ipv4Packet::new(data).expect("IPv4"); // XXX
-                    l3_data_offset = data.offset(ipv4.payload());
-                    // debug!("next level proto: {:?}", ipv4.get_next_level_protocol());
-                    five_tuple.src = IpAddr::V4(ipv4.get_source());
-                    five_tuple.dst = IpAddr::V4(ipv4.get_destination());
-                    l4_proto = ipv4.get_next_level_protocol();
-                    five_tuple.proto = l4_proto.0;
-                    match l4_proto {
-                        IpNextHeaderProtocols::Tcp => {
-                            if let Some(tcp) = TcpPacket::new(ipv4.payload()) {
-                                five_tuple.src_port = tcp.get_source();
-                                five_tuple.dst_port = tcp.get_destination();
-                                // parse_tcp(src, dst, &tcp, ptype, globalstate);
-                            }
-                        }
-                        IpNextHeaderProtocols::Udp => {
-                            if let Some(udp) = UdpPacket::new(ipv4.payload()) {
-                                five_tuple.src_port = udp.get_source();
-                                five_tuple.dst_port = udp.get_destination();
-                                // parse_tcp(src, dst, &tcp, ptype, globalstate);
-                            }
-                        }
-                        // protocols without port numbers
-                        IpNextHeaderProtocols::Icmp |
-                        IpNextHeaderProtocols::Esp => {
-                        }
-                        p => {
-                            warn!("Unknown L3 protocol (IPv4) {:?}", p);
-                        }
-                    }
-                }
-                EtherTypes::Ipv6 => {
-                    let ipv6 = &Ipv6Packet::new(data).expect("IPv6"); // XXX
-                    l3_data_offset = data.offset(ipv6.payload());
-                    debug!("next level proto: {:?}", ipv6.get_next_header());
-                    five_tuple.src = IpAddr::V6(ipv6.get_source());
-                    five_tuple.dst = IpAddr::V6(ipv6.get_destination());
-                    l4_proto = ipv6.get_next_header();
-                    five_tuple.proto = l4_proto.0;
-                    match l4_proto {
-                        IpNextHeaderProtocols::Tcp => {
-                            if let Some(tcp) = TcpPacket::new(ipv6.payload()) {
-                                five_tuple.src_port = tcp.get_source();
-                                five_tuple.dst_port = tcp.get_destination();
-                                // parse_tcp(src, dst, &tcp, ptype, globalstate);
-                            }
-                        }
-                        IpNextHeaderProtocols::Udp => {
-                            if let Some(udp) = UdpPacket::new(ipv6.payload()) {
-                                five_tuple.src_port = udp.get_source();
-                                five_tuple.dst_port = udp.get_destination();
-                                // parse_tcp(src, dst, &tcp, ptype, globalstate);
-                            }
-                        }
-                        // protocols without port numbers
-                        IpNextHeaderProtocols::Icmp |
-                        IpNextHeaderProtocols::Esp => {
-                        }
-                        p => {
-                            warn!("Unknown L3 protocol (IPv6) {:?}", p);
-                        }
-                    }
-                }
-                x => {
-                    warn!("warning: unknown L2 type {}", x);
-                }
-            }
-            five_tuple
+        let l3_info = L3Info {
+            ethertype,
+            src: IpAddr::V4(ipv4.get_source()),
+            dst: IpAddr::V4(ipv4.get_destination()),
+            data: ipv4.payload(),
         };
 
+        let l4_proto = ipv4.get_next_level_protocol();
+        match l4_proto {
+            IpNextHeaderProtocols::Tcp => {
+                self.handle_l4_tcp(packet, ctx, data, &l3_info)
+            },
+            IpNextHeaderProtocols::Udp => {
+                self.handle_l4_udp(packet, ctx, data, &l3_info)
+            },
+            IpNextHeaderProtocols::Icmp |
+            IpNextHeaderProtocols::Esp => {
+                self.handle_l4_generic(packet, ctx, data, &l3_info)
+            },
+            _ => {
+                warn!("Unsupported L4 proto {}", l4_proto);
+                self.handle_l4_generic(packet, ctx, data, &l3_info)
+            }
+        }
+    }
+
+    fn handle_l3_ipv6(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+        let ipv6 = match Ipv6Packet::new(data) {
+            Some(ipv4) => ipv4,
+            None       => {
+                warn!("Could not build IPv6 packet from data");
+                return;
+            }
+        };
+
+        // XXX remove padding ?
+
+        for p in self.plugins.list.values_mut() {
+            let _ = p.handle_l3(data, ethertype.0);
+        }
+
+        let l3_info = L3Info {
+            ethertype,
+            src: IpAddr::V6(ipv6.get_source()),
+            dst: IpAddr::V6(ipv6.get_destination()),
+            data: ipv6.payload(),
+        };
+
+        let l4_proto = ipv6.get_next_header();
+        match l4_proto {
+            IpNextHeaderProtocols::Tcp => {
+                self.handle_l4_tcp(packet, ctx, data, &l3_info)
+            },
+            IpNextHeaderProtocols::Udp => {
+                self.handle_l4_udp(packet, ctx, data, &l3_info)
+            },
+            IpNextHeaderProtocols::Esp => {
+                self.handle_l4_generic(packet, ctx, data, &l3_info)
+            },
+            _ => {
+                warn!("Unsupported L4 proto {}", l4_proto);
+                self.handle_l4_generic(packet, ctx, data, &l3_info)
+            }
+        }
+    }
+
+    // Called when L3 layer is unknown
+    fn handle_l3_generic(&mut self, _packet: &pcap_parser::Packet, _ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+        // we don't know if there is padding to remove
+
+        // handle l3
+        for p in self.plugins.list.values_mut() {
+            let _ = p.handle_l3(data, ethertype.0);
+        }
+
+        // don't try to parse l4, we don't know how to get L4 data
+    }
+
+    fn handle_l4_tcp(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
+        debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
+        let l3_data_offset = data.offset(l3_info.data);
+        debug!("    l3_data_offset: {}", l3_data_offset);
+        if l3_data_offset == 0 {
+            debug!("no data in l3 layer, so no trying to handle l4");
+            return;
+        }
+        let l3_data = &data[l3_data_offset..];
+        let l4_proto = IpNextHeaderProtocols::Tcp;
+        debug!("    l3_data len: {}", l3_data.len());
+        let tcp = match TcpPacket::new(l3_data) {
+            Some(tcp) => tcp,
+            None      => {
+                warn!("Could not build TCP packet from data");
+                return;
+            }
+        };
+
+        let five_tuple = FiveTuple {
+            proto: l4_proto.0,
+            src: l3_info.src,
+            src_port: tcp.get_source(),
+            dst: l3_info.dst,
+            dst_port: tcp.get_destination(),
+        };
         debug!("5t: {:?}", five_tuple);
 
         // lookup flow
@@ -443,48 +489,114 @@ impl<'a> Analyzer<'a> {
 
         // get L4 data
         // XXX handle TCP defrag
+        let l4_data = Some(tcp.payload());
+        // handle L4
+        let pdata = PacketData{
+            five_tuple: &five_tuple,
+            to_server,
+            l3_type: l3_info.ethertype.0,
+            l3_data,
+            l4_type: l4_proto.0,
+            l4_data,
+            flow: Some(flow),
+        };
+        for p in self.plugins.list.values_mut() {
+            let _ = p.handle_l4(&pdata);
+        }
+
+        // XXX do other stuff
+
+
+        // XXX check session expiration
+
+    }
+
+    fn handle_l4_udp(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
+        debug!("handle_l4_udp (idx={})", ctx.pcap_index);
+        let l3_data_offset = data.offset(l3_info.data);
         debug!("    l3_data_offset: {}", l3_data_offset);
         if l3_data_offset == 0 {
             debug!("no data in l3 layer, so no trying to handle l4");
             return;
         }
         let l3_data = &data[l3_data_offset..];
-        let l4_data = match l4_proto {
-            IpNextHeaderProtocols::Tcp => {
-                // header length depends on options
-                TcpPacket::new(&l3_data).and_then(|p| {
-                    let offset = p.get_data_offset() as usize * 4;
-                    if offset < l3_data.len() {
-                        Some(&l3_data[offset..])
-                    } else {
-                        None
-                    }
-                })
-            },
-            IpNextHeaderProtocols::Udp => {
-                // fixed length header
-                if l3_data.len() > 8 {
-                    Some(&l3_data[8..])
-                } else {
-                    None
-                }
-            },
-            IpNextHeaderProtocols::Esp => {
-                Some(data) // no header
-            },
-            _ => None
-        };
-        // handle L4
+        let l4_proto = IpNextHeaderProtocols::Udp;
         debug!("    l3_data len: {}", l3_data.len());
-        debug!("    l4_proto: {}", l4_proto);
+        let udp = match UdpPacket::new(l3_data) {
+            Some(udp) => udp,
+            None      => {
+                warn!("Could not build UDP packet from data");
+                return;
+            }
+        };
+
+        let five_tuple = FiveTuple {
+            proto: l4_proto.0,
+            src: l3_info.src,
+            src_port: udp.get_source(),
+            dst: l3_info.dst,
+            dst_port: udp.get_destination(),
+        };
+        debug!("5t: {:?}", five_tuple);
+
+        // lookup flow
+        let flow_id = match self.lookup_flow(&five_tuple) {
+            Some(id) => id,
+            None     => {
+                let flow = Flow::from(&five_tuple);
+                self.insert_flow(five_tuple.clone(), flow)
+            }
+        };
+
+        // take flow ownership
+        let flow = self.flows.get_mut(&flow_id).expect("could not get flow from ID");
+        flow.flow_id = flow_id;
+
+        let to_server = flow.five_tuple == five_tuple;
+
+        // get L4 data
+        let l4_data = Some(udp.payload());
+        // handle L4
         let pdata = PacketData{
             five_tuple: &five_tuple,
             to_server,
-            l3_type: ethertype.0,
+            l3_type: l3_info.ethertype.0,
             l3_data,
             l4_type: l4_proto.0,
             l4_data,
             flow: Some(flow),
+        };
+        for p in self.plugins.list.values_mut() {
+            let _ = p.handle_l4(&pdata);
+        }
+
+        // XXX do other stuff
+
+
+        // XXX check session expiration
+
+    }
+
+    fn handle_l4_generic(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, _data: &[u8], l3_info: &L3Info) {
+        debug!("handle_l4_generic (idx={})", ctx.pcap_index);
+
+        let five_tuple = FiveTuple {
+            proto: 255, // unknown
+            src: l3_info.src,
+            src_port: 0,
+            dst: l3_info.dst,
+            dst_port: 0,
+        };
+        debug!("5t: {:?}", five_tuple);
+
+        let pdata = PacketData{
+            five_tuple: &five_tuple,
+            to_server: true /* to_server */,
+            l3_type: l3_info.ethertype.0,
+            l3_data: l3_info.data,
+            l4_type: five_tuple.proto,
+            l4_data: None,
+            flow: None,
         };
         for p in self.plugins.list.values_mut() {
             let _ = p.handle_l4(&pdata);
