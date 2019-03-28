@@ -17,6 +17,11 @@ fn main() {
              .help("Be verbose")
              .short("v")
              .long("verbose"))
+        .arg(Arg::with_name("plugins")
+             .help("Plugins to load (default: all)")
+             .short("p")
+             .long("plugins")
+             .takes_value(true))
         .arg(Arg::with_name("INPUT")
              .help("Input file name")
              .required(true)
@@ -28,9 +33,18 @@ fn main() {
    eprintln!("Hello, world!");
 
    let builder = plugins::plugins_factory();
-   let mut all_plugins = plugins::plugins(&builder);
-   eprintln!("  Plugins loaded: {}", all_plugins.list.len());
-   let mut analyzer = Analyzer::new(&mut all_plugins);
+   let mut plugins = plugins::plugins(&builder);
+
+   if let Some(plugin_names) = matches.value_of("plugins") {
+       eprintln!("plugins: {}", plugin_names);
+       let names : Vec<_> = plugin_names.split(",").collect();
+       plugins.list.retain(|k, _| {
+           names.iter().any(|&x| x == k.as_str())
+       });
+   }
+
+   eprintln!("  Plugins loaded: {}", plugins.list.len());
+   let mut analyzer = Analyzer::new(&mut plugins);
 
    let input_filename = matches.value_of("INPUT").unwrap();
    // let verbose = matches.is_present("verbose");
