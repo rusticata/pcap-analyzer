@@ -36,11 +36,10 @@ enum PcapType {
     PcapNG
 }
 
-struct L3Info<'a> {
+struct L3Info {
     ethertype: EtherType,
     src: IpAddr,
     dst: IpAddr,
-    data: &'a [u8],
 }
 
 struct ParseContext {
@@ -290,7 +289,7 @@ impl<'a> Analyzer<'a> {
                 self.handle_l3_ipv6(packet, ctx, data, ethertype);
             },
             _ => {
-                warn!("Unsupported ethertype {}", ethertype);
+                warn!("Unsupported ethertype {} (0x{:x})", ethertype, ethertype.0);
                 self.handle_l3_generic(packet, ctx, data, ethertype);
             }
         }
@@ -321,44 +320,67 @@ impl<'a> Analyzer<'a> {
 
         // check IP fragmentation before calling handle_l4
         let mut keep_f = Vec::new();
-        let (frag,data) = {
+        let frag = {
             let id = ipv4.get_identification();
+            let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
+            // XXX RFC 1858: if frag_offset == 1 (*8) && proto == TCP -> alert
             if ipv4.get_flags() & Ipv4Flags::MoreFragments != 0 {
                 debug!("more fragments {}", id);
-                if ipv4.get_fragment_offset() == 0 {
+                if frag_offset == 0 {
                     // first fragment
                     debug!("first fragment");
-                    let v = data.to_vec();
+                    // XXX if keep_f.len() != 0 we already received a fragment 0
+                    let v = ipv4.payload().to_vec();
                     warn!("inserting defrag buffer key={} len={}", id, data.len());
                     // insert ipv4 *data* but keep ipv4 header for the first packet
                     self.ipv4_fragments.insert(id, v);
                 } else {
                     match self.ipv4_fragments.get_mut(&id) {
-                        Some(f) => f.extend_from_slice(ipv4.payload()),
+                        Some(f) => {
+                            // reassembly strategy: last frag wins
+                            if frag_offset < f.len() {
+                                warn!("overlapping fragment frag_offset {}, keep_f.len={}", frag_offset, f.len());
+                                f.truncate(frag_offset);
+                            }
+                            else if frag_offset > f.len() {
+                                warn!("missed fragment frag_offset {}, keep_f.len={}", frag_offset, f.len());
+                                f.resize(frag_offset, 0xff);
+                            }
+                            f.extend_from_slice(ipv4.payload())
+                        },
                         None    => warn!("could not get first fragment buffer for ID {}", id),
                     }
                 }
-                (1,data)
+                1
             } else {
                 // last fragment
-                if ipv4.get_fragment_offset() > 0 {
-                    debug!("last fragment {}", id);
+                if frag_offset > 0 {
+                    debug!("last fragment id={}", id);
                     match self.ipv4_fragments.remove(&id) {
                         Some(f) => {
                             keep_f = f;
+                            // reassembly strategy: last frag wins
+                            if frag_offset < keep_f.len() {
+                                warn!("overlapping fragment frag_offset {}, keep_f.len={}", frag_offset, keep_f.len());
+                                keep_f.truncate(frag_offset);
+                            }
+                            else if frag_offset > keep_f.len() {
+                                warn!("missed fragment frag_offset {}, keep_f.len={}", frag_offset, keep_f.len());
+                                keep_f.resize(frag_offset, 0xff);
+                            }
                             keep_f.extend_from_slice(ipv4.payload());
                             warn!("extracting defrag buffer id={} len={}", id, keep_f.len());
-                            (2,data)
+                            2
                         },
-                        None    => { warn!("could not get first fragment buffer for ID {}", id); (1,data) },
+                        None    => { warn!("could not get first fragment buffer for ID {}", id); 1 },
                     }
                 } else {
-                    (0,data)
+                    0
                 }
             }
         };
         let data = match frag {
-            0 => data, // no fragmentation
+            0 => ipv4.payload(), // no fragmentation
             1 => { return; } // partial data
             _ => {
                 warn!("Using defrag buffer len={}", keep_f.len());
@@ -370,7 +392,6 @@ impl<'a> Analyzer<'a> {
             ethertype,
             src: IpAddr::V4(ipv4.get_source()),
             dst: IpAddr::V4(ipv4.get_destination()),
-            data: ipv4.payload(),
         };
 
         let l4_proto = ipv4.get_next_level_protocol();
@@ -411,7 +432,6 @@ impl<'a> Analyzer<'a> {
             ethertype,
             src: IpAddr::V6(ipv6.get_source()),
             dst: IpAddr::V6(ipv6.get_destination()),
-            data: ipv6.payload(),
         };
 
         let l4_proto = ipv6.get_next_header();
@@ -446,13 +466,7 @@ impl<'a> Analyzer<'a> {
 
     fn handle_l4_tcp(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
         debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
-        let l3_data_offset = data.offset(l3_info.data);
-        debug!("    l3_data_offset: {}", l3_data_offset);
-        if l3_data_offset == 0 {
-            debug!("no data in l3 layer, so no trying to handle l4");
-            return;
-        }
-        let l3_data = &data[l3_data_offset..];
+        let l3_data = data;
         let l4_proto = IpNextHeaderProtocols::Tcp;
         debug!("    l3_data len: {}", l3_data.len());
         let tcp = match TcpPacket::new(l3_data) {
@@ -513,13 +527,7 @@ impl<'a> Analyzer<'a> {
 
     fn handle_l4_udp(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
         debug!("handle_l4_udp (idx={})", ctx.pcap_index);
-        let l3_data_offset = data.offset(l3_info.data);
-        debug!("    l3_data_offset: {}", l3_data_offset);
-        if l3_data_offset == 0 {
-            debug!("no data in l3 layer, so no trying to handle l4");
-            return;
-        }
-        let l3_data = &data[l3_data_offset..];
+        let l3_data = data;
         let l4_proto = IpNextHeaderProtocols::Udp;
         debug!("    l3_data len: {}", l3_data.len());
         let udp = match UdpPacket::new(l3_data) {
@@ -577,7 +585,7 @@ impl<'a> Analyzer<'a> {
 
     }
 
-    fn handle_l4_generic(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, _data: &[u8], l3_info: &L3Info) {
+    fn handle_l4_generic(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
         debug!("handle_l4_generic (idx={})", ctx.pcap_index);
 
         let five_tuple = FiveTuple {
@@ -593,7 +601,7 @@ impl<'a> Analyzer<'a> {
             five_tuple: &five_tuple,
             to_server: true /* to_server */,
             l3_type: l3_info.ethertype.0,
-            l3_data: l3_info.data,
+            l3_data: data,
             l4_type: five_tuple.proto,
             l4_data: None,
             flow: None,
