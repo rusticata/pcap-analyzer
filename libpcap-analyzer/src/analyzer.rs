@@ -16,7 +16,7 @@ use pnet::packet::ipv4::{Ipv4Packet,Ipv4Flags};
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
-use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::packet::ip::{IpNextHeaderProtocol,IpNextHeaderProtocols};
 
 use pcap_parser::*;
 
@@ -40,6 +40,7 @@ struct L3Info {
     ethertype: EtherType,
     src: IpAddr,
     dst: IpAddr,
+    l4_proto: IpNextHeaderProtocol,
 }
 
 struct ParseContext {
@@ -388,13 +389,14 @@ impl<'a> Analyzer<'a> {
             }
         };
 
+        let l4_proto = ipv4.get_next_level_protocol();
         let l3_info = L3Info {
             ethertype,
             src: IpAddr::V4(ipv4.get_source()),
             dst: IpAddr::V4(ipv4.get_destination()),
+            l4_proto,
         };
 
-        let l4_proto = ipv4.get_next_level_protocol();
         match l4_proto {
             IpNextHeaderProtocols::Tcp => {
                 self.handle_l4_tcp(packet, ctx, data, &l3_info)
@@ -428,13 +430,14 @@ impl<'a> Analyzer<'a> {
             let _ = p.handle_l3(data, ethertype.0);
         }
 
+        let l4_proto = ipv6.get_next_header();
         let l3_info = L3Info {
             ethertype,
             src: IpAddr::V6(ipv6.get_source()),
             dst: IpAddr::V6(ipv6.get_destination()),
+            l4_proto,
         };
 
-        let l4_proto = ipv6.get_next_header();
         match l4_proto {
             IpNextHeaderProtocols::Tcp => {
                 self.handle_l4_tcp(packet, ctx, data, &l3_info)
@@ -467,7 +470,6 @@ impl<'a> Analyzer<'a> {
     fn handle_l4_tcp(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
         debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
         let l3_data = data;
-        let l4_proto = IpNextHeaderProtocols::Tcp;
         debug!("    l3_data len: {}", l3_data.len());
         let tcp = match TcpPacket::new(l3_data) {
             Some(tcp) => tcp,
@@ -478,7 +480,7 @@ impl<'a> Analyzer<'a> {
         };
 
         let five_tuple = FiveTuple {
-            proto: l4_proto.0,
+            proto: l3_info.l4_proto.0,
             src: l3_info.src,
             src_port: tcp.get_source(),
             dst: l3_info.dst,
@@ -510,7 +512,7 @@ impl<'a> Analyzer<'a> {
             to_server,
             l3_type: l3_info.ethertype.0,
             l3_data,
-            l4_type: l4_proto.0,
+            l4_type: l3_info.l4_proto.0,
             l4_data,
             flow: Some(flow),
         };
@@ -528,7 +530,6 @@ impl<'a> Analyzer<'a> {
     fn handle_l4_udp(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
         debug!("handle_l4_udp (idx={})", ctx.pcap_index);
         let l3_data = data;
-        let l4_proto = IpNextHeaderProtocols::Udp;
         debug!("    l3_data len: {}", l3_data.len());
         let udp = match UdpPacket::new(l3_data) {
             Some(udp) => udp,
@@ -539,7 +540,7 @@ impl<'a> Analyzer<'a> {
         };
 
         let five_tuple = FiveTuple {
-            proto: l4_proto.0,
+            proto: l3_info.l4_proto.0,
             src: l3_info.src,
             src_port: udp.get_source(),
             dst: l3_info.dst,
@@ -570,7 +571,7 @@ impl<'a> Analyzer<'a> {
             to_server,
             l3_type: l3_info.ethertype.0,
             l3_data,
-            l4_type: l4_proto.0,
+            l4_type: l3_info.l4_proto.0,
             l4_data,
             flow: Some(flow),
         };
@@ -586,7 +587,7 @@ impl<'a> Analyzer<'a> {
     }
 
     fn handle_l4_generic(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
-        debug!("handle_l4_generic (idx={})", ctx.pcap_index);
+        debug!("handle_l4_generic (idx={}, l4_proto={})", ctx.pcap_index, l3_info.l4_proto);
 
         let five_tuple = FiveTuple {
             proto: 255, // unknown
