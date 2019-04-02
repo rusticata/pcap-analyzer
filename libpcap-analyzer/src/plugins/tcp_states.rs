@@ -19,7 +19,7 @@ enum TcpState {
     Closing,
     Closed,
     Reset,
-    Bogus
+    // Bogus
 }
 
 impl Default for TcpState {
@@ -29,6 +29,7 @@ impl Default for TcpState {
 #[derive(Default)]
 struct TcpContext {
     syn_seen: bool,
+    fin_seen: bool,
     /// Seq value during SYN
     syn_seq: u32,
     last_seq: u32,
@@ -138,6 +139,7 @@ debug!("SYN");
                 }
                 // sender initiates a teardown
                 if tcp_flags & TcpFlags::FIN == TcpFlags::FIN {
+                    conn.fin_seen = true;
                     conn.next_seq += 1; // receiver needs to ack FIN
                     conn.state = TcpState::Closing;
                 }
@@ -171,6 +173,11 @@ debug!("SYN");
                     conn.state = TcpState::Reset;
                     rev_conn.state = TcpState::Reset;
                 }
+                // Test if teardown is complete
+                if conn.fin_seen && rev_conn.fin_seen {
+                    conn.state = TcpState::Closed;
+                    rev_conn.state = TcpState::Closed;
+                }
             }
             TcpState::Closed => {
                 // Connection has been reset
@@ -181,10 +188,11 @@ debug!("SYN");
             }
             TcpState::Reset => {
             }
-            _ => {
-                warn!("Bogus state");
-            }
+            // _ => {
+            //     warn!("Bogus state");
+            // }
         }
+        debug!("    Tcp state(after) direct {:?} / rev {:?}", e.0.state, e.1.state);
     }
 
     fn flow_terminate(&mut self, flow: &Flow) {
