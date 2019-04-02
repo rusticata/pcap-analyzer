@@ -438,6 +438,8 @@ impl<'a> Analyzer<'a> {
             l4_proto,
         };
 
+        let data = ipv6.payload();
+
         match l4_proto {
             IpNextHeaderProtocols::Tcp => {
                 self.handle_l4_tcp(packet, ctx, data, &l3_info)
