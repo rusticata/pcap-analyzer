@@ -13,6 +13,10 @@ nom = "4.2"
 pnet = "0.22.0"
 rand="0.6"
 
+[dependencies.rusticata]
+# path = "../../rusticata"
+git = "https://github.com/rusticata/rusticata.git"
+
 [dependencies.pcap-parser]
 version = "0.4"
 features = ["data"]

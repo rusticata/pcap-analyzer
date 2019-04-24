@@ -4,6 +4,7 @@ extern crate log;
 extern crate circular;
 
 extern crate pcap_parser;
+extern crate rusticata;
 
 extern crate nom;
 

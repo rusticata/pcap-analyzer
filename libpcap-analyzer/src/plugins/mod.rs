@@ -4,6 +4,7 @@ use crate::{Plugin,PluginBuilder};
 
 mod basic_stats;
 mod tcp_states;
+mod rusticata;
 
 pub struct Plugins {
     pub list: HashMap<String, Box<Plugin>>,
@@ -18,6 +19,7 @@ pub fn plugins_factory() -> PluginsFactory {
 
     v.push(Box::new(basic_stats::BasicStatsBuilder));
     v.push(Box::new(tcp_states::TcpStatesBuilder));
+    v.push(Box::new(rusticata::RusticataBuilder));
 
     PluginsFactory{ list:v }
 }
