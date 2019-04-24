@@ -1,6 +1,6 @@
-use std::net::IpAddr;
-use std::io::Read;
 use std::cmp::min;
+use std::io::Read;
+use std::net::IpAddr;
 
 use std::collections::HashMap;
 
@@ -34,7 +34,7 @@ use crate::duration::Duration;
 enum PcapType {
     // Unknown,
     Pcap,
-    PcapNG
+    PcapNG,
 }
 
 struct L3Info {
@@ -82,22 +82,22 @@ impl<'a> Analyzer<'a> {
         let sz = f.read(b.space()).or(Err("unable to read data"))?;
         b.fill(sz);
 
-        let mut context = ParseContext{
+        let mut context = ParseContext {
             if_info: InterfaceInfo::new(),
             link_type: Linktype(0),
             pcap_index: 1,
-            first_packet_ts: Duration::new(0,0),
-            rel_ts: Duration::new(0,0),
+            first_packet_ts: Duration::new(0, 0),
+            rel_ts: Duration::new(0, 0),
         };
 
-        let (length,in_pcap_type) = {
-            if let Ok((remaining,_h)) = pcapng::parse_sectionheaderblock(b.data()) {
+        let (length, in_pcap_type) = {
+            if let Ok((remaining, _h)) = pcapng::parse_sectionheaderblock(b.data()) {
                 (b.data().offset(remaining), PcapType::PcapNG)
-            } else if let Ok((remaining,h)) = pcap::parse_pcap_header(b.data()) {
+            } else if let Ok((remaining, h)) = pcap::parse_pcap_header(b.data()) {
                 context.link_type = Linktype(h.network);
                 (b.data().offset(remaining), PcapType::Pcap)
             } else {
-                return Err("couldn't parse input file header")
+                return Err("couldn't parse input file header");
             }
         };
 
@@ -107,10 +107,13 @@ impl<'a> Analyzer<'a> {
         let mut consumed = length;
         let mut last_incomplete_offset = 0;
 
-        self.plugins.list.values_mut().for_each(|plugin| plugin.pre_process());
+        self.plugins
+            .list
+            .values_mut()
+            .for_each(|plugin| plugin.pre_process());
 
         let get_next_packet = match in_pcap_type {
-            PcapType::Pcap   => pcap_get_raw_data,
+            PcapType::Pcap => pcap_get_raw_data,
             PcapType::PcapNG => pcapng_get_raw_data,
         };
 
@@ -123,41 +126,48 @@ impl<'a> Analyzer<'a> {
                 let length = {
                     // read block
                     match get_next_packet(b.data(), &mut context) {
-                        Ok((remaining,opt_packet)) => {
+                        Ok((remaining, opt_packet)) => {
                             // eprintln!("parse_block ok, index {}", pcap_index);
                             // println!("parsed packet: {:?}", packet);
 
                             if let Some(packet) = opt_packet {
                                 debug!("**************************************************************");
                                 if context.pcap_index == 1 {
-                                    context.first_packet_ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
+                                    context.first_packet_ts =
+                                        Duration::new(packet.header.ts_sec, packet.header.ts_usec);
                                 }
-                                debug!("    time  : {} / {}", packet.header.ts_sec, packet.header.ts_usec);
+                                debug!(
+                                    "    time  : {} / {}",
+                                    packet.header.ts_sec, packet.header.ts_usec
+                                );
                                 let ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
                                 context.rel_ts = ts - context.first_packet_ts; // an underflow is weird but not critical
-                                debug!("    reltime  : {}.{}", context.rel_ts.secs, context.rel_ts.micros);
+                                debug!(
+                                    "    reltime  : {}.{}",
+                                    context.rel_ts.secs, context.rel_ts.micros
+                                );
                                 self.handle_packet(&packet, &context);
                                 context.pcap_index += 1;
                             }
 
                             b.data().offset(remaining)
-                        },
+                        }
                         Err(nom::Err::Incomplete(n)) => {
                             // println!("not enough data, needs a refill: {:?}", n);
 
                             needed = Some(n);
                             break;
-                        },
+                        }
                         Err(nom::Err::Failure(e)) => {
                             eprintln!("parse failure: {:?}", e);
                             return Err("parse error");
-                        },
+                        }
                         Err(nom::Err::Error(_e)) => {
                             // panic!("parse error: {:?}", e);
                             eprintln!("parse error");
                             eprintln!("{}", (&b.data()[..min(b.available_data(), 128)]).to_hex(16));
                             return Err("parse error");
-                        },
+                        }
                     }
                 };
                 // println!("consuming {} of {} bytes", length, b.available_data());
@@ -170,7 +180,10 @@ impl<'a> Analyzer<'a> {
                     // println!("growing buffer capacity from {} bytes to {} bytes", capacity, capacity*2);
                     capacity = (capacity * 3) / 2;
                     if capacity > buffer_max_size {
-                        warn!("requesting capacity {} over buffer_max_size {}", capacity, buffer_max_size);
+                        warn!(
+                            "requesting capacity {} over buffer_max_size {}",
+                            capacity, buffer_max_size
+                        );
                         return Err("buffer size too small");
                     }
                     b.grow(capacity);
@@ -207,7 +220,10 @@ impl<'a> Analyzer<'a> {
         self.flows.clear();
         self.flows_id.clear();
 
-        self.plugins.list.values_mut().for_each(|plugin| plugin.post_process());
+        self.plugins
+            .list
+            .values_mut()
+            .for_each(|plugin| plugin.post_process());
 
         Ok(())
     }
@@ -270,24 +286,32 @@ impl<'a> Analyzer<'a> {
                 // debug!("    dest  : {}", eth.get_destination());
 
                 self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype());
-            },
+            }
             None => {
                 // packet too small to be ethernet
             }
         }
     }
 
-    fn handle_l3(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+    fn handle_l3(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        ethertype: EtherType,
+    ) {
         debug!("handle_l3 (idx={})", ctx.pcap_index);
-        if data.is_empty() { return; }
+        if data.is_empty() {
+            return;
+        }
 
         match ethertype {
             EtherTypes::Ipv4 => {
                 self.handle_l3_ipv4(packet, ctx, data, ethertype);
-            },
+            }
             EtherTypes::Ipv6 => {
                 self.handle_l3_ipv6(packet, ctx, data, ethertype);
-            },
+            }
             _ => {
                 warn!("Unsupported ethertype {} (0x{:x})", ethertype, ethertype.0);
                 self.handle_l3_generic(packet, ctx, data, ethertype);
@@ -295,10 +319,16 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn handle_l3_ipv4(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+    fn handle_l3_ipv4(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        ethertype: EtherType,
+    ) {
         let ipv4 = match Ipv4Packet::new(data) {
             Some(ipv4) => ipv4,
-            None       => {
+            None => {
                 warn!("Could not build IPv4 packet from data");
                 return;
             }
@@ -351,16 +381,11 @@ impl<'a> Analyzer<'a> {
         };
 
         match l4_proto {
-            IpNextHeaderProtocols::Tcp => {
-                self.handle_l4_tcp(packet, ctx, data, &l3_info)
-            },
-            IpNextHeaderProtocols::Udp => {
-                self.handle_l4_udp(packet, ctx, data, &l3_info)
-            },
-            IpNextHeaderProtocols::Icmp |
-            IpNextHeaderProtocols::Esp => {
+            IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Icmp | IpNextHeaderProtocols::Esp => {
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
-            },
+            }
             _ => {
                 warn!("Unsupported L4 proto {}", l4_proto);
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
@@ -368,10 +393,16 @@ impl<'a> Analyzer<'a> {
         }
     }
 
-    fn handle_l3_ipv6(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+    fn handle_l3_ipv6(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        ethertype: EtherType,
+    ) {
         let ipv6 = match Ipv6Packet::new(data) {
             Some(ipv4) => ipv4,
-            None       => {
+            None => {
                 warn!("Could not build IPv6 packet from data");
                 return;
             }
@@ -394,15 +425,9 @@ impl<'a> Analyzer<'a> {
         let data = ipv6.payload();
 
         match l4_proto {
-            IpNextHeaderProtocols::Tcp => {
-                self.handle_l4_tcp(packet, ctx, data, &l3_info)
-            },
-            IpNextHeaderProtocols::Udp => {
-                self.handle_l4_udp(packet, ctx, data, &l3_info)
-            },
-            IpNextHeaderProtocols::Esp => {
-                self.handle_l4_generic(packet, ctx, data, &l3_info)
-            },
+            IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
             _ => {
                 warn!("Unsupported L4 proto {}", l4_proto);
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
@@ -411,7 +436,13 @@ impl<'a> Analyzer<'a> {
     }
 
     // Called when L3 layer is unknown
-    fn handle_l3_generic(&mut self, _packet: &pcap_parser::Packet, _ctx: &ParseContext, data: &[u8], ethertype: EtherType) {
+    fn handle_l3_generic(
+        &mut self,
+        _packet: &pcap_parser::Packet,
+        _ctx: &ParseContext,
+        data: &[u8],
+        ethertype: EtherType,
+    ) {
         // we don't know if there is padding to remove
 
         // handle l3
@@ -422,13 +453,19 @@ impl<'a> Analyzer<'a> {
         // don't try to parse l4, we don't know how to get L4 data
     }
 
-    fn handle_l4_tcp(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
+    fn handle_l4_tcp(
+        &mut self,
+        _packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        l3_info: &L3Info,
+    ) {
         debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
         let l3_data = data;
         debug!("    l3_data len: {}", l3_data.len());
         let tcp = match TcpPacket::new(l3_data) {
             Some(tcp) => tcp,
-            None      => {
+            None => {
                 warn!("Could not build TCP packet from data");
                 return;
             }
@@ -446,14 +483,17 @@ impl<'a> Analyzer<'a> {
         // lookup flow
         let flow_id = match self.lookup_flow(&five_tuple) {
             Some(id) => id,
-            None     => {
+            None => {
                 let flow = Flow::from(&five_tuple);
                 self.insert_flow(five_tuple.clone(), flow)
             }
         };
 
         // take flow ownership
-        let flow = self.flows.get_mut(&flow_id).expect("could not get flow from ID");
+        let flow = self
+            .flows
+            .get_mut(&flow_id)
+            .expect("could not get flow from ID");
         flow.flow_id = flow_id;
 
         let to_server = flow.five_tuple == five_tuple;
@@ -462,7 +502,7 @@ impl<'a> Analyzer<'a> {
         // XXX handle TCP defrag
         let l4_data = Some(tcp.payload());
         // handle L4
-        let pdata = PacketData{
+        let pdata = PacketData {
             five_tuple: &five_tuple,
             to_server,
             l3_type: l3_info.ethertype.0,
@@ -477,18 +517,22 @@ impl<'a> Analyzer<'a> {
 
         // XXX do other stuff
 
-
         // XXX check session expiration
-
     }
 
-    fn handle_l4_udp(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
+    fn handle_l4_udp(
+        &mut self,
+        _packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        l3_info: &L3Info,
+    ) {
         debug!("handle_l4_udp (idx={})", ctx.pcap_index);
         let l3_data = data;
         debug!("    l3_data len: {}", l3_data.len());
         let udp = match UdpPacket::new(l3_data) {
             Some(udp) => udp,
-            None      => {
+            None => {
                 warn!("Could not build UDP packet from data");
                 return;
             }
@@ -506,14 +550,17 @@ impl<'a> Analyzer<'a> {
         // lookup flow
         let flow_id = match self.lookup_flow(&five_tuple) {
             Some(id) => id,
-            None     => {
+            None => {
                 let flow = Flow::from(&five_tuple);
                 self.insert_flow(five_tuple.clone(), flow)
             }
         };
 
         // take flow ownership
-        let flow = self.flows.get_mut(&flow_id).expect("could not get flow from ID");
+        let flow = self
+            .flows
+            .get_mut(&flow_id)
+            .expect("could not get flow from ID");
         flow.flow_id = flow_id;
 
         let to_server = flow.five_tuple == five_tuple;
@@ -521,7 +568,7 @@ impl<'a> Analyzer<'a> {
         // get L4 data
         let l4_data = Some(udp.payload());
         // handle L4
-        let pdata = PacketData{
+        let pdata = PacketData {
             five_tuple: &five_tuple,
             to_server,
             l3_type: l3_info.ethertype.0,
@@ -595,7 +642,6 @@ impl<'a> Analyzer<'a> {
 
         // XXX do other stuff
 
-
         // XXX check session expiration
     }
 
@@ -618,7 +664,7 @@ impl<'a> Analyzer<'a> {
                 self.flows_id.insert(five_t, id);
                 return id;
             }
-            _ => ()
+            _ => (),
         }
         // get a new flow index (XXX currently: random number)
         let id = self.trng.gen();
@@ -630,29 +676,35 @@ impl<'a> Analyzer<'a> {
     }
 }
 
-fn pcap_get_raw_data<'a,'ctx>(i:&'a[u8], _ctx:&'ctx mut ParseContext) -> IResult<&'a [u8],Option<pcap_parser::Packet<'a>>> {
-    pcap::parse_pcap_frame(i).map(|(rem,p)| (rem,Some(p)))
+fn pcap_get_raw_data<'a, 'ctx>(
+    i: &'a [u8],
+    _ctx: &'ctx mut ParseContext,
+) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
+    pcap::parse_pcap_frame(i).map(|(rem, p)| (rem, Some(p)))
 }
 
-fn pcapng_get_raw_data<'a,'ctx>(i:&'a[u8], ctx:&'ctx mut ParseContext) -> IResult<&'a [u8],Option<pcap_parser::Packet<'a>>> {
-    pcapng::parse_block(i).map(|(rem,block)| {
+fn pcapng_get_raw_data<'a, 'ctx>(
+    i: &'a [u8],
+    ctx: &'ctx mut ParseContext,
+) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
+    pcapng::parse_block(i).map(|(rem, block)| {
         match block {
             Block::SectionHeader(ref _hdr) => {
                 warn!("new section header block");
-                (rem,None)
-            },
+                (rem, None)
+            }
             Block::InterfaceDescription(ref ifdesc) => {
                 ctx.if_info = pcapng_build_interface(ifdesc);
                 ctx.link_type = ctx.if_info.link_type;
                 // XXX parse_data = get_linktype_parse_fn(if_info.link_type).ok_or("could not find function to decode linktype")?;
-                (rem,None)
-            },
-            Block::SimplePacket(_) |
-            Block::EnhancedPacket(_) => {
-                let packet = pcapng_build_packet(&ctx.if_info, block).expect("could not convert block to packet"); // XXX
-                (rem,Some(packet))
-            },
-            _ => (rem,None),
+                (rem, None)
+            }
+            Block::SimplePacket(_) | Block::EnhancedPacket(_) => {
+                let packet = pcapng_build_packet(&ctx.if_info, block)
+                    .expect("could not convert block to packet"); // XXX
+                (rem, Some(packet))
+            }
+            _ => (rem, None),
         }
     })
 }

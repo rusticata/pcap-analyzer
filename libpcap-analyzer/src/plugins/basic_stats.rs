@@ -43,7 +43,7 @@ impl Plugin for BasicStats {
                    five_tuple.dst,
                    five_tuple.dst_port);
         }
-        // debug!("    l3_data:\n{}", packet.l3_data.to_hex(16));
+        debug!("    l3_data:\n{}", packet.l3_data.to_hex(16));
         packet.l4_data.map(|d| {
             debug!("    l4_data:\n{}", d.to_hex(16));
         });
