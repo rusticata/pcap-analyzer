@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 extern crate clap;
 use clap::{Arg,App,crate_version};
 
@@ -31,20 +34,20 @@ fn main() {
 
    env_logger::init();
 
-   eprintln!("Hello, world!");
+   debug!("Pcap analyser {}", crate_version!());
 
    let builder = plugins::plugins_factory();
    let mut plugins = plugins::plugins(&builder);
 
    if let Some(plugin_names) = matches.value_of("plugins") {
-       eprintln!("plugins: {}", plugin_names);
+       debug!("Restricting plugins to: {}", plugin_names);
        let names : Vec<_> = plugin_names.split(",").collect();
        plugins.list.retain(|k, _| {
-           names.iter().any(|&x| x == k.as_str())
+           names.iter().any(|&x| k.contains(x))
        });
    }
 
-   eprintln!("  Plugins loaded: {}", plugins.list.len());
+   debug!("  Plugins loaded: {}", plugins.list.len());
    let mut analyzer = Analyzer::new(&mut plugins);
 
    let input_filename = matches.value_of("INPUT").unwrap();
