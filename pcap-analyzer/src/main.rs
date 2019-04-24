@@ -4,6 +4,7 @@ use clap::{Arg,App,crate_version};
 extern crate env_logger;
 
 use std::fs::File;
+use std::io;
 use std::path::Path;
 
 use libpcap_analyzer::{plugins,Analyzer};
@@ -49,15 +50,21 @@ fn main() {
    let input_filename = matches.value_of("INPUT").unwrap();
    // let verbose = matches.is_present("verbose");
 
-   let path = Path::new(&input_filename);
-   let display = path.display();
-   let mut file = match File::open(path) {
-       // The `description` method of `io::Error` returns a string that
-       // describes the error
-       Err(why) => panic!("couldn't open {}: {}", display,
-                          why.to_string()),
-       Ok(file) => file,
-   };
+   let mut input_reader =
+       if input_filename == "-" {
+           Box::new(io::stdin()) as Box<io::Read>
+       } else {
+           let path = Path::new(&input_filename);
+           let display = path.display();
+           let file = match File::open(path) {
+               // The `description` method of `io::Error` returns a string that
+               // describes the error
+               Err(why) => panic!("couldn't open {}: {}", display,
+                                  why.to_string()),
+               Ok(file) => file,
+           };
+           Box::new(file) as Box<io::Read>
+       };
 
-   let _ = analyzer.run(&mut file);
+   let _ = analyzer.run(&mut input_reader);
 }
