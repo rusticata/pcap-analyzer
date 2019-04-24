@@ -19,7 +19,7 @@ mod five_tuple;
 mod flow;
 mod packet_data;
 
-mod plugin;
+pub mod plugin;
 use plugin::*;
 
 pub mod plugins;
