@@ -8,22 +8,23 @@ use rand::prelude::*;
 
 use circular::Buffer;
 use nom::HexDisplay;
-use nom::{Needed,Offset,IResult};
+use nom::{IResult, Needed, Offset};
 
-use pnet::packet::Packet;
-use pnet::packet::ethernet::{EthernetPacket,EtherType,EtherTypes};
-use pnet::packet::ipv4::{Ipv4Packet,Ipv4Flags};
+use pnet::packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
+use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
+use pnet::packet::ipv4::{Ipv4Flags, Ipv4Packet};
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
-use pnet::packet::ip::{IpNextHeaderProtocol,IpNextHeaderProtocols};
+use pnet::packet::Packet;
 
 use pcap_parser::*;
 
-use crate::pcapng_extra::{InterfaceInfo,pcapng_build_interface,pcapng_build_packet};
+use crate::pcapng_extra::{pcapng_build_interface, pcapng_build_packet, InterfaceInfo};
 
 use crate::five_tuple::FiveTuple;
-use crate::flow::{Flow,FlowID};
+use crate::flow::{Flow, FlowID};
+use crate::ip_defrag::{DefragEngine, Fragment, IP4DefragEngine};
 use crate::packet_data::PacketData;
 
 use crate::plugins::Plugins;
@@ -59,19 +60,17 @@ pub struct Analyzer<'a> {
     plugins: &'a mut Plugins,
     trng: ThreadRng,
 
-    // XXX we need to store all fragments, with offsets
-    ipv4_fragments: HashMap<u16,Vec<u8>>,
+    ipv4_defrag: Box<DefragEngine>,
 }
-
 
 impl<'a> Analyzer<'a> {
     pub fn new(plugins: &mut Plugins) -> Analyzer {
-        Analyzer{
+        Analyzer {
             flows: HashMap::new(),
             flows_id: HashMap::new(),
             plugins,
             trng: rand::thread_rng(),
-            ipv4_fragments: HashMap::new(),
+            ipv4_defrag: Box::new(IP4DefragEngine::new()),
         }
     }
 
@@ -320,72 +319,26 @@ impl<'a> Analyzer<'a> {
         }
 
         // check IP fragmentation before calling handle_l4
-        let mut keep_f = Vec::new();
-        let frag = {
-            let id = ipv4.get_identification();
-            let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
-            // XXX RFC 1858: if frag_offset == 1 (*8) && proto == TCP -> alert
-            if ipv4.get_flags() & Ipv4Flags::MoreFragments != 0 {
-                debug!("more fragments {}", id);
-                if frag_offset == 0 {
-                    // first fragment
-                    debug!("first fragment");
-                    // XXX if keep_f.len() != 0 we already received a fragment 0
-                    let v = ipv4.payload().to_vec();
-                    warn!("inserting defrag buffer key={} len={}", id, data.len());
-                    // insert ipv4 *data* but keep ipv4 header for the first packet
-                    self.ipv4_fragments.insert(id, v);
-                } else {
-                    match self.ipv4_fragments.get_mut(&id) {
-                        Some(f) => {
-                            // reassembly strategy: last frag wins
-                            if frag_offset < f.len() {
-                                warn!("overlapping fragment frag_offset {}, keep_f.len={}", frag_offset, f.len());
-                                f.truncate(frag_offset);
-                            }
-                            else if frag_offset > f.len() {
-                                warn!("missed fragment frag_offset {}, keep_f.len={}", frag_offset, f.len());
-                                f.resize(frag_offset, 0xff);
-                            }
-                            f.extend_from_slice(ipv4.payload())
-                        },
-                        None    => warn!("could not get first fragment buffer for ID {}", id),
-                    }
-                }
-                1
-            } else {
-                // last fragment
-                if frag_offset > 0 {
-                    debug!("last fragment id={}", id);
-                    match self.ipv4_fragments.remove(&id) {
-                        Some(f) => {
-                            keep_f = f;
-                            // reassembly strategy: last frag wins
-                            if frag_offset < keep_f.len() {
-                                warn!("overlapping fragment frag_offset {}, keep_f.len={}", frag_offset, keep_f.len());
-                                keep_f.truncate(frag_offset);
-                            }
-                            else if frag_offset > keep_f.len() {
-                                warn!("missed fragment frag_offset {}, keep_f.len={}", frag_offset, keep_f.len());
-                                keep_f.resize(frag_offset, 0xff);
-                            }
-                            keep_f.extend_from_slice(ipv4.payload());
-                            warn!("extracting defrag buffer id={} len={}", id, keep_f.len());
-                            2
-                        },
-                        None    => { warn!("could not get first fragment buffer for ID {}", id); 1 },
-                    }
-                } else {
-                    0
-                }
+        let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
+        let more_fragments = ipv4.get_flags() & Ipv4Flags::MoreFragments != 0;
+        let defrag = self.ipv4_defrag.update(
+            ipv4.get_identification(),
+            frag_offset,
+            more_fragments,
+            ipv4.payload(),
+        );
+        let data = match defrag {
+            Fragment::NoFrag(d) => d,
+            Fragment::Complete(ref v) => {
+                warn!("Using defrag buffer len={}", v.len());
+                &v
             }
-        };
-        let data = match frag {
-            0 => ipv4.payload(), // no fragmentation
-            1 => { return; } // partial data
-            _ => {
-                warn!("Using defrag buffer len={}", keep_f.len());
-                &keep_f
+            Fragment::Incomplete => {
+                return;
+            }
+            Fragment::Error => {
+                warn!("Defragmentation error");
+                return;
             }
         };
 
@@ -583,16 +536,23 @@ impl<'a> Analyzer<'a> {
 
         // XXX do other stuff
 
-
         // XXX check session expiration
-
     }
 
-    fn handle_l4_generic(&mut self, _packet: &pcap_parser::Packet, ctx: &ParseContext, data: &[u8], l3_info: &L3Info) {
-        debug!("handle_l4_generic (idx={}, l4_proto={})", ctx.pcap_index, l3_info.l4_proto);
+    fn handle_l4_generic(
+        &mut self,
+        _packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        l3_info: &L3Info,
+    ) {
+        debug!(
+            "handle_l4_generic (idx={}, l4_proto={})",
+            ctx.pcap_index, l3_info.l4_proto
+        );
 
         let five_tuple = FiveTuple {
-            proto: 255, // unknown
+            proto: l3_info.l4_proto.0,
             src: l3_info.src,
             src_port: 0,
             dst: l3_info.dst,
@@ -600,9 +560,29 @@ impl<'a> Analyzer<'a> {
         };
         debug!("5t: {:?}", five_tuple);
 
-        let pdata = PacketData{
+        // lookup flow
+        let flow_id = match self.lookup_flow(&five_tuple) {
+            Some(id) => id,
+            None => {
+                let flow = Flow::from(&five_tuple);
+                self.insert_flow(five_tuple.clone(), flow)
+            }
+        };
+
+        // take flow ownership
+        let flow = self
+            .flows
+            .get_mut(&flow_id)
+            .expect("could not get flow from ID");
+        flow.flow_id = flow_id;
+
+        let to_server = flow.five_tuple == five_tuple;
+
+        // in generic function, we don't know how to get l4_data
+
+        let pdata = PacketData {
             five_tuple: &five_tuple,
-            to_server: true /* to_server */,
+            to_server,
             l3_type: l3_info.ethertype.0,
             l3_data: data,
             l4_type: five_tuple.proto,

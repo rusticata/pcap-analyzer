@@ -26,7 +26,8 @@ pub mod plugins;
 mod analyzer;
 pub use analyzer::*;
 
+mod ip_defrag;
+
 
 #[derive(Debug,PartialEq)]
 pub struct Error;
-
