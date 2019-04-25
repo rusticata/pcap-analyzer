@@ -484,7 +484,7 @@ impl<'a> Analyzer<'a> {
         let flow_id = match self.lookup_flow(&five_tuple) {
             Some(id) => id,
             None => {
-                let flow = Flow::from(&five_tuple);
+                let flow = Flow::new(&five_tuple, packet.header.ts_sec, packet.header.ts_usec);
                 self.insert_flow(five_tuple.clone(), flow)
             }
         };
@@ -551,7 +551,7 @@ impl<'a> Analyzer<'a> {
         let flow_id = match self.lookup_flow(&five_tuple) {
             Some(id) => id,
             None => {
-                let flow = Flow::from(&five_tuple);
+                let flow = Flow::new(&five_tuple, packet.header.ts_sec, packet.header.ts_usec);
                 self.insert_flow(five_tuple.clone(), flow)
             }
         };
@@ -611,7 +611,7 @@ impl<'a> Analyzer<'a> {
         let flow_id = match self.lookup_flow(&five_tuple) {
             Some(id) => id,
             None => {
-                let flow = Flow::from(&five_tuple);
+                let flow = Flow::new(&five_tuple, packet.header.ts_sec, packet.header.ts_usec);
                 self.insert_flow(five_tuple.clone(), flow)
             }
         };

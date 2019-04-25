@@ -5,7 +5,7 @@
 
 use std::ops::{Add,Sub};
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug)]
 pub struct Duration {
     pub secs: u32,
     pub micros: u32,
