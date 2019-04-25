@@ -1,3 +1,5 @@
+use pcap_parser::Packet;
+
 use crate::packet_data::PacketData;
 use crate::flow::Flow;
 
@@ -9,10 +11,10 @@ pub trait PluginBuilder : Sync + Send {
 pub trait Plugin : Sync + Send {
     fn name(&self) -> &'static str;
 
-    fn handle_l2(&mut self, _data: &[u8]) { }
-    fn handle_l3(&mut self, _data: &[u8], _ethertype:u16) { }
+    fn handle_l2(&mut self, _packet:&Packet, _data: &[u8]) { }
+    fn handle_l3(&mut self, _packet:&Packet, _data: &[u8], _ethertype:u16) { }
 
-    fn handle_l4(&mut self, _packet: &PacketData) { }
+    fn handle_l4(&mut self, _packet:&Packet, _pdata: &PacketData) { }
 
     fn flow_terminate(&mut self, _flow: &Flow) {}
 

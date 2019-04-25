@@ -1,3 +1,5 @@
+use pcap_parser::Packet;
+
 use super::{Plugin,PluginBuilder};
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
@@ -36,7 +38,7 @@ impl Plugin for Rusticata {
         self.builder_map = m;
     }
 
-    fn handle_l4(&mut self, pdata: &PacketData) {
+    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketData) {
         let five_tuple = &pdata.five_tuple;
         info!("BasicStats::handle_l4");
         debug!("    5t: proto {} / [{}]:{} -> [{}]:{}",

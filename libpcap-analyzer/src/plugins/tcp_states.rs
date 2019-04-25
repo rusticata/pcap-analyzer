@@ -1,3 +1,5 @@
+use pcap_parser::Packet;
+
 use super::{Plugin,PluginBuilder};
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
@@ -49,7 +51,7 @@ default_plugin_builder!(TcpStates, TcpStatesBuilder);
 impl Plugin for TcpStates {
     fn name(&self) -> &'static str { "TcpStates" }
 
-    fn handle_l4(&mut self, pdata: &PacketData) {
+    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketData) {
         debug!("proto {}", pdata.five_tuple.proto);
 
         if pdata.l4_type != 6 { return; }

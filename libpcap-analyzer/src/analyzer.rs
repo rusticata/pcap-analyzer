@@ -276,7 +276,7 @@ impl<'a> Analyzer<'a> {
         let data = &packet.data[..datalen];
 
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l2(&data);
+            let _ = p.handle_l2(&packet, &data);
         }
 
         match EthernetPacket::new(data) {
@@ -345,7 +345,7 @@ impl<'a> Analyzer<'a> {
 
         // handle l3
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l3(data, ethertype.0);
+            let _ = p.handle_l3(packet, data, ethertype.0);
         }
 
         // check IP fragmentation before calling handle_l4
@@ -411,7 +411,7 @@ impl<'a> Analyzer<'a> {
         // XXX remove padding ?
 
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l3(data, ethertype.0);
+            let _ = p.handle_l3(&packet, data, ethertype.0);
         }
 
         let l4_proto = ipv6.get_next_header();
@@ -438,7 +438,7 @@ impl<'a> Analyzer<'a> {
     // Called when L3 layer is unknown
     fn handle_l3_generic(
         &mut self,
-        _packet: &pcap_parser::Packet,
+        packet: &pcap_parser::Packet,
         _ctx: &ParseContext,
         data: &[u8],
         ethertype: EtherType,
@@ -447,7 +447,7 @@ impl<'a> Analyzer<'a> {
 
         // handle l3
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l3(data, ethertype.0);
+            let _ = p.handle_l3(packet, data, ethertype.0);
         }
 
         // don't try to parse l4, we don't know how to get L4 data
@@ -455,7 +455,7 @@ impl<'a> Analyzer<'a> {
 
     fn handle_l4_tcp(
         &mut self,
-        _packet: &pcap_parser::Packet,
+        packet: &pcap_parser::Packet,
         ctx: &ParseContext,
         data: &[u8],
         l3_info: &L3Info,
@@ -512,7 +512,7 @@ impl<'a> Analyzer<'a> {
             flow: Some(flow),
         };
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l4(&pdata);
+            let _ = p.handle_l4(&packet, &pdata);
         }
 
         // XXX do other stuff
@@ -522,7 +522,7 @@ impl<'a> Analyzer<'a> {
 
     fn handle_l4_udp(
         &mut self,
-        _packet: &pcap_parser::Packet,
+        packet: &pcap_parser::Packet,
         ctx: &ParseContext,
         data: &[u8],
         l3_info: &L3Info,
@@ -578,7 +578,7 @@ impl<'a> Analyzer<'a> {
             flow: Some(flow),
         };
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l4(&pdata);
+            let _ = p.handle_l4(&packet, &pdata);
         }
 
         // XXX do other stuff
@@ -588,7 +588,7 @@ impl<'a> Analyzer<'a> {
 
     fn handle_l4_generic(
         &mut self,
-        _packet: &pcap_parser::Packet,
+        packet: &pcap_parser::Packet,
         ctx: &ParseContext,
         data: &[u8],
         l3_info: &L3Info,
@@ -634,10 +634,10 @@ impl<'a> Analyzer<'a> {
             l3_data: data,
             l4_type: five_tuple.proto,
             l4_data: None,
-            flow: None,
+            flow: Some(flow), // XXX None ?
         };
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l4(&pdata);
+            let _ = p.handle_l4(&packet, &pdata);
         }
 
         // XXX do other stuff

@@ -1,3 +1,5 @@
+use pcap_parser::Packet;
+
 use super::{Plugin,PluginBuilder};
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
@@ -15,14 +17,14 @@ default_plugin_builder!(BasicStats, BasicStatsBuilder);
 impl Plugin for BasicStats {
     fn name(&self) -> &'static str { "BasicStats" }
 
-    fn handle_l3(&mut self, data: &[u8], _ethertype:u16) {
+    fn handle_l3(&mut self, _packet:&Packet, data: &[u8], _ethertype:u16) {
         // info!("BasicStats::handle_l3 (len {})", data.len());
         self.total_bytes += data.len();
         self.total_packets += 1;
     }
 
-    fn handle_l4(&mut self, packet: &PacketData) {
-        let five_tuple = &packet.five_tuple;
+    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketData) {
+        let five_tuple = &pdata.five_tuple;
         info!("BasicStats::handle_l4");
         debug!("    5t: proto {} / [{}]:{} -> [{}]:{}",
                five_tuple.proto,
@@ -30,12 +32,12 @@ impl Plugin for BasicStats {
                five_tuple.src_port,
                five_tuple.dst,
                five_tuple.dst_port);
-        debug!("    to_server: {}", packet.to_server);
-        debug!("    l3_type: {}", packet.l3_type);
-        debug!("    l3_data_len: {}", packet.l3_data.len());
-        debug!("    l4_type: {}", packet.l4_type);
-        debug!("    l4_data_len: {}", packet.l4_data.map_or(0, |d| d.len()));
-        if let Some(flow) = packet.flow {
+        debug!("    to_server: {}", pdata.to_server);
+        debug!("    l3_type: {}", pdata.l3_type);
+        debug!("    l3_data_len: {}", pdata.l3_data.len());
+        debug!("    l4_type: {}", pdata.l4_type);
+        debug!("    l4_data_len: {}", pdata.l4_data.map_or(0, |d| d.len()));
+        if let Some(flow) = pdata.flow {
             let five_tuple = &flow.five_tuple;
             debug!("    flow: [{}]:{} -> [{}]:{}",
                    five_tuple.src,
@@ -43,8 +45,8 @@ impl Plugin for BasicStats {
                    five_tuple.dst,
                    five_tuple.dst_port);
         }
-        debug!("    l3_data:\n{}", packet.l3_data.to_hex(16));
-        packet.l4_data.map(|d| {
+        debug!("    l3_data:\n{}", pdata.l3_data.to_hex(16));
+        pdata.l4_data.map(|d| {
             debug!("    l4_data:\n{}", d.to_hex(16));
         });
     }
