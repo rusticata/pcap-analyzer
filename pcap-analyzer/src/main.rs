@@ -48,6 +48,9 @@ fn main() {
    }
 
    debug!("  Plugins loaded: {}", plugins.list.len());
+   if plugins.list.is_empty() {
+       warn!("No plugins loaded");
+   }
    let mut analyzer = Analyzer::new(&mut plugins);
 
    let input_filename = matches.value_of("INPUT").unwrap();
