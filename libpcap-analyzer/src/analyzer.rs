@@ -132,15 +132,14 @@ impl<'a> Analyzer<'a> {
 
                             if let Some(packet) = opt_packet {
                                 debug!("**************************************************************");
+                                let ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
                                 if context.pcap_index == 1 {
-                                    context.first_packet_ts =
-                                        Duration::new(packet.header.ts_sec, packet.header.ts_usec);
+                                    context.first_packet_ts = ts;
                                 }
                                 debug!(
                                     "    time  : {} / {}",
                                     packet.header.ts_sec, packet.header.ts_usec
                                 );
-                                let ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
                                 context.rel_ts = ts - context.first_packet_ts; // an underflow is weird but not critical
                                 debug!(
                                     "    reltime  : {}.{}",
@@ -471,53 +470,12 @@ impl<'a> Analyzer<'a> {
             }
         };
 
-        let five_tuple = FiveTuple {
-            proto: l3_info.l4_proto.0,
-            src: l3_info.src,
-            src_port: tcp.get_source(),
-            dst: l3_info.dst,
-            dst_port: tcp.get_destination(),
-        };
-        debug!("5t: {:?}", five_tuple);
-
-        // lookup flow
-        let flow_id = match self.lookup_flow(&five_tuple) {
-            Some(id) => id,
-            None => {
-                let flow = Flow::new(&five_tuple, packet.header.ts_sec, packet.header.ts_usec);
-                self.insert_flow(five_tuple.clone(), flow)
-            }
-        };
-
-        // take flow ownership
-        let flow = self
-            .flows
-            .get_mut(&flow_id)
-            .expect("could not get flow from ID");
-        flow.flow_id = flow_id;
-
-        let to_server = flow.five_tuple == five_tuple;
-
-        // get L4 data
         // XXX handle TCP defrag
         let l4_data = Some(tcp.payload());
-        // handle L4
-        let pdata = PacketData {
-            five_tuple: &five_tuple,
-            to_server,
-            l3_type: l3_info.ethertype.0,
-            l3_data,
-            l4_type: l3_info.l4_proto.0,
-            l4_data,
-            flow: Some(flow),
-        };
-        for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l4(&packet, &pdata);
-        }
+        let src_port = tcp.get_source();
+        let dst_port = tcp.get_destination();
 
-        // XXX do other stuff
-
-        // XXX check session expiration
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
     }
 
     fn handle_l4_udp(
@@ -538,52 +496,11 @@ impl<'a> Analyzer<'a> {
             }
         };
 
-        let five_tuple = FiveTuple {
-            proto: l3_info.l4_proto.0,
-            src: l3_info.src,
-            src_port: udp.get_source(),
-            dst: l3_info.dst,
-            dst_port: udp.get_destination(),
-        };
-        debug!("5t: {:?}", five_tuple);
-
-        // lookup flow
-        let flow_id = match self.lookup_flow(&five_tuple) {
-            Some(id) => id,
-            None => {
-                let flow = Flow::new(&five_tuple, packet.header.ts_sec, packet.header.ts_usec);
-                self.insert_flow(five_tuple.clone(), flow)
-            }
-        };
-
-        // take flow ownership
-        let flow = self
-            .flows
-            .get_mut(&flow_id)
-            .expect("could not get flow from ID");
-        flow.flow_id = flow_id;
-
-        let to_server = flow.five_tuple == five_tuple;
-
-        // get L4 data
         let l4_data = Some(udp.payload());
-        // handle L4
-        let pdata = PacketData {
-            five_tuple: &five_tuple,
-            to_server,
-            l3_type: l3_info.ethertype.0,
-            l3_data,
-            l4_type: l3_info.l4_proto.0,
-            l4_data,
-            flow: Some(flow),
-        };
-        for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l4(&packet, &pdata);
-        }
+        let src_port = udp.get_source();
+        let dst_port = udp.get_destination();
 
-        // XXX do other stuff
-
-        // XXX check session expiration
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
     }
 
     fn handle_l4_generic(
@@ -597,13 +514,31 @@ impl<'a> Analyzer<'a> {
             "handle_l4_generic (idx={}, l4_proto={})",
             ctx.pcap_index, l3_info.l4_proto
         );
+        let l3_data = data;
+        // in generic function, we don't know how to get l4_data
+        let l4_data = None;
+        let src_port = 0;
+        let dst_port = 0;
 
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+    }
+
+    fn handle_l4_common(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        _ctx: &ParseContext,
+        l3_data: &[u8],
+        l3_info: &L3Info,
+        src_port: u16,
+        dst_port: u16,
+        l4_data: Option<&[u8]>
+    ) {
         let five_tuple = FiveTuple {
             proto: l3_info.l4_proto.0,
             src: l3_info.src,
-            src_port: 0,
+            src_port,
             dst: l3_info.dst,
-            dst_port: 0,
+            dst_port,
         };
         debug!("5t: {:?}", five_tuple);
 
@@ -625,16 +560,14 @@ impl<'a> Analyzer<'a> {
 
         let to_server = flow.five_tuple == five_tuple;
 
-        // in generic function, we don't know how to get l4_data
-
         let pdata = PacketData {
             five_tuple: &five_tuple,
             to_server,
             l3_type: l3_info.ethertype.0,
-            l3_data: data,
-            l4_type: five_tuple.proto,
-            l4_data: None,
-            flow: Some(flow), // XXX None ?
+            l3_data,
+            l4_type: l3_info.l4_proto.0,
+            l4_data,
+            flow: Some(flow),
         };
         for p in self.plugins.list.values_mut() {
             let _ = p.handle_l4(&packet, &pdata);
