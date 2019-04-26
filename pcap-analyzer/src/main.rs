@@ -48,6 +48,7 @@ fn main() {
    }
 
    debug!("  Plugins loaded: {}", plugins.list.len());
+   debug!("  Plugins: {}", plugins.list.keys().map(|s| s.as_ref()).collect::<Vec<_>>().join(", "));
    if plugins.list.is_empty() {
        warn!("No plugins loaded");
    }
