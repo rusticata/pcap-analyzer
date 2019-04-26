@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use libpcap_analyzer::{plugins,Analyzer};
+use libpcap_analyzer::{plugins,Analyzer,Config};
 
 fn main() {
    let matches = App::new("Pcap analyzer")
@@ -37,7 +37,8 @@ fn main() {
    debug!("Pcap analyser {}", crate_version!());
 
    let builder = plugins::plugins_factory();
-   let mut plugins = plugins::build_plugins(&builder);
+   let config = Config::default();
+   let mut plugins = plugins::build_plugins(&builder,&config);
 
    if let Some(plugin_names) = matches.value_of("plugins") {
        debug!("Restricting plugins to: {}", plugin_names);

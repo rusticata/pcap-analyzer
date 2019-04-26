@@ -1,6 +1,6 @@
 use pcap_parser::Packet;
 
-use super::{Plugin,PluginBuilder};
+use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
 use crate::flow::{FlowID,Flow};
@@ -205,4 +205,3 @@ debug!("SYN");
     fn post_process(&mut self) {
     }
 }
-

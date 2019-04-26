@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use crate::config::Config;
 use crate::{Plugin,PluginBuilder};
 
 mod basic_stats;
 mod tcp_states;
 mod rusticata;
+mod examples;
 
 pub struct Plugins {
     pub storage: HashMap<String, Box<Plugin>>,
@@ -20,15 +22,17 @@ pub fn plugins_factory() -> PluginsFactory {
     v.push(Box::new(basic_stats::BasicStatsBuilder));
     v.push(Box::new(tcp_states::TcpStatesBuilder));
     v.push(Box::new(rusticata::RusticataBuilder));
+    v.push(Box::new(examples::EmptyBuilder));
+    v.push(Box::new(examples::EmptyWithConfigBuilder));
 
     PluginsFactory{ list:v }
 }
 
-pub fn build_plugins(factory: &PluginsFactory) -> Plugins {
+pub fn build_plugins(factory: &PluginsFactory, config:&Config) -> Plugins {
     let mut h: HashMap<String, Box<Plugin>> = HashMap::new();
 
     factory.list.iter().for_each(|b| {
-        let plugin = b.build();
+        let plugin = b.build(&config);
         h.insert(plugin.name().to_string(), plugin);
     });
 

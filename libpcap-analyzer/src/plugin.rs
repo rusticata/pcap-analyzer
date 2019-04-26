@@ -3,10 +3,11 @@ use pcap_parser::Packet;
 use crate::packet_data::PacketData;
 use crate::three_tuple::ThreeTuple;
 use crate::flow::Flow;
+use crate::config::Config;
 
 pub trait PluginBuilder : Sync + Send {
     fn name(&self) -> &'static str;
-    fn build(&self) -> Box<Plugin>;
+    fn build(&self, config:&Config) -> Box<Plugin>;
 }
 
 pub trait Plugin : Sync + Send {
@@ -23,14 +24,15 @@ pub trait Plugin : Sync + Send {
     fn post_process(&mut self) {}
 }
 
+/// Derives a plugin builder relying on the Plugin::default() function
 #[macro_export]
 macro_rules! default_plugin_builder {
     ($name:ident,$builder:ident) => {
         pub struct $builder;
 
-        impl PluginBuilder for $builder {
+        impl $crate::plugin::PluginBuilder for $builder {
             fn name(&self) -> &'static str { "$builder" }
-            fn build(&self) -> Box<Plugin> {
+            fn build(&self, _config:&$crate::Config) -> Box<$crate::plugin::Plugin> {
                 Box::new($name::default())
             }
         }

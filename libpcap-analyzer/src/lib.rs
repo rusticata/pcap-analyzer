@@ -14,6 +14,8 @@ extern crate rand;
 
 mod pcapng_extra;
 
+mod config;
+pub use config::Config;
 mod duration;
 mod five_tuple;
 mod three_tuple;
