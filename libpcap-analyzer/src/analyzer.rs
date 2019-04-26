@@ -11,7 +11,7 @@ use nom::HexDisplay;
 use nom::{IResult, Needed, Offset};
 
 use pnet::packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
-use pnet::packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
+use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::{Ipv4Flags, Ipv4Packet};
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::TcpPacket;
@@ -23,6 +23,7 @@ use pcap_parser::*;
 use crate::pcapng_extra::{pcapng_build_interface, pcapng_build_packet, InterfaceInfo};
 
 use crate::five_tuple::FiveTuple;
+use crate::three_tuple::ThreeTuple;
 use crate::flow::{Flow, FlowID};
 use crate::ip_defrag::{DefragEngine, Fragment, IP4DefragEngine};
 use crate::packet_data::PacketData;
@@ -38,10 +39,8 @@ enum PcapType {
 }
 
 struct L3Info {
-    ethertype: EtherType,
-    src: IpAddr,
-    dst: IpAddr,
-    l4_proto: IpNextHeaderProtocol,
+    l3_proto: u16,
+    three_tuple: ThreeTuple,
 }
 
 struct ParseContext {
@@ -332,6 +331,7 @@ impl<'a> Analyzer<'a> {
                 return;
             }
         };
+        let l4_proto = ipv4.get_next_level_protocol();
 
         // remove padding
         let data = {
@@ -342,9 +342,15 @@ impl<'a> Analyzer<'a> {
             }
         };
 
+        let t3 = ThreeTuple{
+            proto: l4_proto.0,
+            src: IpAddr::V4(ipv4.get_source()),
+            dst: IpAddr::V4(ipv4.get_destination()),
+        };
+
         // handle l3
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l3(packet, data, ethertype.0);
+            let _ = p.handle_l3(packet, data, ethertype.0, &t3);
         }
 
         // check IP fragmentation before calling handle_l4
@@ -371,12 +377,9 @@ impl<'a> Analyzer<'a> {
             }
         };
 
-        let l4_proto = ipv4.get_next_level_protocol();
         let l3_info = L3Info {
-            ethertype,
-            src: IpAddr::V4(ipv4.get_source()),
-            dst: IpAddr::V4(ipv4.get_destination()),
-            l4_proto,
+            three_tuple: t3,
+            l3_proto: ethertype.0,
         };
 
         match l4_proto {
@@ -406,19 +409,23 @@ impl<'a> Analyzer<'a> {
                 return;
             }
         };
+        let l4_proto = ipv6.get_next_header();
 
         // XXX remove padding ?
 
-        for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l3(&packet, data, ethertype.0);
-        }
-
-        let l4_proto = ipv6.get_next_header();
-        let l3_info = L3Info {
-            ethertype,
+        let t3 = ThreeTuple{
+            proto: l4_proto.0,
             src: IpAddr::V6(ipv6.get_source()),
             dst: IpAddr::V6(ipv6.get_destination()),
-            l4_proto,
+        };
+
+        for p in self.plugins.list.values_mut() {
+            let _ = p.handle_l3(&packet, data, ethertype.0, &t3);
+        }
+
+        let l3_info = L3Info {
+            three_tuple: t3,
+            l3_proto: ethertype.0,
         };
 
         let data = ipv6.payload();
@@ -444,9 +451,11 @@ impl<'a> Analyzer<'a> {
     ) {
         // we don't know if there is padding to remove
 
+        let t3 = ThreeTuple::default();
+
         // handle l3
         for p in self.plugins.list.values_mut() {
-            let _ = p.handle_l3(packet, data, ethertype.0);
+            let _ = p.handle_l3(packet, data, ethertype.0, &t3);
         }
 
         // don't try to parse l4, we don't know how to get L4 data
@@ -512,7 +521,7 @@ impl<'a> Analyzer<'a> {
     ) {
         debug!(
             "handle_l4_generic (idx={}, l4_proto={})",
-            ctx.pcap_index, l3_info.l4_proto
+            ctx.pcap_index, l3_info.three_tuple.proto
         );
         let l3_data = data;
         // in generic function, we don't know how to get l4_data
@@ -533,14 +542,9 @@ impl<'a> Analyzer<'a> {
         dst_port: u16,
         l4_data: Option<&[u8]>
     ) {
-        let five_tuple = FiveTuple {
-            proto: l3_info.l4_proto.0,
-            src: l3_info.src,
-            src_port,
-            dst: l3_info.dst,
-            dst_port,
-        };
+        let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
         debug!("5t: {:?}", five_tuple);
+        let now = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
 
         // lookup flow
         let flow_id = match self.lookup_flow(&five_tuple) {
@@ -557,15 +561,16 @@ impl<'a> Analyzer<'a> {
             .get_mut(&flow_id)
             .expect("could not get flow from ID");
         flow.flow_id = flow_id;
+        flow.last_seen = now;
 
         let to_server = flow.five_tuple == five_tuple;
 
         let pdata = PacketData {
             five_tuple: &five_tuple,
             to_server,
-            l3_type: l3_info.ethertype.0,
+            l3_type: l3_info.l3_proto,
             l3_data,
-            l4_type: l3_info.l4_proto.0,
+            l4_type: l3_info.three_tuple.proto,
             l4_data,
             flow: Some(flow),
         };

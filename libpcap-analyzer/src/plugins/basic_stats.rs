@@ -1,15 +1,26 @@
 use pcap_parser::Packet;
 
+use std::collections::HashMap;
+
 use super::{Plugin,PluginBuilder};
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
+use crate::three_tuple::ThreeTuple;
 
 use nom::HexDisplay;
+
+#[derive(Default)]
+pub struct Count {
+    pub num_bytes : usize,
+    pub num_packets : usize,
+}
 
 #[derive(Default)]
 pub struct BasicStats {
     pub total_bytes : usize,
     pub total_packets : usize,
+
+    pub l3_conversations: HashMap<ThreeTuple,Count>,
 }
 
 default_plugin_builder!(BasicStats, BasicStatsBuilder);
@@ -17,8 +28,11 @@ default_plugin_builder!(BasicStats, BasicStatsBuilder);
 impl Plugin for BasicStats {
     fn name(&self) -> &'static str { "BasicStats" }
 
-    fn handle_l3(&mut self, _packet:&Packet, data: &[u8], _ethertype:u16) {
+    fn handle_l3(&mut self, packet:&Packet, data: &[u8], _ethertype:u16, t3:&ThreeTuple) {
         // info!("BasicStats::handle_l3 (len {})", data.len());
+        let entry = self.l3_conversations.entry(t3.clone()).or_insert_with(|| Count::default());
+        entry.num_bytes += packet.header.len as usize;
+        entry.num_packets += 1;
         self.total_bytes += data.len();
         self.total_packets += 1;
     }
@@ -54,5 +68,9 @@ impl Plugin for BasicStats {
     fn post_process(&mut self) {
         info!("BasicStats: total bytes {}", self.total_bytes);
         info!("BasicStats: total packets {}", self.total_packets);
+        info!("Conversions (L3):");
+        for (t3,stats) in self.l3_conversations.iter() {
+            info!("  {} -> {} [{}]: {} bytes, {} packets", t3.src, t3.dst, t3.proto, stats.num_bytes, stats.num_packets);
+        }
     }
 }

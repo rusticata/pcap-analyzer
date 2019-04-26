@@ -11,14 +11,18 @@ pub struct Flow {
     pub five_tuple: FiveTuple,
     /// timestamp of first packet
     pub first_seen: Duration,
+    /// timestamp of last seen packet
+    pub last_seen: Duration,
 }
 
 impl Flow {
     pub fn new(five_tuple: &FiveTuple, ts_sec: u32, ts_usec: u32) -> Self {
+        let d = Duration::new(ts_sec, ts_usec);
         Flow {
             flow_id: 0,
             five_tuple: five_tuple.clone(),
-            first_seen: Duration::new(ts_sec, ts_usec),
+            first_seen: d,
+            last_seen: d
         }
     }
 }
@@ -28,5 +32,6 @@ impl Hash for Flow {
         // skip flow_id
         self.five_tuple.hash(state);
         self.first_seen.hash(state);
+        // skip last seen
     }
 }

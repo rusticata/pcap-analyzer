@@ -16,6 +16,7 @@ mod pcapng_extra;
 
 mod duration;
 mod five_tuple;
+mod three_tuple;
 mod flow;
 mod packet_data;
 
