@@ -33,7 +33,12 @@ pub fn build_plugins(factory: &PluginsFactory, config:&Config) -> Plugins {
 
     factory.list.iter().for_each(|b| {
         let plugin = b.build(&config);
-        h.insert(plugin.name().to_string(), plugin);
+        let name = plugin.name().to_string();
+        if h.contains_key(&name) {
+            warn!("Attempt to insert plugin {} twice", name);
+        } else {
+            h.insert(plugin.name().to_string(), plugin);
+        }
     });
 
     Plugins { storage: h }
