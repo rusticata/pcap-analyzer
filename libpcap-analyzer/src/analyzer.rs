@@ -107,7 +107,7 @@ impl<'a> Analyzer<'a> {
         let mut last_incomplete_offset = 0;
 
         self.plugins
-            .list
+            .storage
             .values_mut()
             .for_each(|plugin| plugin.pre_process());
 
@@ -211,7 +211,7 @@ impl<'a> Analyzer<'a> {
         // expire remaining flows
         debug!("{} flows remaining in table", self.flows.len());
         for f in self.flows.values() {
-            for p in self.plugins.list.values_mut() {
+            for p in self.plugins.storage.values_mut() {
                 p.flow_terminate(&f);
             }
         }
@@ -219,7 +219,7 @@ impl<'a> Analyzer<'a> {
         self.flows_id.clear();
 
         self.plugins
-            .list
+            .storage
             .values_mut()
             .for_each(|plugin| plugin.post_process());
 
@@ -273,7 +273,7 @@ impl<'a> Analyzer<'a> {
         let datalen = min(packet.header.caplen as usize, packet.data.len());
         let data = &packet.data[..datalen];
 
-        for p in self.plugins.list.values_mut() {
+        for p in self.plugins.storage.values_mut() {
             let _ = p.handle_l2(&packet, &data);
         }
 
@@ -349,7 +349,7 @@ impl<'a> Analyzer<'a> {
         };
 
         // handle l3
-        for p in self.plugins.list.values_mut() {
+        for p in self.plugins.storage.values_mut() {
             let _ = p.handle_l3(packet, data, ethertype.0, &t3);
         }
 
@@ -419,7 +419,7 @@ impl<'a> Analyzer<'a> {
             dst: IpAddr::V6(ipv6.get_destination()),
         };
 
-        for p in self.plugins.list.values_mut() {
+        for p in self.plugins.storage.values_mut() {
             let _ = p.handle_l3(&packet, data, ethertype.0, &t3);
         }
 
@@ -454,7 +454,7 @@ impl<'a> Analyzer<'a> {
         let t3 = ThreeTuple::default();
 
         // handle l3
-        for p in self.plugins.list.values_mut() {
+        for p in self.plugins.storage.values_mut() {
             let _ = p.handle_l3(packet, data, ethertype.0, &t3);
         }
 
@@ -574,7 +574,7 @@ impl<'a> Analyzer<'a> {
             l4_data,
             flow: Some(flow),
         };
-        for p in self.plugins.list.values_mut() {
+        for p in self.plugins.storage.values_mut() {
             let _ = p.handle_l4(&packet, &pdata);
         }
 

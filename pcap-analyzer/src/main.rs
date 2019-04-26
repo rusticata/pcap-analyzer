@@ -37,19 +37,19 @@ fn main() {
    debug!("Pcap analyser {}", crate_version!());
 
    let builder = plugins::plugins_factory();
-   let mut plugins = plugins::plugins(&builder);
+   let mut plugins = plugins::build_plugins(&builder);
 
    if let Some(plugin_names) = matches.value_of("plugins") {
        debug!("Restricting plugins to: {}", plugin_names);
        let names : Vec<_> = plugin_names.split(",").collect();
-       plugins.list.retain(|k, _| {
+       plugins.storage.retain(|k, _| {
            names.iter().any(|&x| k.contains(x))
        });
    }
 
-   debug!("  Plugins loaded: {}", plugins.list.len());
-   debug!("  Plugins: {}", plugins.list.keys().map(|s| s.as_ref()).collect::<Vec<_>>().join(", "));
-   if plugins.list.is_empty() {
+   debug!("  Plugins loaded: {}", plugins.storage.len());
+   debug!("  Plugins: {}", plugins.storage.keys().map(|s| s.as_ref()).collect::<Vec<_>>().join(", "));
+   if plugins.storage.is_empty() {
        warn!("No plugins loaded");
    }
    let mut analyzer = Analyzer::new(&mut plugins);

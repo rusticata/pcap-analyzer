@@ -7,7 +7,7 @@ mod tcp_states;
 mod rusticata;
 
 pub struct Plugins {
-    pub list: HashMap<String, Box<Plugin>>,
+    pub storage: HashMap<String, Box<Plugin>>,
 }
 
 pub struct PluginsFactory {
@@ -24,7 +24,7 @@ pub fn plugins_factory() -> PluginsFactory {
     PluginsFactory{ list:v }
 }
 
-pub fn plugins(factory: &PluginsFactory) -> Plugins {
+pub fn build_plugins(factory: &PluginsFactory) -> Plugins {
     let mut h: HashMap<String, Box<Plugin>> = HashMap::new();
 
     factory.list.iter().for_each(|b| {
@@ -32,5 +32,5 @@ pub fn plugins(factory: &PluginsFactory) -> Plugins {
         h.insert(plugin.name().to_string(), plugin);
     });
 
-    Plugins { list: h }
+    Plugins { storage: h }
 }
