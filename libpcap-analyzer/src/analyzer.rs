@@ -16,6 +16,7 @@ use pnet::packet::ipv4::{Ipv4Flags, Ipv4Packet};
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
+use pnet::packet::vlan::VlanPacket;
 use pnet::packet::Packet;
 
 use pcap_parser::*;
@@ -310,6 +311,9 @@ impl<'a> Analyzer<'a> {
             EtherTypes::Ipv6 => {
                 self.handle_l3_ipv6(packet, ctx, data, ethertype);
             }
+            EtherTypes::Vlan => {
+                self.handle_l3_vlan_801q(packet, ctx, data, ethertype);
+            }
             _ => {
                 warn!("Unsupported ethertype {} (0x{:x})", ethertype, ethertype.0);
                 self.handle_l3_generic(packet, ctx, data, ethertype);
@@ -439,6 +443,26 @@ impl<'a> Analyzer<'a> {
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
             }
         }
+    }
+
+    fn handle_l3_vlan_801q(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        _ethertype: EtherType,
+    ) {
+        debug!("handle_l3_vlan_801q (idx={})", ctx.pcap_index);
+        let vlan = match VlanPacket::new(data) {
+            Some(vlan) => vlan,
+            None => {
+                warn!("Could not build 802.1Q Vlan packet from data");
+                return;
+            }
+        };
+        let next_ethertype = vlan.get_ethertype();
+
+        self.handle_l3(&packet, &ctx, vlan.payload(), next_ethertype);
     }
 
     // Called when L3 layer is unknown
