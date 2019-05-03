@@ -19,6 +19,7 @@ use pnet::packet::tcp::TcpPacket;
 use pnet::packet::udp::UdpPacket;
 use pnet::packet::vlan::VlanPacket;
 use pnet::packet::Packet;
+use pnet::util::MacAddr;
 
 use pcap_parser::*;
 
@@ -281,10 +282,21 @@ impl<'a> Analyzer<'a> {
 
         match EthernetPacket::new(data) {
             Some(eth) => {
-                debug!("    ethertype: {}", eth.get_ethertype().0);
                 // debug!("    source: {}", eth.get_source());
                 // debug!("    dest  : {}", eth.get_destination());
-
+                let dest = eth.get_destination();
+                if dest.0 == 1 {
+                    // Multicast
+                    if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) {
+                        warn!("Cisco CDP/VTP/UDLD");
+                    } else if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) {
+                        warn!("Cisco Multicast address");
+                    } else {
+                        warn!("Ethernet broadcast (unknown)");
+                    }
+                    return;
+                }
+                debug!("    ethertype: 0x{:x}", eth.get_ethertype().0);
                 self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype());
             }
             None => {
