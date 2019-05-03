@@ -350,17 +350,25 @@ impl<'a> Analyzer<'a> {
                 return;
             }
         };
-        let l4_proto = ipv4.get_next_level_protocol();
 
         // remove padding
-        let data = {
+        let (data,ipv4) = {
             if (ipv4.get_total_length() as usize) < data.len() {
-                &data[..ipv4.get_total_length() as usize]
+                let d = &data[..ipv4.get_total_length() as usize];
+                let ipv4 = match Ipv4Packet::new(d) {
+                    Some(ipv4) => ipv4,
+                    None => {
+                        warn!("Could not build IPv4 packet from data");
+                        return;
+                    }
+                };
+                (d,ipv4)
             } else {
-                data
+                (data,ipv4)
             }
         };
 
+        let l4_proto = ipv4.get_next_level_protocol();
         let t3 = ThreeTuple {
             proto: l4_proto.0,
             src: IpAddr::V4(ipv4.get_source()),
