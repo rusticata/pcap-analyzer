@@ -314,7 +314,6 @@ impl<'a> Analyzer<'a> {
         data: &[u8],
         ethertype: EtherType,
     ) {
-        debug!("handle_l3 (idx={})", ctx.pcap_index);
         if data.is_empty() {
             return;
         }
@@ -343,6 +342,7 @@ impl<'a> Analyzer<'a> {
         data: &[u8],
         ethertype: EtherType,
     ) {
+        debug!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
         let ipv4 = match Ipv4Packet::new(data) {
             Some(ipv4) => ipv4,
             None => {
@@ -422,6 +422,7 @@ impl<'a> Analyzer<'a> {
         data: &[u8],
         ethertype: EtherType,
     ) {
+        debug!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
         let ipv6 = match Ipv6Packet::new(data) {
             Some(ipv4) => ipv4,
             None => {
@@ -487,10 +488,11 @@ impl<'a> Analyzer<'a> {
     fn handle_l3_generic(
         &mut self,
         packet: &pcap_parser::Packet,
-        _ctx: &ParseContext,
+        ctx: &ParseContext,
         data: &[u8],
         ethertype: EtherType,
     ) {
+        debug!("handle_l3_generic (idx={})", ctx.pcap_index);
         // we don't know if there is padding to remove
 
         let t3 = ThreeTuple::default();
