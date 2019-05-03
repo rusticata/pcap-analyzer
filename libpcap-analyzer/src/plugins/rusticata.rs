@@ -24,8 +24,8 @@ impl Plugin for Rusticata {
     fn pre_process(&mut self) {
         let mut m : HashMap<&'static str, Box<RBuilder>> = HashMap::new();
         m.insert("ikev2", Box::new(IPsecBuilder{}) as Box<_>);
-        m.insert("kerberos_probe_tcp", Box::new(KerberosTCPBuilder{}) as Box<_>);
-        m.insert("kerberos_probe_udp", Box::new(KerberosUDPBuilder{}) as Box<_>);
+        m.insert("kerberos_tcp", Box::new(KerberosTCPBuilder{}) as Box<_>);
+        m.insert("kerberos_udp", Box::new(KerberosUDPBuilder{}) as Box<_>);
         m.insert("ntp", Box::new(NTPBuilder{}) as Box<_>);
         m.insert("openvpn_tcp", Box::new(OpenVPNTCPBuilder{}) as Box<_>);
         m.insert("openvpn_udp", Box::new(OpenVPNUDPBuilder{}) as Box<_>);
