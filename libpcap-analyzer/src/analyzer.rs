@@ -11,6 +11,7 @@ use nom::HexDisplay;
 use nom::{IResult, Needed, Offset};
 
 use pnet::packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
+use pnet::packet::icmp::IcmpPacket;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::{Ipv4Flags, Ipv4Packet};
 use pnet::packet::ipv6::Ipv6Packet;
@@ -24,10 +25,10 @@ use pcap_parser::*;
 use crate::pcapng_extra::{pcapng_build_interface, pcapng_build_packet, InterfaceInfo};
 
 use crate::five_tuple::FiveTuple;
-use crate::three_tuple::ThreeTuple;
 use crate::flow::{Flow, FlowID};
 use crate::ip_defrag::{DefragEngine, Fragment, IP4DefragEngine};
 use crate::packet_data::PacketData;
+use crate::three_tuple::ThreeTuple;
 
 use crate::plugins::Plugins;
 
@@ -346,7 +347,7 @@ impl<'a> Analyzer<'a> {
             }
         };
 
-        let t3 = ThreeTuple{
+        let t3 = ThreeTuple {
             proto: l4_proto.0,
             src: IpAddr::V4(ipv4.get_source()),
             dst: IpAddr::V4(ipv4.get_destination()),
@@ -389,9 +390,8 @@ impl<'a> Analyzer<'a> {
         match l4_proto {
             IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Icmp | IpNextHeaderProtocols::Esp => {
-                self.handle_l4_generic(packet, ctx, data, &l3_info)
-            }
+            IpNextHeaderProtocols::Icmp => self.handle_l4_icmp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
             _ => {
                 warn!("Unsupported L4 proto {}", l4_proto);
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
@@ -417,7 +417,7 @@ impl<'a> Analyzer<'a> {
 
         // XXX remove padding ?
 
-        let t3 = ThreeTuple{
+        let t3 = ThreeTuple {
             proto: l4_proto.0,
             src: IpAddr::V6(ipv6.get_source()),
             dst: IpAddr::V6(ipv6.get_destination()),
@@ -536,6 +536,36 @@ impl<'a> Analyzer<'a> {
         self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
     }
 
+    fn handle_l4_icmp(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        l3_info: &L3Info,
+    ) {
+        debug!("handle_l4_icmp (idx={})", ctx.pcap_index);
+        let l3_data = data;
+
+        let icmp = match IcmpPacket::new(l3_data) {
+            Some(icmp) => icmp,
+            None => {
+                warn!("Could not build ICMP packet from data");
+                return;
+            }
+        };
+        debug!(
+            "ICMP type={:?} code={:?}",
+            icmp.get_icmp_type(),
+            icmp.get_icmp_code()
+        );
+
+        let l4_data = Some(icmp.payload());
+        let src_port = 0;
+        let dst_port = 0;
+
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+    }
+
     fn handle_l4_generic(
         &mut self,
         packet: &pcap_parser::Packet,
@@ -564,7 +594,7 @@ impl<'a> Analyzer<'a> {
         l3_info: &L3Info,
         src_port: u16,
         dst_port: u16,
-        l4_data: Option<&[u8]>
+        l4_data: Option<&[u8]>,
     ) {
         let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
         debug!("5t: {:?}", five_tuple);
