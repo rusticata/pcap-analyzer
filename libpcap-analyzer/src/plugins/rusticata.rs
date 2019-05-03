@@ -68,6 +68,7 @@ impl Plugin for Rusticata {
                 }
         };
         pdata.l4_data.map(|d| {
+            if d.is_empty() { return; }
             let parser = {
                 // check if we already have a parser
                 if let Some(parser) = self.flow_parsers.get_mut(&flow_id) {
