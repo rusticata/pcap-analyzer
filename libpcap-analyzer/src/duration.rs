@@ -53,3 +53,16 @@ impl Sub for Duration {
         Duration{ secs, micros }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Duration;
+    #[test]
+    fn duration_sub() {
+        let d1 = Duration::new(1234, 5678);
+        let d2 = Duration::new(1234, 6789);
+        let d = d2 - d1;
+        assert_eq!(d.secs,0);
+        assert_eq!(d.micros,1111);
+    }
+}
