@@ -452,8 +452,9 @@ impl<'a> Analyzer<'a> {
             IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Ipv4 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv4),
             _ => {
-                warn!("Unsupported L4 proto {}", l4_proto);
+                warn!("IPv6: Unsupported L4 proto {}", l4_proto);
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
             }
         }
