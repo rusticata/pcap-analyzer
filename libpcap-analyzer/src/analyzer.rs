@@ -13,6 +13,7 @@ use nom::{IResult, Needed, Offset};
 use pnet::packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use pnet::packet::gre::GrePacket;
 use pnet::packet::icmp::IcmpPacket;
+use pnet::packet::icmpv6::Icmpv6Packet;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::{Ipv4Flags, Ipv4Packet};
 use pnet::packet::ipv6::Ipv6Packet;
@@ -452,6 +453,7 @@ impl<'a> Analyzer<'a> {
         match l4_proto {
             IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Icmpv6 => self.handle_l4_icmpv6(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Ipv4 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv4),
             _ => {
@@ -576,6 +578,36 @@ impl<'a> Analyzer<'a> {
         );
 
         let l4_data = Some(icmp.payload());
+        let src_port = 0;
+        let dst_port = 0;
+
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+    }
+
+    fn handle_l4_icmpv6(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        l3_info: &L3Info,
+    ) {
+        debug!("handle_l4_icmpv6 (idx={})", ctx.pcap_index);
+        let l3_data = data;
+
+        let icmpv6 = match Icmpv6Packet::new(l3_data) {
+            Some(icmp) => icmp,
+            None => {
+                warn!("Could not build ICMPv6 packet from data");
+                return;
+            }
+        };
+        debug!(
+            "ICMPv6 type={:?} code={:?}",
+            icmpv6.get_icmpv6_type(),
+            icmpv6.get_icmpv6_code()
+        );
+
+        let l4_data = Some(icmpv6.payload());
         let src_port = 0;
         let dst_port = 0;
 
