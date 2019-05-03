@@ -11,6 +11,7 @@ use nom::HexDisplay;
 use nom::{IResult, Needed, Offset};
 
 use pnet::packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
+use pnet::packet::gre::GrePacket;
 use pnet::packet::icmp::IcmpPacket;
 use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv4::{Ipv4Flags, Ipv4Packet};
@@ -404,6 +405,7 @@ impl<'a> Analyzer<'a> {
             IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Icmp => self.handle_l4_icmp(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Gre => self.handle_l4_gre(packet, ctx, data, &l3_info),
             _ => {
                 warn!("Unsupported L4 proto {}", l4_proto);
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
@@ -576,6 +578,30 @@ impl<'a> Analyzer<'a> {
         let dst_port = 0;
 
         self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+    }
+
+    fn handle_l4_gre(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        _l3_info: &L3Info,
+    ) {
+        debug!("handle_l4_gre (idx={})", ctx.pcap_index);
+        let l3_data = data;
+
+        let gre = match GrePacket::new(l3_data) {
+            Some(gre) => gre,
+            None => {
+                warn!("Could not build GRE packet from data");
+                return;
+            }
+        };
+
+        let next_proto = gre.get_protocol_type();
+        let data = gre.payload();
+
+        self.handle_l3(packet, ctx, data, EtherType(next_proto));
     }
 
     fn handle_l4_generic(
