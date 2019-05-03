@@ -406,6 +406,7 @@ impl<'a> Analyzer<'a> {
             IpNextHeaderProtocols::Icmp => self.handle_l4_icmp(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Gre => self.handle_l4_gre(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Ipv6 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv6),
             _ => {
                 warn!("Unsupported L4 proto {}", l4_proto);
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
