@@ -18,5 +18,5 @@ rand="0.6"
 git = "https://github.com/rusticata/rusticata.git"
 
 [dependencies.pcap-parser]
-version = "0.4"
+version = "0.5"
 features = ["data"]

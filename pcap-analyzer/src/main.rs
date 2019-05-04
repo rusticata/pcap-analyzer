@@ -74,5 +74,5 @@ fn main() {
            Box::new(file) as Box<io::Read>
        };
 
-   let _ = analyzer.run(&mut input_reader);
+   let _ = analyzer.run(&mut input_reader).expect("run analyzer");
 }

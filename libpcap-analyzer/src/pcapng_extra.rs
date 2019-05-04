@@ -1,6 +1,7 @@
 use pcap_parser::*;
 use nom::le_u64;
 
+#[derive(Debug)]
 pub struct InterfaceInfo {
     pub link_type: Linktype,
     pub if_tsresol: u8,
@@ -35,27 +36,5 @@ pub fn pcapng_build_interface<'a>(idb: &'a InterfaceDescriptionBlock<'a>) -> Int
 }
 
 pub fn pcapng_build_packet<'a>(if_info:&InterfaceInfo, block:Block<'a>) -> Option<Packet<'a>> {
-    match block {
-        Block::EnhancedPacket(ref b) => {
-            let if_tsoffset = if_info.if_tsoffset;
-            let if_tsresol = if_info.if_tsresol;
-            let ts_mode = if_tsresol & 0x70;
-            let unit =
-                if ts_mode == 0 { 10u64.pow(if_tsresol as u32) }
-                else { 2u64.pow((if_tsresol & !0x70) as u32) };
-            let ts : u64 = ((b.ts_high as u64) << 32) | (b.ts_low as u64);
-            let ts_sec = (if_tsoffset + (ts / unit)) as u32;
-            let ts_usec = (ts % unit) as u32;
-            let header = PacketHeader{
-                ts_sec,
-                ts_usec,
-                caplen: b.caplen,
-                len: b.origlen
-            };
-            let data = b.data;
-            Some(Packet{ header, data})
-        },
-        _ => None
-    }
+    pcapng::packet_of_block(block, if_info.if_tsoffset, if_info.if_tsresol)
 }
-
