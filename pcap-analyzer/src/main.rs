@@ -6,12 +6,14 @@ use clap::{Arg,App,crate_version};
 
 extern crate env_logger;
 extern crate flate2;
+extern crate xz2;
 
 use std::fs::File;
 use std::io;
 use std::path::Path;
 
 use flate2::read::GzDecoder;
+use xz2::read::XzDecoder;
 
 use libpcap_analyzer::{plugins,Analyzer,Config};
 
@@ -66,11 +68,13 @@ fn main() -> io::Result<()> {
            Box::new(io::stdin()) as Box<io::Read>
        } else {
            let path = Path::new(&input_filename);
+           let file = File::open(path)?;
            if input_filename.ends_with(".gz") {
-               let file = File::open(path)?;
                Box::new(GzDecoder::new(file)) as Box<io::Read>
+           } else if input_filename.ends_with(".xz") {
+               Box::new(XzDecoder::new(file)) as Box<io::Read>
            } else {
-               Box::new(File::open(path)?)
+               Box::new(file)
            }
        };
 
