@@ -5,14 +5,17 @@ extern crate clap;
 use clap::{Arg,App,crate_version};
 
 extern crate env_logger;
+extern crate flate2;
 
 use std::fs::File;
 use std::io;
 use std::path::Path;
 
+use flate2::read::GzDecoder;
+
 use libpcap_analyzer::{plugins,Analyzer,Config};
 
-fn main() {
+fn main() -> io::Result<()> {
    let matches = App::new("Pcap analyzer")
         .version(crate_version!())
         .author("Pierre Chifflier")
@@ -63,16 +66,15 @@ fn main() {
            Box::new(io::stdin()) as Box<io::Read>
        } else {
            let path = Path::new(&input_filename);
-           let display = path.display();
-           let file = match File::open(path) {
-               // The `description` method of `io::Error` returns a string that
-               // describes the error
-               Err(why) => panic!("couldn't open {}: {}", display,
-                                  why.to_string()),
-               Ok(file) => file,
-           };
-           Box::new(file) as Box<io::Read>
+           if input_filename.ends_with(".gz") {
+               let file = File::open(path)?;
+               Box::new(GzDecoder::new(file)) as Box<io::Read>
+           } else {
+               Box::new(File::open(path)?)
+           }
        };
 
    let _ = analyzer.run(&mut input_reader).expect("run analyzer");
+
+   Ok(())
 }
