@@ -16,6 +16,7 @@ use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
 use libpcap_analyzer::{plugins,Analyzer,Config};
+use libpcap_tools::PcapEngine;
 
 fn main() -> io::Result<()> {
    let matches = App::new("Pcap analyzer")
@@ -58,7 +59,8 @@ fn main() -> io::Result<()> {
    if plugins.storage.is_empty() {
        warn!("No plugins loaded");
    }
-   let mut analyzer = Analyzer::new(&mut plugins);
+   let analyzer = Analyzer::new(plugins);
+   let mut engine = PcapEngine::new(Box::new(analyzer));
 
    let input_filename = matches.value_of("INPUT").unwrap();
    // let verbose = matches.is_present("verbose");
@@ -78,7 +80,7 @@ fn main() -> io::Result<()> {
            }
        };
 
-   let _ = analyzer.run(&mut input_reader).expect("run analyzer");
+   let _ = engine.run(&mut input_reader).expect("run analyzer");
 
    Ok(())
 }

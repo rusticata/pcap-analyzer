@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
-use crate::three_tuple::ThreeTuple;
+use libpcap_tools::ThreeTuple;
 
 use nom::HexDisplay;
 

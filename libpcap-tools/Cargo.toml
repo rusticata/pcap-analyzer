@@ -1,21 +1,15 @@
 [package]
-name = "libpcap-analyzer"
+name = "libpcap-tools"
 version = "0.1.0"
 authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 edition = "2018"
 
 [dependencies]
+circular = "0.2"
 env_logger = "0.6"
 lazy_static = "1.2"
-libpcap-tools = { path="../libpcap-tools" }
 log = "0.4"
 nom = "4.2"
-pnet = "0.22.0"
-rand="0.6"
-
-[dependencies.rusticata]
-# path = "../../rusticata"
-git = "https://github.com/rusticata/rusticata.git"
 
 [dependencies.pcap-parser]
 version = "0.5"

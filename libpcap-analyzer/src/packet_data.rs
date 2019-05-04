@@ -1,5 +1,4 @@
-use crate::five_tuple::FiveTuple;
-use crate::flow::Flow;
+use libpcap_tools::{FiveTuple, Flow};
 
 pub struct PacketData<'l3, 'l4, 't, 'f> {
     pub five_tuple: &'t FiveTuple,

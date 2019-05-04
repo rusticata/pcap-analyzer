@@ -1,7 +1,7 @@
+use crate::Duration;
 use std::hash::{Hash, Hasher};
 
 use crate::five_tuple::FiveTuple;
-use crate::duration::Duration;
 
 pub type FlowID = u64;
 
@@ -22,7 +22,7 @@ impl Flow {
             flow_id: 0,
             five_tuple: five_tuple.clone(),
             first_seen: d,
-            last_seen: d
+            last_seen: d,
         }
     }
 }

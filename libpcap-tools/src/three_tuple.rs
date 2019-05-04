@@ -6,6 +6,7 @@ pub struct ThreeTuple {
     pub src: IpAddr,
     pub dst: IpAddr,
 }
+
 impl Default for ThreeTuple {
     fn default() -> Self {
         ThreeTuple {

@@ -1,14 +1,9 @@
 use std::cmp::min;
-use std::io::Read;
 use std::net::IpAddr;
 
 use std::collections::HashMap;
 
 use rand::prelude::*;
-
-use circular::Buffer;
-use nom::HexDisplay;
-use nom::{IResult, Needed, Offset};
 
 use pnet::packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use pnet::packet::gre::GrePacket;
@@ -25,285 +20,36 @@ use pnet::util::MacAddr;
 
 use pcap_parser::*;
 
-use crate::pcapng_extra::{pcapng_build_interface, pcapng_build_packet, InterfaceInfo};
+use libpcap_tools::*;
 
-use crate::five_tuple::FiveTuple;
-use crate::flow::{Flow, FlowID};
 use crate::ip_defrag::{DefragEngine, Fragment, IP4DefragEngine};
 use crate::packet_data::PacketData;
-use crate::three_tuple::ThreeTuple;
+use libpcap_tools::{FiveTuple, Flow, FlowID, ThreeTuple};
 
 use crate::plugins::Plugins;
-
-use crate::duration::Duration;
-
-enum PcapType {
-    // Unknown,
-    Pcap,
-    PcapBE,
-    PcapNG,
-    PcapNGBE,
-}
 
 struct L3Info {
     l3_proto: u16,
     three_tuple: ThreeTuple,
 }
 
-struct ParseContext {
-    if_info: InterfaceInfo,
-    interfaces: Vec<InterfaceInfo>,
-    bigendian: bool,
-
-    pcap_index: usize,
-
-    first_packet_ts: Duration,
-    rel_ts: Duration,
-}
-
-pub struct Analyzer<'a> {
+pub struct Analyzer {
     flows: HashMap<FlowID, Flow>,
     flows_id: HashMap<FiveTuple, FlowID>,
-    plugins: &'a mut Plugins,
+    plugins: Plugins,
     trng: ThreadRng,
 
     ipv4_defrag: Box<DefragEngine>,
 }
 
-impl<'a> Analyzer<'a> {
-    pub fn new(plugins: &mut Plugins) -> Analyzer {
+impl Analyzer {
+    pub fn new(plugins: Plugins) -> Analyzer {
         Analyzer {
             flows: HashMap::new(),
             flows_id: HashMap::new(),
             plugins,
             trng: rand::thread_rng(),
             ipv4_defrag: Box::new(IP4DefragEngine::new()),
-        }
-    }
-
-    /// Main function: for a reader, read all pcap data and run all plugins
-    pub fn run<R: Read>(&mut self, f: &mut R) -> Result<(), &'static str> {
-        let mut capacity = 16384 * 8;
-        let buffer_max_size = 65536 * 8;
-        let mut b = Buffer::with_capacity(capacity);
-        let sz = f.read(b.space()).or(Err("unable to read data"))?;
-        b.fill(sz);
-
-        let mut context = ParseContext {
-            if_info: InterfaceInfo::new(),
-            interfaces: Vec::new(),
-            bigendian: false,
-            pcap_index: 1,
-            first_packet_ts: Duration::new(0, 0),
-            rel_ts: Duration::new(0, 0),
-        };
-
-        let (length, in_pcap_type) = {
-            if let Ok((remaining, h)) = pcapng::parse_sectionheaderblock(b.data()) {
-                context.bigendian = h.is_bigendian();
-                if h.is_bigendian() {
-                    (b.data().offset(remaining), PcapType::PcapNGBE)
-                } else {
-                    (b.data().offset(remaining), PcapType::PcapNG)
-                }
-            } else if let Ok((remaining, h)) = pcap::parse_pcap_header(b.data()) {
-                let if_info = InterfaceInfo {
-                    link_type: Linktype(h.network),
-                    if_tsresol: 0,
-                    if_tsoffset: 0,
-                };
-                context.interfaces.push(if_info);
-                context.bigendian = h.is_bigendian();
-                if h.is_bigendian() {
-                    (b.data().offset(remaining), PcapType::PcapBE)
-                } else {
-                    (b.data().offset(remaining), PcapType::Pcap)
-                }
-            } else {
-                return Err("couldn't parse input file header");
-            }
-        };
-
-        // println!("consumed {} bytes", length);
-        b.consume(length);
-
-        let mut consumed = length;
-        let mut last_incomplete_offset = 0;
-
-        self.plugins
-            .storage
-            .values_mut()
-            .for_each(|plugin| plugin.pre_process());
-
-        let get_next_packet = match in_pcap_type {
-            PcapType::Pcap => pcap_get_raw_data,
-            PcapType::PcapBE => pcap_get_raw_data_be,
-            PcapType::PcapNG => pcapng_get_raw_data,
-            PcapType::PcapNGBE => pcapng_get_raw_data_be,
-        };
-
-        loop {
-            let needed: Option<Needed>;
-
-            // println!("{}", (&b.data()[..min(b.available_data(), 128)]).to_hex(16));
-
-            loop {
-                let length = {
-                    // read block
-                    match get_next_packet(b.data(), &mut context) {
-                        Ok((remaining, opt_packet)) => {
-                            // eprintln!("parse_block ok, index {}", pcap_index);
-                            // println!("parsed packet: {:?}", opt_packet);
-
-                            if let Some(packet) = opt_packet {
-                                debug!("**************************************************************");
-                                let ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
-                                if context.pcap_index == 1 {
-                                    context.first_packet_ts = ts;
-                                }
-                                debug!(
-                                    "    time  : {} / {}",
-                                    packet.header.ts_sec, packet.header.ts_usec
-                                );
-                                context.rel_ts = ts - context.first_packet_ts; // an underflow is weird but not critical
-                                debug!(
-                                    "    reltime  : {}.{}",
-                                    context.rel_ts.secs, context.rel_ts.micros
-                                );
-                                self.handle_packet(&packet, &context);
-                                context.pcap_index += 1;
-                            }
-
-                            b.data().offset(remaining)
-                        }
-                        Err(nom::Err::Incomplete(n)) => {
-                            // println!("not enough data, needs a refill: {:?}", n);
-
-                            needed = Some(n);
-                            break;
-                        }
-                        Err(nom::Err::Failure(e)) => {
-                            error!("pcap parse failure: {:?}", e);
-                            return Err("parse error");
-                        }
-                        Err(nom::Err::Error(_e)) => {
-                            // panic!("parse error: {:?}", e);
-                            error!("Error while parsing pcap data");
-                            debug!("{:?}", _e);
-                            debug!("{}", (&b.data()[..min(b.available_data(), 128)]).to_hex(16));
-                            return Err("parse error");
-                        }
-                    }
-                };
-                // println!("consuming {} of {} bytes", length, b.available_data());
-                b.consume(length);
-                consumed += length;
-            }
-
-            if let Some(Needed::Size(sz)) = needed {
-                if sz > b.capacity() {
-                    // println!("growing buffer capacity from {} bytes to {} bytes", capacity, capacity*2);
-                    capacity = (capacity * 3) / 2;
-                    if capacity > buffer_max_size {
-                        warn!(
-                            "requesting capacity {} over buffer_max_size {}",
-                            capacity, buffer_max_size
-                        );
-                        return Err("buffer size too small");
-                    }
-                    b.grow(capacity);
-                } else {
-                    // eprintln!("incomplete, but less missing bytes {} than buffer size {} consumed {}", sz, capacity, consumed);
-                    if last_incomplete_offset == consumed {
-                        warn!("seems file is truncated, exiting");
-                        break;
-                    }
-                    last_incomplete_offset = consumed;
-                    // refill the buffer
-                    let sz = f.read(b.space()).or(Err("unable to read data"))?;
-                    b.fill(sz);
-                    // println!("refill: {} more bytes, available data: {} bytes, consumed: {} bytes",
-                    //          sz, b.available_data(), consumed);
-
-                    // if there's no more available data in the buffer after a write, that means we reached
-                    // the end of the file
-                    if b.available_data() == 0 {
-                        // println!("no more data to read or parse, stopping the reading loop");
-                        break;
-                    }
-                }
-            }
-        }
-
-        // expire remaining flows
-        debug!("{} flows remaining in table", self.flows.len());
-        for f in self.flows.values() {
-            for p in self.plugins.storage.values_mut() {
-                p.flow_terminate(&f);
-            }
-        }
-        self.flows.clear();
-        self.flows_id.clear();
-
-        self.plugins
-            .storage
-            .values_mut()
-            .for_each(|plugin| plugin.post_process());
-
-        Ok(())
-    }
-
-    /// Dispatch function: given a packet, use link type to get the real data, and
-    /// call the matching handling function (some pcap blocks encode ethernet, or IPv4 etc.)
-    fn handle_packet(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) {
-        let link_type = match ctx.interfaces.get(packet.interface as usize) {
-            Some(if_info) => if_info.link_type,
-            None => {
-                warn!(
-                    "Could not get link_type (missing interface info) for packet idx={}",
-                    ctx.pcap_index
-                );
-                return;
-            }
-        };
-        debug!("linktype: {}", link_type);
-        match link_type {
-            Linktype::NULL => {
-                // XXX read first u32 in *host order*: 2 if IPv4, etc.
-                self.handle_l3(&packet, &ctx, &packet.data[4..], EtherTypes::Ipv4); // XXX overflow
-            }
-            Linktype::RAW => {
-                // XXX may be IPv4 or IPv6, check IP header ...
-                self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4);
-            }
-            Linktype::ETHERNET => {
-                self.handle_l2(&packet, &ctx);
-            }
-            Linktype::FDDI => {
-                self.handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4);
-            }
-            Linktype::NFLOG => match pcap_parser::data::parse_nflog(packet.data) {
-                Ok((_, nf)) => {
-                    let ethertype = match nf.header.af {
-                        2 => EtherTypes::Ipv4,
-                        10 => EtherTypes::Ipv6,
-                        af => {
-                            warn!("NFLOG: unsupported address family {}", af);
-                            EtherType::new(0)
-                        }
-                    };
-                    let data = match nf.get_payload() {
-                        Some(data) => data,
-                        None => {
-                            warn!("Unable to get payload from nflog data");
-                            return;
-                        }
-                    };
-                    self.handle_l3(&packet, &ctx, &data, ethertype);
-                }
-                _ => (),
-            },
-            l => warn!("Unsupported link type {}", l),
         }
     }
 
@@ -787,67 +533,58 @@ impl<'a> Analyzer<'a> {
     }
 }
 
-fn pcap_get_raw_data<'a, 'ctx>(
-    i: &'a [u8],
-    _ctx: &'ctx mut ParseContext,
-) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
-    pcap::parse_pcap_frame(i).map(|(rem, p)| (rem, Some(p)))
-}
-
-fn pcap_get_raw_data_be<'a, 'ctx>(
-    i: &'a [u8],
-    _ctx: &'ctx mut ParseContext,
-) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
-    pcap::parse_pcap_frame_be(i).map(|(rem, p)| (rem, Some(p)))
-}
-
-fn pcapng_get_raw_cont<'a, 'ctx>(
-    i: &'a [u8],
-    block: Block<'a>,
-    ctx: &'ctx mut ParseContext,
-) -> (&'a [u8], Option<pcap_parser::Packet<'a>>) {
-    match block {
-        Block::SectionHeader(ref _hdr) => {
-            warn!("new section header block");
-            // XXX we may have to change endianess
-            // XXX invalidate all interfaces
-            // (i, None)
-            unimplemented!();
-        }
-        Block::InterfaceDescription(ref ifdesc) => {
-            let if_info = pcapng_build_interface(ifdesc);
-            ctx.interfaces.push(if_info);
-            (i, None)
-        }
-        Block::SimplePacket(_) | Block::EnhancedPacket(_) => {
-            match pcapng_build_packet(&ctx.if_info, block) {
-                Some(packet) => (i, Some(packet)),
-                None => {
-                    warn!("could not convert block to packet (idx={})", ctx.pcap_index);
-                    (i, None)
-                }
+impl PcapAnalyzer for Analyzer {
+    /// Dispatch function: given a packet, use link type to get the real data, and
+    /// call the matching handling function (some pcap blocks encode ethernet, or IPv4 etc.)
+    fn handle_packet(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) {
+        let link_type = match ctx.interfaces.get(packet.interface as usize) {
+            Some(if_info) => if_info.link_type,
+            None => {
+                warn!(
+                    "Could not get link_type (missing interface info) for packet idx={}",
+                    ctx.pcap_index
+                );
+                return;
             }
-        }
-        // ignore some block types
-        Block::InterfaceStatistics(_) => (i, None),
-        // warn if parser does not recognize block
-        Block::Unknown(ref block) => {
-            warn!("pcap-ng: unknown block (type = 0x{:x})", block.block_type);
-            (i, None)
+        };
+        debug!("linktype: {}", link_type);
+        match link_type {
+            Linktype::NULL => {
+                // XXX read first u32 in *host order*: 2 if IPv4, etc.
+                self.handle_l3(&packet, &ctx, &packet.data[4..], EtherTypes::Ipv4); // XXX overflow
+            }
+            Linktype::RAW => {
+                // XXX may be IPv4 or IPv6, check IP header ...
+                self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4);
+            }
+            Linktype::ETHERNET => {
+                self.handle_l2(&packet, &ctx);
+            }
+            Linktype::FDDI => {
+                self.handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4);
+            }
+            Linktype::NFLOG => match pcap_parser::data::parse_nflog(packet.data) {
+                Ok((_, nf)) => {
+                    let ethertype = match nf.header.af {
+                        2 => EtherTypes::Ipv4,
+                        10 => EtherTypes::Ipv6,
+                        af => {
+                            warn!("NFLOG: unsupported address family {}", af);
+                            EtherType::new(0)
+                        }
+                    };
+                    let data = match nf.get_payload() {
+                        Some(data) => data,
+                        None => {
+                            warn!("Unable to get payload from nflog data");
+                            return;
+                        }
+                    };
+                    self.handle_l3(&packet, &ctx, &data, ethertype);
+                }
+                _ => (),
+            },
+            l => warn!("Unsupported link type {}", l),
         }
     }
-}
-
-fn pcapng_get_raw_data<'a, 'ctx>(
-    i: &'a [u8],
-    ctx: &'ctx mut ParseContext,
-) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
-    pcapng::parse_block(i).map(|(rem, block)| pcapng_get_raw_cont(rem, block, ctx))
-}
-
-fn pcapng_get_raw_data_be<'a, 'ctx>(
-    i: &'a [u8],
-    ctx: &'ctx mut ParseContext,
-) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
-    pcapng::parse_block_be(i).map(|(rem, block)| pcapng_get_raw_cont(rem, block, ctx))
 }

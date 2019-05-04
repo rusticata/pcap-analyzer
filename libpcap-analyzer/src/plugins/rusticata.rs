@@ -3,7 +3,7 @@ use pcap_parser::Packet;
 use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
-use crate::flow::FlowID;
+use libpcap_tools::FlowID;
 
 use std::collections::HashMap;
 

@@ -1,8 +1,7 @@
 use pcap_parser::Packet;
 
 use crate::packet_data::PacketData;
-use crate::three_tuple::ThreeTuple;
-use crate::flow::Flow;
+use libpcap_tools::{Flow,ThreeTuple};
 use crate::config::Config;
 
 pub trait PluginBuilder : Sync + Send {

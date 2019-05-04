@@ -1,8 +1,6 @@
 #[macro_use]
 extern crate log;
 
-extern crate circular;
-
 extern crate pcap_parser;
 extern crate rusticata;
 
@@ -12,14 +10,8 @@ extern crate nom;
 
 extern crate rand;
 
-mod pcapng_extra;
-
 mod config;
 pub use config::Config;
-mod duration;
-mod five_tuple;
-mod three_tuple;
-mod flow;
 mod packet_data;
 
 pub mod plugin;
