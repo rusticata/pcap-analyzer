@@ -53,7 +53,7 @@ impl Analyzer {
         }
     }
 
-    fn handle_l2(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) {
+    fn handle_l2(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) -> Result<(), Error> {
         debug!("handle_l2 (idx={})", ctx.pcap_index);
 
         // resize slice to remove padding
@@ -78,13 +78,14 @@ impl Analyzer {
                     } else {
                         warn!("Ethernet broadcast (unknown)");
                     }
-                    return;
+                    return Ok(());
                 }
                 debug!("    ethertype: 0x{:x}", eth.get_ethertype().0);
-                self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype());
+                self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype())
             }
             None => {
                 // packet too small to be ethernet
+                Ok(())
             }
         }
     }
@@ -95,24 +96,18 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         ethertype: EtherType,
-    ) {
+    ) -> Result<(), Error> {
         if data.is_empty() {
-            return;
+            return Ok(());
         }
 
         match ethertype {
-            EtherTypes::Ipv4 => {
-                self.handle_l3_ipv4(packet, ctx, data, ethertype);
-            }
-            EtherTypes::Ipv6 => {
-                self.handle_l3_ipv6(packet, ctx, data, ethertype);
-            }
-            EtherTypes::Vlan => {
-                self.handle_l3_vlan_801q(packet, ctx, data, ethertype);
-            }
+            EtherTypes::Ipv4 => self.handle_l3_ipv4(packet, ctx, data, ethertype),
+            EtherTypes::Ipv6 => self.handle_l3_ipv6(packet, ctx, data, ethertype),
+            EtherTypes::Vlan => self.handle_l3_vlan_801q(packet, ctx, data, ethertype),
             _ => {
                 warn!("Unsupported ethertype {} (0x{:x})", ethertype, ethertype.0);
-                self.handle_l3_generic(packet, ctx, data, ethertype);
+                self.handle_l3_generic(packet, ctx, data, ethertype)
             }
         }
     }
@@ -123,27 +118,15 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         ethertype: EtherType,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
-        let ipv4 = match Ipv4Packet::new(data) {
-            Some(ipv4) => ipv4,
-            None => {
-                warn!("Could not build IPv4 packet from data");
-                return;
-            }
-        };
+        let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
 
         // remove padding
         let (data, ipv4) = {
             if (ipv4.get_total_length() as usize) < data.len() {
                 let d = &data[..ipv4.get_total_length() as usize];
-                let ipv4 = match Ipv4Packet::new(d) {
-                    Some(ipv4) => ipv4,
-                    None => {
-                        warn!("Could not build IPv4 packet from data");
-                        return;
-                    }
-                };
+                let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
                 (d, ipv4)
             } else {
                 (data, ipv4)
@@ -178,11 +161,11 @@ impl Analyzer {
                 &v
             }
             Fragment::Incomplete => {
-                return;
+                return Ok(());
             }
             Fragment::Error => {
                 warn!("Defragmentation error");
-                return;
+                return Err(Error::Generic("Defragmentation error"));
             }
         };
 
@@ -211,15 +194,9 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         ethertype: EtherType,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
-        let ipv6 = match Ipv6Packet::new(data) {
-            Some(ipv4) => ipv4,
-            None => {
-                warn!("Could not build IPv6 packet from data");
-                return;
-            }
-        };
+        let ipv6 = Ipv6Packet::new(data).ok_or("Could not build IPv6 packet from data")?;
         let l4_proto = ipv6.get_next_header();
 
         // XXX remove padding ?
@@ -260,19 +237,13 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         _ethertype: EtherType,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l3_vlan_801q (idx={})", ctx.pcap_index);
-        let vlan = match VlanPacket::new(data) {
-            Some(vlan) => vlan,
-            None => {
-                warn!("Could not build 802.1Q Vlan packet from data");
-                return;
-            }
-        };
+        let vlan = VlanPacket::new(data).ok_or("Could not build 802.1Q Vlan packet from data")?;
         let next_ethertype = vlan.get_ethertype();
         debug!("    802.1q: VLAN id={}", vlan.get_vlan_identifier());
 
-        self.handle_l3(&packet, &ctx, vlan.payload(), next_ethertype);
+        self.handle_l3(&packet, &ctx, vlan.payload(), next_ethertype)
     }
 
     // Called when L3 layer is unknown
@@ -282,7 +253,7 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         ethertype: EtherType,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l3_generic (idx={})", ctx.pcap_index);
         // we don't know if there is padding to remove
 
@@ -294,6 +265,7 @@ impl Analyzer {
         }
 
         // don't try to parse l4, we don't know how to get L4 data
+        Ok(())
     }
 
     fn handle_l4_tcp(
@@ -302,24 +274,18 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         l3_info: &L3Info,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
         let l3_data = data;
         debug!("    l3_data len: {}", l3_data.len());
-        let tcp = match TcpPacket::new(l3_data) {
-            Some(tcp) => tcp,
-            None => {
-                warn!("Could not build TCP packet from data");
-                return;
-            }
-        };
+        let tcp = TcpPacket::new(l3_data).ok_or("Could not build TCP packet from data")?;
 
         // XXX handle TCP defrag
         let l4_data = Some(tcp.payload());
         let src_port = tcp.get_source();
         let dst_port = tcp.get_destination();
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
     }
 
     fn handle_l4_udp(
@@ -328,23 +294,17 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         l3_info: &L3Info,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l4_udp (idx={})", ctx.pcap_index);
         let l3_data = data;
         debug!("    l3_data len: {}", l3_data.len());
-        let udp = match UdpPacket::new(l3_data) {
-            Some(udp) => udp,
-            None => {
-                warn!("Could not build UDP packet from data");
-                return;
-            }
-        };
+        let udp = UdpPacket::new(l3_data).ok_or("Could not build UDP packet from data")?;
 
         let l4_data = Some(udp.payload());
         let src_port = udp.get_source();
         let dst_port = udp.get_destination();
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
     }
 
     fn handle_l4_icmp(
@@ -353,17 +313,11 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         l3_info: &L3Info,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l4_icmp (idx={})", ctx.pcap_index);
         let l3_data = data;
 
-        let icmp = match IcmpPacket::new(l3_data) {
-            Some(icmp) => icmp,
-            None => {
-                warn!("Could not build ICMP packet from data");
-                return;
-            }
-        };
+        let icmp = IcmpPacket::new(l3_data).ok_or("Could not build ICMP packet from data")?;
         debug!(
             "ICMP type={:?} code={:?}",
             icmp.get_icmp_type(),
@@ -374,7 +328,7 @@ impl Analyzer {
         let src_port = 0;
         let dst_port = 0;
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
     }
 
     fn handle_l4_icmpv6(
@@ -383,17 +337,11 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         l3_info: &L3Info,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l4_icmpv6 (idx={})", ctx.pcap_index);
         let l3_data = data;
 
-        let icmpv6 = match Icmpv6Packet::new(l3_data) {
-            Some(icmp) => icmp,
-            None => {
-                warn!("Could not build ICMPv6 packet from data");
-                return;
-            }
-        };
+        let icmpv6 = Icmpv6Packet::new(l3_data).ok_or("Could not build ICMPv6 packet from data")?;
         debug!(
             "ICMPv6 type={:?} code={:?}",
             icmpv6.get_icmpv6_type(),
@@ -404,7 +352,7 @@ impl Analyzer {
         let src_port = 0;
         let dst_port = 0;
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
     }
 
     fn handle_l4_gre(
@@ -413,22 +361,16 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         _l3_info: &L3Info,
-    ) {
+    ) -> Result<(), Error> {
         debug!("handle_l4_gre (idx={})", ctx.pcap_index);
         let l3_data = data;
 
-        let gre = match GrePacket::new(l3_data) {
-            Some(gre) => gre,
-            None => {
-                warn!("Could not build GRE packet from data");
-                return;
-            }
-        };
+        let gre = GrePacket::new(l3_data).ok_or("Could not build GRE packet from data")?;
 
         let next_proto = gre.get_protocol_type();
         let data = gre.payload();
 
-        self.handle_l3(packet, ctx, data, EtherType(next_proto));
+        self.handle_l3(packet, ctx, data, EtherType(next_proto))
     }
 
     fn handle_l4_generic(
@@ -437,7 +379,7 @@ impl Analyzer {
         ctx: &ParseContext,
         data: &[u8],
         l3_info: &L3Info,
-    ) {
+    ) -> Result<(), Error> {
         debug!(
             "handle_l4_generic (idx={}, l4_proto={})",
             ctx.pcap_index, l3_info.three_tuple.proto
@@ -448,7 +390,7 @@ impl Analyzer {
         let src_port = 0;
         let dst_port = 0;
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data);
+        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
     }
 
     fn handle_l4_common(
@@ -460,7 +402,7 @@ impl Analyzer {
         src_port: u16,
         dst_port: u16,
         l4_data: Option<&[u8]>,
-    ) {
+    ) -> Result<(), Error> {
         let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
         debug!("5t: {:?}", five_tuple);
         let now = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
@@ -478,7 +420,7 @@ impl Analyzer {
         let flow = self
             .flows
             .get_mut(&flow_id)
-            .expect("could not get flow from ID");
+            .ok_or("could not get flow from ID")?;
         flow.flow_id = flow_id;
         flow.last_seen = now;
 
@@ -500,6 +442,18 @@ impl Analyzer {
         // XXX do other stuff
 
         // XXX check session expiration
+        // const FLOW_EXPIRATION: u32 = 100;
+        // for (flow_id, flow) in self.flows.iter() {
+        //     if (now - flow.last_seen).secs > FLOW_EXPIRATION {
+        //         warn!(
+        //             "Flow {} candidate for expiration (delay: {} secs)",
+        //             flow_id,
+        //             (now - flow.last_seen).secs
+        //         );
+        //     }
+        // }
+
+        Ok(())
     }
 
     fn lookup_flow(&mut self, five_t: &FiveTuple) -> Option<FlowID> {
@@ -536,7 +490,11 @@ impl Analyzer {
 impl PcapAnalyzer for Analyzer {
     /// Dispatch function: given a packet, use link type to get the real data, and
     /// call the matching handling function (some pcap blocks encode ethernet, or IPv4 etc.)
-    fn handle_packet(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) -> Result<(),Error> {
+    fn handle_packet(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+    ) -> Result<(), Error> {
         let link_type = match ctx.interfaces.get(packet.interface as usize) {
             Some(if_info) => if_info.link_type,
             None => {
@@ -551,18 +509,14 @@ impl PcapAnalyzer for Analyzer {
         match link_type {
             Linktype::NULL => {
                 // XXX read first u32 in *host order*: 2 if IPv4, etc.
-                self.handle_l3(&packet, &ctx, &packet.data[4..], EtherTypes::Ipv4); // XXX overflow
+                self.handle_l3(&packet, &ctx, &packet.data[4..], EtherTypes::Ipv4) // XXX overflow
             }
             Linktype::RAW => {
                 // XXX may be IPv4 or IPv6, check IP header ...
-                self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4);
+                self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4)
             }
-            Linktype::ETHERNET => {
-                self.handle_l2(&packet, &ctx);
-            }
-            Linktype::FDDI => {
-                self.handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4);
-            }
+            Linktype::ETHERNET => self.handle_l2(&packet, &ctx),
+            Linktype::FDDI => self.handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4),
             Linktype::NFLOG => match pcap_parser::data::parse_nflog(packet.data) {
                 Ok((_, nf)) => {
                     let ethertype = match nf.header.af {
@@ -573,19 +527,17 @@ impl PcapAnalyzer for Analyzer {
                             EtherType::new(0)
                         }
                     };
-                    let data = match nf.get_payload() {
-                        Some(data) => data,
-                        None => {
-                            warn!("Unable to get payload from nflog data");
-                            return Err(Error::Generic("Unable to extract nflog payload"));
-                        }
-                    };
-                    self.handle_l3(&packet, &ctx, &data, ethertype);
+                    let data = nf
+                        .get_payload()
+                        .ok_or("Unable to get payload from nflog data")?;
+                    self.handle_l3(&packet, &ctx, &data, ethertype)
                 }
-                _ => (),
+                _ => Ok(()),
             },
-            l => warn!("Unsupported link type {}", l),
-        };
-        Ok(())
+            l => {
+                warn!("Unsupported link type {}", l);
+                Ok(())
+            }
+        }
     }
 }
