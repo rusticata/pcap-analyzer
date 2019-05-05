@@ -4,7 +4,8 @@ extern crate log;
 extern crate clap;
 use clap::{Arg,App,crate_version};
 
-extern crate env_logger;
+// extern crate env_logger;
+extern crate std_logger;
 extern crate flate2;
 extern crate pcap_parser;
 extern crate xz2;
@@ -41,7 +42,8 @@ fn main() -> io::Result<()> {
             .index(2))
         .get_matches();
 
-   env_logger::init();
+   // env_logger::init();
+   std_logger::init();
 
    debug!("Pcap rewrite tool {}", crate_version!());
 

@@ -7,8 +7,8 @@ use libpcap_tools::{FlowID,Flow};
 
 use std::collections::HashMap;
 
-use pnet::packet::tcp::TcpPacket;
-use pnet::packet::tcp::TcpFlags;
+use pnet_packet::tcp::TcpPacket;
+use pnet_packet::tcp::TcpFlags;
 
 const TH_SYN_ACK     : u16 = 0x12;
 const TH_SYN_FIN_RST : u16 = 0x07;

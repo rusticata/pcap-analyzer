@@ -5,3 +5,10 @@ members = [
   "pcap-analyzer",
   "pcap-rewrite",
 ]
+
+[profile.release]
+opt-level = 'z'  # Optimize for size.
+lto = true
+codegen-units = 1
+incremental = false
+# panic = 'abort'

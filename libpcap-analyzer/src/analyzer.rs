@@ -5,18 +5,18 @@ use std::collections::HashMap;
 
 use rand::prelude::*;
 
-use pnet::packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
-use pnet::packet::gre::GrePacket;
-use pnet::packet::icmp::IcmpPacket;
-use pnet::packet::icmpv6::Icmpv6Packet;
-use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::packet::ipv4::{Ipv4Flags, Ipv4Packet};
-use pnet::packet::ipv6::Ipv6Packet;
-use pnet::packet::tcp::TcpPacket;
-use pnet::packet::udp::UdpPacket;
-use pnet::packet::vlan::VlanPacket;
-use pnet::packet::Packet;
-use pnet::util::MacAddr;
+use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
+use pnet_packet::gre::GrePacket;
+use pnet_packet::icmp::IcmpPacket;
+use pnet_packet::icmpv6::Icmpv6Packet;
+use pnet_packet::ip::IpNextHeaderProtocols;
+use pnet_packet::ipv4::{Ipv4Flags, Ipv4Packet};
+use pnet_packet::ipv6::Ipv6Packet;
+use pnet_packet::tcp::TcpPacket;
+use pnet_packet::udp::UdpPacket;
+use pnet_packet::vlan::VlanPacket;
+use pnet_packet::Packet;
+use pnet_base::MacAddr;
 
 use pcap_parser::*;
 
