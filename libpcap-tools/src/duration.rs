@@ -1,10 +1,9 @@
-//! Reimplementation of std::time::Duration, but panic-free
-//! and partial, only to match our needs:
-//!   - use micros instead of nanos, avoid casts
-//!   - expose fields
-
 use std::ops::{Add,Sub};
 
+/// Reimplementation of std::time::Duration, but panic-free
+/// and partial, only to match our needs:
+///   - use micros instead of nanos, avoid casts
+///   - expose fields
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug)]
 pub struct Duration {
     pub secs: u32,

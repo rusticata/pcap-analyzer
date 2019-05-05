@@ -15,7 +15,6 @@ pub struct PcapEngine {
 }
 
 enum PcapType {
-    // Unknown,
     Pcap,
     PcapBE,
     PcapNG,
@@ -23,11 +22,12 @@ enum PcapType {
 }
 
 impl PcapEngine {
+    /// Build a new PcapEngine, taking ownership of the input PcapAnalyzer
     pub fn new(a: Box<PcapAnalyzer>) -> Self {
         PcapEngine { a }
     }
 
-    /// Main function: for a reader, read all pcap data and run all plugins
+    /// Main function: given a reader, read all pcap data and call analyzer for each Packet
     pub fn run<R: Read>(&mut self, f: &mut R) -> Result<(), Error> {
         let mut capacity = 16384 * 8;
         let buffer_max_size = 65536 * 8;

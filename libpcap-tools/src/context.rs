@@ -15,9 +15,13 @@ pub struct ParseContext {
     pub pcap_index: usize,
 }
 
+/// Information related to a network interface used for capture
 pub struct InterfaceInfo {
+    /// The `Linktype` used for data format
     pub link_type: Linktype,
+    /// Time resolution
     pub if_tsresol: u8,
+    /// Time offset
     pub if_tsoffset: u64,
 }
 

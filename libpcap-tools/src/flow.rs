@@ -3,11 +3,15 @@ use std::hash::{Hash, Hasher};
 
 use crate::five_tuple::FiveTuple;
 
+/// Unique `Flow` identifier
 pub type FlowID = u64;
 
+/// Generic definiction of a Flow
 #[derive(PartialEq, Eq, Default, Debug)]
 pub struct Flow {
+    /// The `Flow` identifier
     pub flow_id: FlowID,
+    /// The `FiveTuple` identifying the `Flow`
     pub five_tuple: FiveTuple,
     /// timestamp of first packet
     pub first_seen: Duration,

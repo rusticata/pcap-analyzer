@@ -1,9 +1,13 @@
 use std::net::{IpAddr, Ipv4Addr};
 
+/// Network 3-tuple: layer 4 protocol (e.g TCP or UDP), source and destination IP addresses
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ThreeTuple {
+    /// Layer 4 protocol (e.g TCP, UDP, ICMP)
     pub proto: u8,
+    /// Source IP address
     pub src: IpAddr,
+    /// Destination IP address
     pub dst: IpAddr,
 }
 
