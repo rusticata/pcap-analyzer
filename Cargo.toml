@@ -3,4 +3,5 @@ members = [
   "libpcap-tools",
   "libpcap-analyzer",
   "pcap-analyzer",
+  "pcap-rewrite",
 ]
