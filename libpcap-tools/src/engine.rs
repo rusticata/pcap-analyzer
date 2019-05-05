@@ -7,6 +7,7 @@ use std::io::Read;
 use crate::analyzer::PcapAnalyzer;
 use crate::context::*;
 use crate::duration::Duration;
+use crate::error::Error;
 
 /// pcap/pcap-ng analyzer engine
 pub struct PcapEngine {
@@ -27,14 +28,14 @@ impl PcapEngine {
     }
 
     /// Main function: for a reader, read all pcap data and run all plugins
-    pub fn run<R: Read>(&mut self, f: &mut R) -> Result<(), &'static str> {
+    pub fn run<R: Read>(&mut self, f: &mut R) -> Result<(), Error> {
         let mut capacity = 16384 * 8;
         let buffer_max_size = 65536 * 8;
         let mut b = Buffer::with_capacity(capacity);
-        let sz = f.read(b.space()).or(Err("unable to read data"))?;
+        let sz = f.read(b.space())?;
         b.fill(sz);
 
-        self.a.init();
+        self.a.init()?;
         let mut ctx = ParseContext::default();
 
         let (length, in_pcap_type) = {
@@ -59,7 +60,7 @@ impl PcapEngine {
                     (b.data().offset(remaining), PcapType::Pcap)
                 }
             } else {
-                return Err("couldn't parse input file header");
+                return Err(Error::Generic("couldn't parse input file header"));
             }
         };
 
@@ -100,7 +101,7 @@ impl PcapEngine {
                                 );
                                 ctx.rel_ts = ts - ctx.first_packet_ts; // an underflow is weird but not critical
                                 debug!("    reltime  : {}.{}", ctx.rel_ts.secs, ctx.rel_ts.micros);
-                                self.a.handle_packet(&packet, &ctx);
+                                self.a.handle_packet(&packet, &ctx).or(Err("Analyzer error"))?;
                                 ctx.pcap_index += 1;
                             }
 
@@ -114,14 +115,14 @@ impl PcapEngine {
                         }
                         Err(nom::Err::Failure(e)) => {
                             error!("pcap parse failure: {:?}", e);
-                            return Err("parse error");
+                            return Err(Error::Generic("parse error"));
                         }
                         Err(nom::Err::Error(_e)) => {
                             // panic!("parse error: {:?}", e);
                             error!("Error while parsing pcap data");
                             debug!("{:?}", _e);
                             debug!("{}", (&b.data()[..min(b.available_data(), 128)]).to_hex(16));
-                            return Err("parse error");
+                            return Err(Error::Generic("parse error"));
                         }
                     }
                 };
@@ -139,7 +140,7 @@ impl PcapEngine {
                             "requesting capacity {} over buffer_max_size {}",
                             capacity, buffer_max_size
                         );
-                        return Err("buffer size too small");
+                        return Err(Error::Generic("buffer size too small"));
                     }
                     b.grow(capacity);
                 } else {
@@ -150,7 +151,7 @@ impl PcapEngine {
                     }
                     last_incomplete_offset = consumed;
                     // refill the buffer
-                    let sz = f.read(b.space()).or(Err("unable to read data"))?;
+                    let sz = f.read(b.space())?;
                     b.fill(sz);
                     // println!("refill: {} more bytes, available data: {} bytes, consumed: {} bytes",
                     //          sz, b.available_data(), consumed);

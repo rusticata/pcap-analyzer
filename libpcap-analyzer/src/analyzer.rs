@@ -536,7 +536,7 @@ impl Analyzer {
 impl PcapAnalyzer for Analyzer {
     /// Dispatch function: given a packet, use link type to get the real data, and
     /// call the matching handling function (some pcap blocks encode ethernet, or IPv4 etc.)
-    fn handle_packet(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) {
+    fn handle_packet(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) -> Result<(),Error> {
         let link_type = match ctx.interfaces.get(packet.interface as usize) {
             Some(if_info) => if_info.link_type,
             None => {
@@ -544,7 +544,7 @@ impl PcapAnalyzer for Analyzer {
                     "Could not get link_type (missing interface info) for packet idx={}",
                     ctx.pcap_index
                 );
-                return;
+                return Err(Error::Generic("Missing interface info"));
             }
         };
         debug!("linktype: {}", link_type);
@@ -577,7 +577,7 @@ impl PcapAnalyzer for Analyzer {
                         Some(data) => data,
                         None => {
                             warn!("Unable to get payload from nflog data");
-                            return;
+                            return Err(Error::Generic("Unable to extract nflog payload"));
                         }
                     };
                     self.handle_l3(&packet, &ctx, &data, ethertype);
@@ -585,6 +585,7 @@ impl PcapAnalyzer for Analyzer {
                 _ => (),
             },
             l => warn!("Unsupported link type {}", l),
-        }
+        };
+        Ok(())
     }
 }
