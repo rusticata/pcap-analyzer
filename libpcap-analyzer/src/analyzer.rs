@@ -160,14 +160,15 @@ impl Analyzer {
         let data = match defrag {
             Fragment::NoFrag(d) => d,
             Fragment::Complete(ref v) => {
-                warn!("Using defrag buffer len={}", v.len());
+                warn!("IPv4 defrag done, using defrag buffer len={}", v.len());
                 &v
             }
             Fragment::Incomplete => {
+                debug!("IPv4 defragmentation incomplete");
                 return Ok(());
             }
             Fragment::Error => {
-                warn!("IPv4 Defragmentation error");
+                warn!("IPv4 defragmentation error");
                 return Ok(());
             }
         };
@@ -408,14 +409,15 @@ impl Analyzer {
         let data = match defrag {
             Fragment::NoFrag(d) => d,
             Fragment::Complete(ref v) => {
-                warn!("Using defrag buffer len={}", v.len());
+                warn!("IPv6Fragment defrag done, using defrag buffer len={}", v.len());
                 &v
             }
             Fragment::Incomplete => {
+                debug!("IPv6Fragment defragmentation incomplete");
                 return Ok(());
             }
             Fragment::Error => {
-                warn!("IPv6Fragment Defragmentation error");
+                warn!("IPv6Fragment defragmentation error");
                 return Ok(());
             }
         };
