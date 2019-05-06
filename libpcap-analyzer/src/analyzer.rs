@@ -575,6 +575,8 @@ impl PcapAnalyzer for Analyzer {
                 // XXX may be IPv4 or IPv6, check IP header ...
                 self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4)
             }
+            Linktype(228) /* IPV4 */ => self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4),
+            Linktype(229) /* IPV6 */ => self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv6),
             Linktype::ETHERNET => self.handle_l2(&packet, &ctx),
             Linktype::FDDI => self.handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4),
             Linktype::NFLOG => match pcap_parser::data::parse_nflog(packet.data) {
