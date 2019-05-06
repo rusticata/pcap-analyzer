@@ -164,8 +164,8 @@ impl Analyzer {
                 return Ok(());
             }
             Fragment::Error => {
-                warn!("Defragmentation error");
-                return Err(Error::Generic("Defragmentation error"));
+                warn!("IPv4 Defragmentation error");
+                return Ok(());
             }
         };
 
