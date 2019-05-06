@@ -5,6 +5,7 @@ use std::collections::HashMap;
 
 use rand::prelude::*;
 
+use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use pnet_packet::gre::GrePacket;
 use pnet_packet::icmp::IcmpPacket;
@@ -16,13 +17,13 @@ use pnet_packet::tcp::TcpPacket;
 use pnet_packet::udp::UdpPacket;
 use pnet_packet::vlan::VlanPacket;
 use pnet_packet::Packet;
-use pnet_base::MacAddr;
 
 use pcap_parser::*;
 
 use libpcap_tools::*;
 
-use crate::ip_defrag::{DefragEngine, Fragment, IP4DefragEngine};
+use crate::ip6_defrag::IPv6FragmentPacket;
+use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
 use crate::packet_data::PacketData;
 use libpcap_tools::{FiveTuple, Flow, FlowID, ThreeTuple};
 
@@ -40,6 +41,7 @@ pub struct Analyzer {
     trng: ThreadRng,
 
     ipv4_defrag: Box<DefragEngine>,
+    ipv6_defrag: Box<DefragEngine>,
 }
 
 impl Analyzer {
@@ -49,7 +51,8 @@ impl Analyzer {
             flows_id: HashMap::new(),
             plugins,
             trng: rand::thread_rng(),
-            ipv4_defrag: Box::new(IP4DefragEngine::new()),
+            ipv4_defrag: Box::new(IPDefragEngine::new()),
+            ipv6_defrag: Box::new(IPDefragEngine::new()),
         }
     }
 
@@ -149,7 +152,7 @@ impl Analyzer {
         let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
         let more_fragments = ipv4.get_flags() & Ipv4Flags::MoreFragments != 0;
         let defrag = self.ipv4_defrag.update(
-            ipv4.get_identification(),
+            ipv4.get_identification().into(),
             frag_offset,
             more_fragments,
             ipv4.payload(),
@@ -224,6 +227,7 @@ impl Analyzer {
             IpNextHeaderProtocols::Icmpv6 => self.handle_l4_icmpv6(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
             IpNextHeaderProtocols::Ipv4 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv4),
+            IpNextHeaderProtocols::Ipv6Frag => self.handle_l4_ipv6frag(packet, ctx, data, &l3_info),
             _ => {
                 warn!("IPv6: Unsupported L4 proto {}", l4_proto);
                 self.handle_l4_generic(packet, ctx, data, &l3_info)
@@ -371,6 +375,62 @@ impl Analyzer {
         let data = gre.payload();
 
         self.handle_l3(packet, ctx, data, EtherType(next_proto))
+    }
+
+    fn handle_l4_ipv6frag(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        l3_info: &L3Info,
+    ) -> Result<(), Error> {
+        debug!("handle_l4_ipv6frag (idx={})", ctx.pcap_index);
+        let l3_data = data;
+
+        let ip6frag = IPv6FragmentPacket::new(l3_data)
+            .ok_or("Could not build IPv6FragmentPacket packet from data")?;
+        debug!(
+            "IPv6FragmentPacket more_fragments={} next_header={} id=0x{:x}",
+            ip6frag.more_fragments(),
+            ip6frag.get_next_header(),
+            ip6frag.get_identification()
+        );
+
+        // check IP fragmentation before calling handle_l4
+        let frag_offset = (ip6frag.get_fragment_offset() * 8) as usize;
+        let more_fragments = ip6frag.more_fragments();
+        let defrag = self.ipv6_defrag.update(
+            ip6frag.get_identification().into(),
+            frag_offset,
+            more_fragments,
+            ip6frag.payload(),
+        );
+        let data = match defrag {
+            Fragment::NoFrag(d) => d,
+            Fragment::Complete(ref v) => {
+                warn!("Using defrag buffer len={}", v.len());
+                &v
+            }
+            Fragment::Incomplete => {
+                return Ok(());
+            }
+            Fragment::Error => {
+                warn!("IPv6Fragment Defragmentation error");
+                return Ok(());
+            }
+        };
+
+        let l4_proto = ip6frag.get_next_header();
+
+        match l4_proto {
+            IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Icmp => self.handle_l4_icmp(packet, ctx, data, &l3_info),
+            _ => {
+                warn!("IPv6Fragment: Unsupported L4 proto {}", l4_proto);
+                self.handle_l4_generic(packet, ctx, data, &l3_info)
+            }
+        }
     }
 
     fn handle_l4_generic(

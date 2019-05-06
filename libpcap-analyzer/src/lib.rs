@@ -23,6 +23,8 @@ mod analyzer;
 pub use analyzer::*;
 
 mod ip_defrag;
+mod ip6_defrag;
+pub use ip6_defrag::*;
 
 
 #[derive(Debug,PartialEq)]

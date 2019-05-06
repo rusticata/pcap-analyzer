@@ -4,7 +4,7 @@ use std::collections::HashMap;
 pub trait DefragEngine {
     /// This function updates the engine with a new Fragment
     /// Returns a Fragment describing the defragmentation operation result
-    fn update<'a>(&mut self, id:u16, offset:usize, more_fragments:bool, frag:&'a[u8]) -> Fragment<'a>;
+    fn update<'a>(&mut self, id:u32, offset:usize, more_fragments:bool, frag:&'a[u8]) -> Fragment<'a>;
 }
 
 pub enum Fragment<'a> {
@@ -24,27 +24,27 @@ pub enum Fragment<'a> {
 // pub struct IP4Fragment {
 // }
 
-pub struct IP4DefragEngine {
+pub struct IPDefragEngine {
     // XXX we need to store all fragments, with offsets
     // XXX index this by 3-tuple ?
-    ipv4_fragments: HashMap<u16,Vec<u8>>,
+    ip_fragments: HashMap<u32,Vec<u8>>,
 }
 
-impl IP4DefragEngine {
-    pub fn new() -> IP4DefragEngine {
-        IP4DefragEngine{
-            ipv4_fragments: HashMap::new(),
+impl IPDefragEngine {
+    pub fn new() -> IPDefragEngine {
+        IPDefragEngine{
+            ip_fragments: HashMap::new(),
         }
     }
 }
 
-impl DefragEngine for IP4DefragEngine {
-        fn update<'a>(&mut self, id:u16, frag_offset:usize, more_fragments:bool, frag:&'a[u8]) -> Fragment<'a> {
+impl DefragEngine for IPDefragEngine {
+        fn update<'a>(&mut self, id:u32, frag_offset:usize, more_fragments:bool, frag:&'a[u8]) -> Fragment<'a> {
             if more_fragments == false {
                 if frag_offset == 0 { Fragment::NoFrag(frag) }
                 else {
                     // This is the last fragment
-                    match self.ipv4_fragments.remove(&id) {
+                    match self.ip_fragments.remove(&id) {
                         None    => { warn!("could not get first fragment buffer for ID {}", id); Fragment::Error },
                         Some(mut f) => {
                             // reassembly strategy: last frag wins
@@ -71,12 +71,12 @@ impl DefragEngine for IP4DefragEngine {
                     let v = frag.to_vec();
                     warn!("inserting defrag buffer key={} len={}", id, frag.len());
                     // insert ipv4 *data* but keep ipv4 header for the first packet
-                    if self.ipv4_fragments.contains_key(&id) {
+                    if self.ip_fragments.contains_key(&id) {
                         warn!("IPv4 defrag collision for id {}", id)
                     }
-                    self.ipv4_fragments.insert(id, v);
+                    self.ip_fragments.insert(id, v);
                 } else {
-                    match self.ipv4_fragments.get_mut(&id) {
+                    match self.ip_fragments.get_mut(&id) {
                         Some(f) => {
                             // reassembly strategy: last frag wins
                             if frag_offset < f.len() {
