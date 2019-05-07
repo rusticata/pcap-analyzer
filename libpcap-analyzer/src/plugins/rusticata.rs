@@ -92,7 +92,10 @@ impl Plugin for Rusticata {
                 }
             };
             let direction = if pdata.to_server { STREAM_TOSERVER } else { STREAM_TOCLIENT };
-            parser.parse(d, direction);
+            let res = parser.parse(d, direction);
+            if res == R_STATUS_FAIL {
+                warn!("rusticata: parser failed");
+            }
         });
     }
 }
