@@ -550,6 +550,15 @@ impl Analyzer {
 }
 
 impl PcapAnalyzer for Analyzer {
+    /// Initialize all plugins
+    fn init(&mut self) -> Result<(), Error> {
+        self.plugins
+            .storage
+            .values_mut()
+            .for_each(|plugin| plugin.pre_process());
+        Ok(())
+    }
+
     /// Dispatch function: given a packet, use link type to get the real data, and
     /// call the matching handling function (some pcap blocks encode ethernet, or IPv4 etc.)
     fn handle_packet(
@@ -603,5 +612,23 @@ impl PcapAnalyzer for Analyzer {
                 Ok(())
             }
         }
+    }
+
+    /// Finalize analysis and notify plugins
+    fn teardown(&mut self) {
+        // expire remaining flows
+        debug!("{} flows remaining in table", self.flows.len());
+        for f in self.flows.values() {
+            for p in self.plugins.storage.values_mut() {
+                p.flow_terminate(&f);
+            }
+        }
+        self.flows.clear();
+        self.flows_id.clear();
+
+        self.plugins
+            .storage
+            .values_mut()
+            .for_each(|plugin| plugin.post_process());
     }
 }
