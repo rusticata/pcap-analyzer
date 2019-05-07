@@ -28,10 +28,10 @@ default_plugin_builder!(BasicStats, BasicStatsBuilder);
 impl Plugin for BasicStats {
     fn name(&self) -> &'static str { "BasicStats" }
 
-    fn handle_l3(&mut self, packet:&Packet, data: &[u8], _ethertype:u16, t3:&ThreeTuple) {
+    fn handle_l3(&mut self, _packet:&Packet, data: &[u8], _ethertype:u16, t3:&ThreeTuple) {
         // info!("BasicStats::handle_l3 (len {})", data.len());
         let entry = self.l3_conversations.entry(t3.clone()).or_insert_with(|| Count::default());
-        entry.num_bytes += packet.header.len as usize;
+        entry.num_bytes += data.len();
         entry.num_packets += 1;
         self.total_bytes += data.len();
         self.total_packets += 1;
