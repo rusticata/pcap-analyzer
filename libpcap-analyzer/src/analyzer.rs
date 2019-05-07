@@ -1,7 +1,6 @@
 use std::cmp::min;
-use std::net::IpAddr;
-
 use std::collections::HashMap;
+use std::net::IpAddr;
 
 use rand::prelude::*;
 
