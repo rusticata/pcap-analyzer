@@ -23,6 +23,8 @@ impl Plugin for Rusticata {
 
     fn pre_process(&mut self) {
         let mut m : HashMap<&'static str, Box<RBuilder>> = HashMap::new();
+        m.insert("dns_udp", Box::new(DnsUDPBuilder{}) as Box<_>);
+        m.insert("dns_tcp", Box::new(DnsTCPBuilder{}) as Box<_>);
         m.insert("ikev2", Box::new(IPsecBuilder{}) as Box<_>);
         m.insert("kerberos_tcp", Box::new(KerberosTCPBuilder{}) as Box<_>);
         m.insert("kerberos_udp", Box::new(KerberosUDPBuilder{}) as Box<_>);
@@ -102,12 +104,14 @@ impl Plugin for Rusticata {
 
 fn probe(i:&[u8], l4_type: u8) -> Option<String> {
     if l4_type == 6 {
+        if dns_probe_tcp(i) { return Some("dns_tcp".to_string()); }
         if tls_probe(i) { return Some("tls".to_string()); }
         if ssh_probe(i) { return Some("ssh".to_string()); }
         if kerberos_probe_tcp(i) { return Some("kerberos_tcp".to_string()); }
         if openvpn_tcp_probe(i) { return Some("openvpn_tcp".to_string()); }
     }
     if l4_type == 17 {
+        if dns_probe_udp(i) { return Some("dns_udp".to_string()); }
         if ipsec_probe(i) { return Some("ikev2".to_string()); }
         if kerberos_probe_udp(i) { return Some("kerberos_udp".to_string()); }
         if ntp_probe(i) { return Some("ntp".to_string()); }
