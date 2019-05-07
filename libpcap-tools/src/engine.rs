@@ -37,6 +37,7 @@ impl PcapEngine {
 
         self.a.init()?;
         let mut ctx = ParseContext::default();
+        ctx.pcap_index = 1;
 
         let (length, in_pcap_type) = {
             if let Ok((remaining, h)) = pcapng::parse_sectionheaderblock(b.data()) {
