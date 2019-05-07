@@ -1,4 +1,5 @@
 use crate::three_tuple::ThreeTuple;
+use std::fmt;
 use std::net::{IpAddr, Ipv4Addr};
 
 /// Network 5-tuple: layer 4 protocol (e.g TCP or UDP), source and destination IP/ports
@@ -14,6 +15,16 @@ pub struct FiveTuple {
     pub src_port: u16,
     /// Destination port. 0 if not relevant for protocol
     pub dst_port: u16,
+}
+
+impl fmt::Display for FiveTuple {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}:{} -> {}:{} [{}]",
+            self.src, self.src_port, self.dst, self.dst_port, self.proto
+        )
+    }
 }
 
 /// Generic interface for structures that can provide a `FiveTuple`
