@@ -409,7 +409,10 @@ impl Analyzer {
         let data = match defrag {
             Fragment::NoFrag(d) => d,
             Fragment::Complete(ref v) => {
-                warn!("IPv6Fragment defrag done, using defrag buffer len={}", v.len());
+                warn!(
+                    "IPv6Fragment defrag done, using defrag buffer len={}",
+                    v.len()
+                );
                 &v
             }
             Fragment::Incomplete => {
