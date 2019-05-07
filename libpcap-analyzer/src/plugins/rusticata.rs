@@ -41,27 +41,6 @@ impl Plugin for Rusticata {
     }
 
     fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketData) {
-        let five_tuple = &pdata.five_tuple;
-        info!("BasicStats::handle_l4");
-        debug!("    5t: proto {} / [{}]:{} -> [{}]:{}",
-               five_tuple.proto,
-               five_tuple.src,
-               five_tuple.src_port,
-               five_tuple.dst,
-               five_tuple.dst_port);
-        debug!("    to_server: {}", pdata.to_server);
-        debug!("    l3_type: {}", pdata.l3_type);
-        debug!("    l3_data_len: {}", pdata.l3_data.len());
-        debug!("    l4_type: {}", pdata.l4_type);
-        debug!("    l4_data_len: {}", pdata.l4_data.map_or(0, |d| d.len()));
-        if let Some(flow) = pdata.flow {
-            let five_tuple = &flow.five_tuple;
-            debug!("    flow: [{}]:{} -> [{}]:{}",
-                   five_tuple.src,
-                   five_tuple.src_port,
-                   five_tuple.dst,
-                   five_tuple.dst_port);
-        }
         let flow_id = match pdata.flow {
                 Some(f) => f.flow_id,
                 None => {
