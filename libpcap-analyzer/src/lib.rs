@@ -10,8 +10,6 @@ extern crate nom;
 
 extern crate rand;
 
-mod config;
-pub use config::Config;
 mod packet_data;
 
 pub mod plugin;

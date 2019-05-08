@@ -9,6 +9,7 @@ circular = "0.2"
 lazy_static = "1.2"
 log = "0.4"
 nom = "4.2"
+toml="0.5"
 
 [dependencies.pcap-parser]
 version = "0.5"

@@ -2,6 +2,7 @@
 extern crate log;
 
 mod analyzer;
+mod config;
 mod context;
 mod duration;
 mod engine;
@@ -11,6 +12,7 @@ mod flow;
 mod three_tuple;
 
 pub use analyzer::*;
+pub use config::Config;
 pub use context::*;
 pub use duration::Duration;
 pub use engine::*;

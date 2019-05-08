@@ -1,3 +1,4 @@
+use crate::config::Config;
 use circular::Buffer;
 use nom::{HexDisplay, IResult, Needed, Offset};
 use pcap_parser::*;
@@ -12,6 +13,8 @@ use crate::error::Error;
 /// pcap/pcap-ng analyzer engine
 pub struct PcapEngine {
     a: Box<PcapAnalyzer>,
+    buffer_max_size: usize,
+    buffer_initial_capacity: usize,
 }
 
 enum PcapType {
@@ -23,14 +26,21 @@ enum PcapType {
 
 impl PcapEngine {
     /// Build a new PcapEngine, taking ownership of the input PcapAnalyzer
-    pub fn new(a: Box<PcapAnalyzer>) -> Self {
-        PcapEngine { a }
+    pub fn new(a: Box<PcapAnalyzer>, config: &Config) -> Self {
+        let buffer_max_size = config.get_usize("buffer_max_size").unwrap_or(65536 * 8);
+        let buffer_initial_capacity = config
+            .get_usize("buffer_initial_capacity")
+            .unwrap_or(16384 * 8);
+        PcapEngine {
+            a,
+            buffer_max_size,
+            buffer_initial_capacity,
+        }
     }
 
     /// Main function: given a reader, read all pcap data and call analyzer for each Packet
     pub fn run<R: Read>(&mut self, f: &mut R) -> Result<(), Error> {
-        let mut capacity = 16384 * 8;
-        let buffer_max_size = 65536 * 8;
+        let mut capacity = self.buffer_initial_capacity;
         let mut b = Buffer::with_capacity(capacity);
         let sz = f.read(b.space())?;
         b.fill(sz);
@@ -102,7 +112,9 @@ impl PcapEngine {
                                 );
                                 ctx.rel_ts = ts - ctx.first_packet_ts; // an underflow is weird but not critical
                                 debug!("    reltime  : {}.{}", ctx.rel_ts.secs, ctx.rel_ts.micros);
-                                self.a.handle_packet(&packet, &ctx).or(Err("Analyzer error"))?;
+                                self.a
+                                    .handle_packet(&packet, &ctx)
+                                    .or(Err("Analyzer error"))?;
                                 ctx.pcap_index += 1;
                             }
 
@@ -136,10 +148,10 @@ impl PcapEngine {
                 if sz > b.capacity() {
                     // println!("growing buffer capacity from {} bytes to {} bytes", capacity, capacity*2);
                     capacity = (capacity * 3) / 2;
-                    if capacity > buffer_max_size {
+                    if capacity > self.buffer_max_size {
                         warn!(
                             "requesting capacity {} over buffer_max_size {}",
-                            capacity, buffer_max_size
+                            capacity, self.buffer_max_size
                         );
                         return Err(Error::Generic("buffer size too small"));
                     }

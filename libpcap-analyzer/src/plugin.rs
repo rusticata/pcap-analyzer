@@ -1,8 +1,7 @@
 use pcap_parser::Packet;
 
-use crate::config::Config;
 use crate::packet_data::PacketData;
-use libpcap_tools::{Flow, ThreeTuple};
+use libpcap_tools::{Config, Flow, ThreeTuple};
 
 pub trait PluginBuilder: Sync + Send {
     fn name(&self) -> &'static str;
@@ -33,7 +32,7 @@ macro_rules! default_plugin_builder {
             fn name(&self) -> &'static str {
                 "$builder"
             }
-            fn build(&self, _config: &$crate::Config) -> Box<$crate::plugin::Plugin> {
+            fn build(&self, _config: &libpcap_tools::Config) -> Box<$crate::plugin::Plugin> {
                 Box::new($name::default())
             }
         }

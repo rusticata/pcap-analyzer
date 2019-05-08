@@ -23,6 +23,15 @@ impl Config {
         }
         item.as_str()
     }
+    /// Get an entry of type integer by path
+    pub fn get_usize<T: AsRef<str>>(&self, k: T) -> Option<usize> {
+        let mut item = &self.value;
+        for key in k.as_ref().split(".") {
+            item = item.get(key)?;
+        }
+        item.as_integer()
+            .and_then(|i| if i >= 0 { Some(i as usize) } else { None })
+    }
 
     /// Load configuration from input object. If keys are already present, they are overwritten
     pub fn load_config<R: io::Read>(&mut self, mut config: R) -> Result<(), io::Error> {

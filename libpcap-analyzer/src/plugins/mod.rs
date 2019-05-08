@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use crate::config::Config;
 use crate::{Plugin, PluginBuilder};
+use libpcap_tools::Config;
 
 mod basic_stats;
 mod examples;

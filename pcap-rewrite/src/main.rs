@@ -17,7 +17,7 @@ use std::path::Path;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
-use libpcap_tools::PcapEngine;
+use libpcap_tools::{Config, PcapEngine};
 
 mod rewriter;
 use crate::rewriter::*;
@@ -68,8 +68,9 @@ fn main() -> io::Result<()> {
    let outfile = File::create(path)?;
 
 
+   let config = Config::default();
    let rewriter = Rewriter::new(Box::new(outfile));
-   let mut engine = PcapEngine::new(Box::new(rewriter));
+   let mut engine = PcapEngine::new(Box::new(rewriter), &config);
 
    let _ = engine.run(&mut input_reader).expect("run analyzer");
 

@@ -15,8 +15,8 @@ use std::path::Path;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
-use libpcap_analyzer::{plugins,Analyzer,Config};
-use libpcap_tools::PcapEngine;
+use libpcap_analyzer::{plugins,Analyzer};
+use libpcap_tools::{Config, PcapEngine};
 
 fn load_config(config:&mut Config, filename:&str) -> Result<(),io::Error> {
     debug!("Loading configuration {}", filename);
@@ -74,7 +74,7 @@ fn main() -> io::Result<()> {
        warn!("No plugins loaded");
    }
    let analyzer = Analyzer::new(plugins);
-   let mut engine = PcapEngine::new(Box::new(analyzer));
+   let mut engine = PcapEngine::new(Box::new(analyzer), &config);
 
    let input_filename = matches.value_of("INPUT").unwrap();
    // let verbose = matches.is_present("verbose");
