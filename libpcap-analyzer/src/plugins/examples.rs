@@ -36,7 +36,7 @@ impl crate::plugin::PluginBuilder for EmptyWithConfigBuilder {
     fn build(&self, config:&crate::Config) -> Box<Plugin> {
         let name = config.get("plugin.emptywithconfig.name");
         let plugin = EmptyWithConfig {
-            name: name.map(|s| s.clone()),
+            name: name.map(|s| s.to_string()),
         };
         Box::new(plugin)
     }

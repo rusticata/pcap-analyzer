@@ -18,6 +18,13 @@ use xz2::read::XzDecoder;
 use libpcap_analyzer::{plugins,Analyzer,Config};
 use libpcap_tools::PcapEngine;
 
+fn load_config(config:&mut Config, filename:&str) -> Result<(),io::Error> {
+    debug!("Loading configuration {}", filename);
+    let path = Path::new(&filename);
+    let file = File::open(path)?;
+    config.load_config(file)
+}
+
 fn main() -> io::Result<()> {
    let matches = App::new("Pcap analyzer")
         .version(crate_version!())
@@ -32,6 +39,11 @@ fn main() -> io::Result<()> {
              .short("p")
              .long("plugins")
              .takes_value(true))
+        .arg(Arg::with_name("config")
+             .help("Configuration file")
+             .short("c")
+             .long("config")
+             .takes_value(true))
         .arg(Arg::with_name("INPUT")
              .help("Input file name")
              .required(true)
@@ -43,9 +55,11 @@ fn main() -> io::Result<()> {
    debug!("Pcap analyser {}", crate_version!());
 
    let builder = plugins::plugins_factory();
-   let config = Config::default();
+   let mut config = Config::default();
+   if let Some(filename) = matches.value_of("config") {
+       load_config(&mut config, filename)?;
+   }
    let mut plugins = plugins::build_plugins(&builder,&config);
-
    if let Some(plugin_names) = matches.value_of("plugins") {
        debug!("Restricting plugins to: {}", plugin_names);
        let names : Vec<_> = plugin_names.split(",").collect();

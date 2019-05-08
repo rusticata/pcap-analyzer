@@ -14,6 +14,7 @@ pnet_base = "0.22.0"
 pnet_macros_support = "0.22.0"
 pnet_packet = "0.22.0"
 rand="0.6"
+toml="0.5"
 
 [dependencies.rusticata]
 # path = "../../rusticata"
