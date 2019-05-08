@@ -42,12 +42,7 @@ impl Plugin for BasicStats {
         let five_tuple = &pdata.five_tuple;
 
         info!("BasicStats::handle_l4");
-        debug!("    5t: proto {} / [{}]:{} -> [{}]:{}",
-               five_tuple.proto,
-               five_tuple.src,
-               five_tuple.src_port,
-               five_tuple.dst,
-               five_tuple.dst_port);
+        debug!("    5t: {}", five_tuple);
         debug!("    to_server: {}", pdata.to_server);
         debug!("    l3_type: {}", pdata.l3_type);
         debug!("    l3_data_len: {}", pdata.l3_data.len());
@@ -58,11 +53,12 @@ impl Plugin for BasicStats {
         entry.num_packets += 1;
         if let Some(flow) = pdata.flow {
             let five_tuple = &flow.five_tuple;
-            debug!("    flow: [{}]:{} -> [{}]:{}",
+            debug!("    flow: [{}]:{} -> [{}]:{} [{}]",
                    five_tuple.src,
                    five_tuple.src_port,
                    five_tuple.dst,
-                   five_tuple.dst_port);
+                   five_tuple.dst_port,
+                   five_tuple.proto);
         }
         debug!("    l3_data:\n{}", pdata.l3_data.to_hex(16));
         pdata.l4_data.map(|d| {

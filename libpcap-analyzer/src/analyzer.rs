@@ -468,7 +468,7 @@ impl Analyzer {
         l4_data: Option<&[u8]>,
     ) -> Result<(), Error> {
         let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
-        debug!("5t: {:?}", five_tuple);
+        debug!("5t: {}", five_tuple);
         let now = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
 
         // lookup flow
