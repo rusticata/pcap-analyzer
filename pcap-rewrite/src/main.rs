@@ -22,6 +22,13 @@ use libpcap_tools::{Config, PcapEngine};
 mod rewriter;
 use crate::rewriter::*;
 
+fn load_config(config:&mut Config, filename:&str) -> Result<(),io::Error> {
+    debug!("Loading configuration {}", filename);
+    let path = Path::new(&filename);
+    let file = File::open(path)?;
+    config.load_config(file)
+}
+
 fn main() -> io::Result<()> {
    let matches = App::new("Pcap rewrite tool")
         .version(crate_version!())
@@ -31,6 +38,11 @@ fn main() -> io::Result<()> {
              .help("Plugins to load (default: all)")
              .short("p")
              .long("plugins")
+             .takes_value(true))
+        .arg(Arg::with_name("config")
+             .help("Configuration file")
+             .short("c")
+             .long("config")
              .takes_value(true))
         .arg(Arg::with_name("INPUT")
              .help("Input file name")
@@ -46,6 +58,11 @@ fn main() -> io::Result<()> {
    std_logger::init();
 
    debug!("Pcap rewrite tool {}", crate_version!());
+
+   let mut config = Config::default();
+   if let Some(filename) = matches.value_of("config") {
+       load_config(&mut config, filename)?;
+   }
 
    let input_filename = matches.value_of("INPUT").unwrap();
    let output_filename = matches.value_of("OUTPUT").unwrap();
@@ -67,8 +84,6 @@ fn main() -> io::Result<()> {
    let path = Path::new(&output_filename);
    let outfile = File::create(path)?;
 
-
-   let config = Config::default();
    let rewriter = Rewriter::new(Box::new(outfile));
    let mut engine = PcapEngine::new(Box::new(rewriter), &config);
 
