@@ -6,6 +6,7 @@ use clap::{crate_version, App, Arg};
 
 extern crate env_logger;
 extern crate flate2;
+extern crate lz4;
 extern crate xz2;
 
 use std::fs::File;
@@ -103,6 +104,8 @@ fn main() -> io::Result<()> {
             Box::new(GzDecoder::new(file)) as Box<io::Read>
         } else if input_filename.ends_with(".xz") {
             Box::new(XzDecoder::new(file)) as Box<io::Read>
+        } else if input_filename.ends_with(".lz4") {
+            Box::new(lz4::Decoder::new(file)?) as Box<io::Read>
         } else {
             Box::new(file)
         }
