@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 env_logger = "0.6"
+explugin-example = { path="../explugin-example" }
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 libpcap-analyzer = { path="../libpcap-analyzer" }
 libpcap-tools = { path="../libpcap-tools" }

@@ -2,6 +2,7 @@
 members = [
   "libpcap-tools",
   "libpcap-analyzer",
+  "explugin-example",
   "pcap-analyzer",
   "pcap-rewrite",
 ]

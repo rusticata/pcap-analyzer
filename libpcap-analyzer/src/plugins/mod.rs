@@ -8,38 +8,54 @@ mod examples;
 mod rusticata;
 mod tcp_states;
 
+/// Storage of plugin instances
 pub struct Plugins {
     pub storage: HashMap<String, Box<Plugin>>,
 }
 
+/// Plugin Factory
 pub struct PluginsFactory {
     list: Vec<Box<PluginBuilder>>,
 }
 
-pub fn plugins_factory() -> PluginsFactory {
-    let mut v: Vec<Box<PluginBuilder>> = Vec::new();
+impl PluginsFactory {
+    /// Create a new empty plugin factory
+    pub fn new() -> PluginsFactory {
+        PluginsFactory { list: Vec::new() }
+    }
 
-    v.push(Box::new(basic_stats::BasicStatsBuilder));
-    v.push(Box::new(tcp_states::TcpStatesBuilder));
-    v.push(Box::new(rusticata::RusticataBuilder));
-    v.push(Box::new(examples::EmptyBuilder));
-    v.push(Box::new(examples::EmptyWithConfigBuilder));
+    /// Create a new empty plugin factory, loading all plugins
+    pub fn new_all_plugins() -> PluginsFactory {
+        let mut v: Vec<Box<PluginBuilder>> = Vec::new();
 
-    PluginsFactory { list: v }
-}
+        v.push(Box::new(basic_stats::BasicStatsBuilder));
+        v.push(Box::new(tcp_states::TcpStatesBuilder));
+        v.push(Box::new(rusticata::RusticataBuilder));
+        v.push(Box::new(examples::EmptyBuilder));
+        v.push(Box::new(examples::EmptyWithConfigBuilder));
 
-pub fn build_plugins(factory: &PluginsFactory, config: &Config) -> Plugins {
-    let mut h: HashMap<String, Box<Plugin>> = HashMap::new();
+        PluginsFactory { list: v }
+    }
 
-    factory.list.iter().for_each(|b| {
-        let plugin = b.build(&config);
-        let name = plugin.name().to_string();
-        if h.contains_key(&name) {
-            warn!("Attempt to insert plugin {} twice", name);
-        } else {
-            h.insert(plugin.name().to_string(), plugin);
-        }
-    });
+    /// Add a new plugin builder to the factory
+    pub fn add_builder(&mut self, b: Box<PluginBuilder>) {
+        self.list.push(b);
+    }
 
-    Plugins { storage: h }
+    /// Instanciate all plugins
+    pub fn build_plugins(&self, config: &Config) -> Plugins {
+        let mut h: HashMap<String, Box<Plugin>> = HashMap::new();
+
+        self.list.iter().for_each(|b| {
+            let plugin = b.build(&config);
+            let name = plugin.name().to_string();
+            if h.contains_key(&name) {
+                warn!("Attempt to insert plugin {} twice", name);
+            } else {
+                h.insert(plugin.name().to_string(), plugin);
+            }
+        });
+
+        Plugins { storage: h }
+    }
 }

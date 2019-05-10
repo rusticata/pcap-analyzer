@@ -5,6 +5,7 @@ extern crate clap;
 use clap::{crate_version, App, Arg};
 
 extern crate env_logger;
+extern crate explugin_example;
 extern crate flate2;
 extern crate lz4;
 extern crate xz2;
@@ -16,6 +17,7 @@ use std::path::Path;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
+use explugin_example::ExEmptyPluginBuilder;
 use libpcap_analyzer::{plugins, Analyzer};
 use libpcap_tools::{Config, PcapEngine};
 
@@ -63,12 +65,18 @@ fn main() -> io::Result<()> {
 
     debug!("Pcap analyser {}", crate_version!());
 
-    let builder = plugins::plugins_factory();
+    // create plugin factory with all available plugins
+    let mut factory = plugins::PluginsFactory::new_all_plugins();
+    // add external plugins
+    let ex_p = ExEmptyPluginBuilder {};
+    factory.add_builder(Box::new(ex_p));
     let mut config = Config::default();
     if let Some(filename) = matches.value_of("config") {
         load_config(&mut config, filename)?;
     }
-    let mut plugins = plugins::build_plugins(&builder, &config);
+    // instanciate all plugins
+    let mut plugins = factory.build_plugins(&config);
+    // eventually, filter plugin instances
     if let Some(plugin_names) = matches.value_of("plugins") {
         debug!("Restricting plugins to: {}", plugin_names);
         let names: Vec<_> = plugin_names.split(",").collect();
