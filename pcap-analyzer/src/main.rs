@@ -68,8 +68,7 @@ fn main() -> io::Result<()> {
     // create plugin factory with all available plugins
     let mut factory = plugins::PluginsFactory::new_all_plugins();
     // add external plugins
-    let ex_p = ExEmptyPluginBuilder {};
-    factory.add_builder(Box::new(ex_p));
+    factory.add_builder(Box::new(ExEmptyPluginBuilder));
     let mut config = Config::default();
     if let Some(filename) = matches.value_of("config") {
         load_config(&mut config, filename)?;
