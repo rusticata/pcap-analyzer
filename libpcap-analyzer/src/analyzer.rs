@@ -329,8 +329,8 @@ impl Analyzer {
         );
 
         let l4_data = Some(icmp.payload());
-        let src_port = 0;
-        let dst_port = 0;
+        let src_port = icmp.get_icmp_type().0 as u16;
+        let dst_port = icmp.get_icmp_code().0 as u16;
 
         self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
     }
