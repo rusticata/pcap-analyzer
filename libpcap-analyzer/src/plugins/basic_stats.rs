@@ -67,7 +67,7 @@ impl Plugin for BasicStats {
     }
 
     fn post_process(&mut self) {
-        info!("BasicStats: total packets {} nytes", self.total_packets);
+        info!("BasicStats: total packets {} bytes", self.total_packets);
         info!("BasicStats: total bytes (L3) {}", self.total_bytes_l3);
         let total_l4 = self.l4_conversations
             .iter()
