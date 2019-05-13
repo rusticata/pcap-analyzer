@@ -124,9 +124,11 @@ impl Analyzer {
         debug!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
         let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
 
+        let ip_len = ipv4.get_total_length() as usize;
+
         // remove padding
         let (data, ipv4) = {
-            if (ipv4.get_total_length() as usize) < data.len() {
+            if ip_len < data.len() && ip_len > 0 {
                 let d = &data[..ipv4.get_total_length() as usize];
                 let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
                 (d, ipv4)
@@ -147,6 +149,20 @@ impl Analyzer {
             let _ = p.handle_l3(packet, data, ethertype.0, &t3);
         }
 
+        // if get_total_length is 0, assume TSO offloading and no padding
+        let payload = if ip_len == 0 {
+            warn!("IPv4: packet reported length is 0. Assuming TSO");
+            // the payload() function from pnet will fail
+            let start = ipv4.get_header_length() as usize * 4;
+            if start > data.len() {
+                warn!("IPv4: ip_len == 0 and ipv4.get_header_length is invalid!");
+                return Ok(())
+            }
+            &data[start..]
+        } else {
+            ipv4.payload()
+        };
+
         // check IP fragmentation before calling handle_l4
         let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
         let more_fragments = ipv4.get_flags() & Ipv4Flags::MoreFragments != 0;
@@ -154,7 +170,7 @@ impl Analyzer {
             ipv4.get_identification().into(),
             frag_offset,
             more_fragments,
-            ipv4.payload(),
+            payload,
         );
         let data = match defrag {
             Fragment::NoFrag(d) => d,
