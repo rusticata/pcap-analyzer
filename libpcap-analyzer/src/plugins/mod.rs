@@ -4,9 +4,10 @@ use crate::{Plugin, PluginBuilder};
 use libpcap_tools::Config;
 
 mod basic_stats;
-#[cfg(feature="community_id")]
+#[cfg(feature = "plugin_community_id")]
 mod community_id;
 mod examples;
+#[cfg(feature = "plugin_rusticata")]
 mod rusticata;
 mod tcp_states;
 
@@ -31,9 +32,10 @@ impl PluginsFactory {
         let mut v: Vec<Box<PluginBuilder>> = Vec::new();
 
         v.push(Box::new(basic_stats::BasicStatsBuilder));
-        #[cfg(feature="community_id")]
+        #[cfg(feature = "plugin_community_id")]
         v.push(Box::new(community_id::CommunityIDBuilder));
         v.push(Box::new(tcp_states::TcpStatesBuilder));
+        #[cfg(feature = "plugin_rusticata")]
         v.push(Box::new(rusticata::RusticataBuilder));
         v.push(Box::new(examples::EmptyBuilder));
         v.push(Box::new(examples::EmptyWithConfigBuilder));

@@ -1,13 +1,8 @@
 #[macro_use]
 extern crate log;
 
-extern crate pcap_parser;
-extern crate rusticata;
-
 extern crate nom;
-
-// #[macro_use] extern crate lazy_static;
-
+extern crate pcap_parser;
 extern crate rand;
 
 mod packet_data;
@@ -20,10 +15,9 @@ pub mod plugins;
 mod analyzer;
 pub use analyzer::*;
 
-mod ip_defrag;
 mod ip6_defrag;
+mod ip_defrag;
 pub use ip6_defrag::*;
 
-
-#[derive(Debug,PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Error;

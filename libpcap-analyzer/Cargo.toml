@@ -6,8 +6,9 @@ edition = "2018"
 
 [features]
 default = []
-all = ["community_id"]
-community_id = ["sha1", "base64"]
+all = ["plugin_community_id", "plugin_rusticata"]
+plugin_community_id = ["sha1", "base64"]
+plugin_rusticata = ["rusticata"]
 
 [dependencies]
 base64 = { version="0.10", optional=true }
@@ -25,6 +26,7 @@ sha1 = { version="0.6", features=["std"], optional=true }
 [dependencies.rusticata]
 # path = "../../rusticata"
 git = "https://github.com/rusticata/rusticata.git"
+optional = true
 
 [dependencies.pcap-parser]
 version = "0.5"
