@@ -4,7 +4,13 @@ version = "0.1.0"
 authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 edition = "2018"
 
+[features]
+default = []
+all = ["community_id"]
+community_id = ["sha1", "base64"]
+
 [dependencies]
+base64 = { version="0.10", optional=true }
 env_logger = "0.6"
 lazy_static = "1.2"
 libpcap-tools = { path="../libpcap-tools" }
@@ -14,6 +20,7 @@ pnet_base = "0.22.0"
 pnet_macros_support = "0.22.0"
 pnet_packet = "0.22.0"
 rand="0.6"
+sha1 = { version="0.6", features=["std"], optional=true }
 
 [dependencies.rusticata]
 # path = "../../rusticata"
