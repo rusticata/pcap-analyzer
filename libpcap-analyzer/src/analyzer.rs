@@ -69,6 +69,7 @@ impl Analyzer {
         let datalen = min(packet.header.caplen as usize, packet.data.len());
         let data = &packet.data[..datalen];
 
+        // let start = ::std::time::Instant::now();
         self.plugins
             .storage
             .par_iter_mut()
@@ -76,6 +77,8 @@ impl Analyzer {
             .for_each(|(_name, p)| {
                 let _ = p.handle_l2(&packet, &data);
             });
+        // let elapsed = start.elapsed();
+        // debug!("Time to run l2 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
         match EthernetPacket::new(data) {
             Some(eth) => {
@@ -274,6 +277,7 @@ impl Analyzer {
         three_tuple: &ThreeTuple,
     ) {
         // run l3 plugins
+        // let start = ::std::time::Instant::now();
         self.plugins
             .storage
             .par_iter_mut()
@@ -281,6 +285,8 @@ impl Analyzer {
             .for_each(|(_name, p)| {
                 let _ = p.handle_l3(packet, data, ethertype, three_tuple);
             });
+        // let elapsed = start.elapsed();
+        // debug!("Time to run l3 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
     }
 
     // Dispatcher function, when l3 layer has been parsed
@@ -535,6 +541,7 @@ impl Analyzer {
             l4_data,
             flow: Some(flow),
         };
+        // let start = ::std::time::Instant::now();
         self.plugins
             .storage
             .par_iter_mut()
@@ -542,6 +549,8 @@ impl Analyzer {
             .for_each(|(_name, p)| {
                 let _ = p.handle_l4(&packet, &pdata);
             });
+        // let elapsed = start.elapsed();
+        // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
         // XXX do other stuff
 
