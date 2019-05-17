@@ -15,7 +15,7 @@ base64 = { version="0.10", optional=true }
 env_logger = "0.6"
 lazy_static = "1.2"
 libpcap-tools = { path="../libpcap-tools" }
-log = "0.4"
+log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 nom = "4.2"
 pnet_base = "0.22.0"
 pnet_macros_support = "0.22.0"
