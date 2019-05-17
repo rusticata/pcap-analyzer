@@ -97,7 +97,7 @@ fn main() -> io::Result<()> {
     if plugins.storage.is_empty() {
         warn!("No plugins loaded");
     }
-    let analyzer = Analyzer::new(plugins);
+    let analyzer = Analyzer::new(plugins, &config);
     let mut engine = PcapEngine::new(Box::new(analyzer), &config);
 
     let input_filename = matches.value_of("INPUT").unwrap();

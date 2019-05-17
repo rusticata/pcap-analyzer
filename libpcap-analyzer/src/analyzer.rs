@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 
 use rand::prelude::*;
+use rayon::prelude::*;
 
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
@@ -44,7 +45,12 @@ pub struct Analyzer {
 }
 
 impl Analyzer {
-    pub fn new(plugins: Plugins) -> Analyzer {
+    pub fn new(plugins: Plugins, config: &Config) -> Analyzer {
+        let n = config.get_usize("num_threads").unwrap_or(0);
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(n)
+            .build_global()
+            .unwrap();
         Analyzer {
             flows: HashMap::new(),
             flows_id: HashMap::new(),
@@ -62,9 +68,9 @@ impl Analyzer {
         let datalen = min(packet.header.caplen as usize, packet.data.len());
         let data = &packet.data[..datalen];
 
-        for p in self.plugins.storage.values_mut() {
+        self.plugins.storage.par_iter_mut().for_each(|(_name, p)| {
             let _ = p.handle_l2(&packet, &data);
-        }
+        });
 
         match EthernetPacket::new(data) {
             Some(eth) => {
@@ -156,7 +162,7 @@ impl Analyzer {
             let start = ipv4.get_header_length() as usize * 4;
             if start > data.len() {
                 warn!("IPv4: ip_len == 0 and ipv4.get_header_length is invalid!");
-                return Ok(())
+                return Ok(());
             }
             &data[start..]
         } else {
@@ -280,9 +286,9 @@ impl Analyzer {
         let t3 = ThreeTuple::default();
 
         // handle l3
-        for p in self.plugins.storage.values_mut() {
+        self.plugins.storage.par_iter_mut().for_each(|(_name, p)| {
             let _ = p.handle_l3(packet, data, ethertype.0, &t3);
-        }
+        });
 
         // don't try to parse l4, we don't know how to get L4 data
         Ok(())
@@ -515,9 +521,9 @@ impl Analyzer {
             l4_data,
             flow: Some(flow),
         };
-        for p in self.plugins.storage.values_mut() {
+        self.plugins.storage.par_iter_mut().for_each(|(_name, p)| {
             let _ = p.handle_l4(&packet, &pdata);
-        }
+        });
 
         // XXX do other stuff
 
