@@ -6,6 +6,7 @@ use pcap_parser::Packet;
 use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
+use crate::plugin::PLUGIN_L4;
 use base64;
 use libpcap_tools::FiveTuple;
 use sha1::Sha1;
@@ -72,6 +73,9 @@ fn hash_community_id(five_tuple: &FiveTuple, l4_type: u8, seed: u16) -> String {
 impl Plugin for CommunityID {
     fn name(&self) -> &'static str {
         "CommunityID"
+    }
+    fn plugin_type(&self) -> u16 {
+        PLUGIN_L4
     }
 
     fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketData) {

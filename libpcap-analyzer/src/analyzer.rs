@@ -10,7 +10,7 @@ use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use pnet_packet::gre::GrePacket;
 use pnet_packet::icmp::IcmpPacket;
 use pnet_packet::icmpv6::Icmpv6Packet;
-use pnet_packet::ip::IpNextHeaderProtocols;
+use pnet_packet::ip::{IpNextHeaderProtocol, IpNextHeaderProtocols};
 use pnet_packet::ipv4::{Ipv4Flags, Ipv4Packet};
 use pnet_packet::ipv6::Ipv6Packet;
 use pnet_packet::tcp::TcpPacket;
@@ -27,6 +27,7 @@ use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
 use crate::packet_data::PacketData;
 use libpcap_tools::{FiveTuple, Flow, FlowID, ThreeTuple};
 
+use crate::plugin::*;
 use crate::plugins::Plugins;
 
 struct L3Info {
@@ -68,9 +69,13 @@ impl Analyzer {
         let datalen = min(packet.header.caplen as usize, packet.data.len());
         let data = &packet.data[..datalen];
 
-        self.plugins.storage.par_iter_mut().for_each(|(_name, p)| {
-            let _ = p.handle_l2(&packet, &data);
-        });
+        self.plugins
+            .storage
+            .par_iter_mut()
+            .filter(|(_, p)| p.plugin_type() & PLUGIN_L2 != 0)
+            .for_each(|(_name, p)| {
+                let _ = p.handle_l2(&packet, &data);
+            });
 
         match EthernetPacket::new(data) {
             Some(eth) => {
@@ -150,10 +155,7 @@ impl Analyzer {
             dst: IpAddr::V4(ipv4.get_destination()),
         };
 
-        // handle l3
-        for p in self.plugins.storage.values_mut() {
-            let _ = p.handle_l3(packet, data, ethertype.0, &t3);
-        }
+        self.run_l3_plugins(packet, data, ethertype.0, &t3);
 
         // if get_total_length is 0, assume TSO offloading and no padding
         let payload = if ip_len == 0 {
@@ -199,18 +201,7 @@ impl Analyzer {
             l3_proto: ethertype.0,
         };
 
-        match l4_proto {
-            IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Icmp => self.handle_l4_icmp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Gre => self.handle_l4_gre(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Ipv6 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv6),
-            _ => {
-                warn!("Unsupported L4 proto {}", l4_proto);
-                self.handle_l4_generic(packet, ctx, data, &l3_info)
-            }
-        }
+        self.handle_l3_common(packet, ctx, data, &l3_info)
     }
 
     fn handle_l3_ipv6(
@@ -232,9 +223,7 @@ impl Analyzer {
             dst: IpAddr::V6(ipv6.get_destination()),
         };
 
-        for p in self.plugins.storage.values_mut() {
-            let _ = p.handle_l3(&packet, data, ethertype.0, &t3);
-        }
+        self.run_l3_plugins(packet, data, ethertype.0, &t3);
 
         let l3_info = L3Info {
             three_tuple: t3,
@@ -242,19 +231,7 @@ impl Analyzer {
         };
 
         let data = ipv6.payload();
-
-        match l4_proto {
-            IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Icmpv6 => self.handle_l4_icmpv6(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Ipv4 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv4),
-            IpNextHeaderProtocols::Ipv6Frag => self.handle_l4_ipv6frag(packet, ctx, data, &l3_info),
-            _ => {
-                warn!("IPv6: Unsupported L4 proto {}", l4_proto);
-                self.handle_l4_generic(packet, ctx, data, &l3_info)
-            }
-        }
+        self.handle_l3_common(packet, ctx, data, &l3_info)
     }
 
     fn handle_l3_vlan_801q(
@@ -282,16 +259,53 @@ impl Analyzer {
     ) -> Result<(), Error> {
         debug!("handle_l3_generic (idx={})", ctx.pcap_index);
         // we don't know if there is padding to remove
-
-        let t3 = ThreeTuple::default();
-
-        // handle l3
-        self.plugins.storage.par_iter_mut().for_each(|(_name, p)| {
-            let _ = p.handle_l3(packet, data, ethertype.0, &t3);
-        });
-
+        //run Layer 3 plugins
+        self.run_l3_plugins(packet, data, ethertype.0, &ThreeTuple::default());
         // don't try to parse l4, we don't know how to get L4 data
         Ok(())
+    }
+
+    // Run all Layer 3 plugins
+    fn run_l3_plugins(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        data: &[u8],
+        ethertype: u16,
+        three_tuple: &ThreeTuple,
+    ) {
+        // run l3 plugins
+        self.plugins
+            .storage
+            .par_iter_mut()
+            .filter(|(_, p)| p.plugin_type() & PLUGIN_L3 != 0)
+            .for_each(|(_name, p)| {
+                let _ = p.handle_l3(packet, data, ethertype, three_tuple);
+            });
+    }
+
+    // Dispatcher function, when l3 layer has been parsed
+    fn handle_l3_common(
+        &mut self,
+        packet: &pcap_parser::Packet,
+        ctx: &ParseContext,
+        data: &[u8],
+        l3_info: &L3Info,
+    ) -> Result<(), Error> {
+        match IpNextHeaderProtocol(l3_info.three_tuple.proto) {
+            IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Icmp => self.handle_l4_icmp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Icmpv6 => self.handle_l4_icmpv6(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Gre => self.handle_l4_gre(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Ipv4 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv4),
+            IpNextHeaderProtocols::Ipv6 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv6),
+            IpNextHeaderProtocols::Ipv6Frag => self.handle_l4_ipv6frag(packet, ctx, data, &l3_info),
+            p => {
+                warn!("Unsupported L4 proto {}", p);
+                self.handle_l4_generic(packet, ctx, data, &l3_info)
+            }
+        }
     }
 
     fn handle_l4_tcp(
@@ -521,9 +535,13 @@ impl Analyzer {
             l4_data,
             flow: Some(flow),
         };
-        self.plugins.storage.par_iter_mut().for_each(|(_name, p)| {
-            let _ = p.handle_l4(&packet, &pdata);
-        });
+        self.plugins
+            .storage
+            .par_iter_mut()
+            .filter(|(_, p)| p.plugin_type() & PLUGIN_L4 != 0)
+            .for_each(|(_name, p)| {
+                let _ = p.handle_l4(&packet, &pdata);
+            });
 
         // XXX do other stuff
 

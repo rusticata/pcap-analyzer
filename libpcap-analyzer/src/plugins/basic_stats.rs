@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
+use crate::plugin::{PLUGIN_L3, PLUGIN_L4};
 use libpcap_tools::{ThreeTuple, FiveTuple};
 
 use nom::HexDisplay;
@@ -28,6 +29,7 @@ default_plugin_builder!(BasicStats, BasicStatsBuilder);
 
 impl Plugin for BasicStats {
     fn name(&self) -> &'static str { "BasicStats" }
+    fn plugin_type(&self) -> u16 { PLUGIN_L3|PLUGIN_L4 }
 
     fn handle_l3(&mut self, _packet:&Packet, data: &[u8], _ethertype:u16, t3:&ThreeTuple) {
         // info!("BasicStats::handle_l3 (len {})", data.len());

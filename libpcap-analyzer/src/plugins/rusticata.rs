@@ -3,6 +3,7 @@ use pcap_parser::Packet;
 use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
+use crate::plugin::PLUGIN_L4;
 use libpcap_tools::FlowID;
 
 use std::collections::HashMap;
@@ -20,6 +21,7 @@ default_plugin_builder!(Rusticata, RusticataBuilder);
 
 impl Plugin for Rusticata {
     fn name(&self) -> &'static str { "Rusticata" }
+    fn plugin_type(&self) -> u16 { PLUGIN_L4 }
 
     fn pre_process(&mut self) {
         let mut m : HashMap<&'static str, Box<RBuilder>> = HashMap::new();

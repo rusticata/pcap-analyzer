@@ -1,4 +1,4 @@
-use crate::plugin::Plugin;
+use crate::plugin::{Plugin, PLUGIN_NONE};
 use crate::default_plugin_builder;
 use libpcap_tools::Config;
 
@@ -11,6 +11,7 @@ default_plugin_builder!(Empty, EmptyBuilder);
 
 impl Plugin for Empty {
     fn name(&self) -> &'static str { "Empty" }
+    fn plugin_type(&self) -> u16 { PLUGIN_NONE }
 }
 
 /// Example plugin, reading a configuration value
@@ -21,6 +22,7 @@ pub struct EmptyWithConfig {
 
 impl Plugin for EmptyWithConfig {
     fn name(&self) -> &'static str { "EmptyWithConfig" }
+    fn plugin_type(&self) -> u16 { PLUGIN_NONE }
 
     fn pre_process(&mut self) {
         info!("Hello, I am plugin EmptyWithConfig, with name {:?}", self.name);
