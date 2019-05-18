@@ -78,6 +78,7 @@ impl Plugin for Rusticata {
             let res = parser.parse(d, direction);
             if res == R_STATUS_FAIL {
                 warn!("rusticata: parser failed");
+                // remove or disable parser for flow?
             }
         });
     }

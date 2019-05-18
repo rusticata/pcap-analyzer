@@ -199,7 +199,7 @@ debug!("SYN");
         debug!("    Tcp state(after) direct {:?} / rev {:?}", e.0.state, e.1.state);
     }
 
-    fn flow_terminate(&mut self, flow: &Flow) {
+    fn flow_destroyed(&mut self, flow: &Flow) {
         debug!("flow_terminate id={}", flow.flow_id);
         self.ctx_map.remove(&flow.flow_id);
     }

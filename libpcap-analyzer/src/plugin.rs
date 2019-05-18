@@ -18,8 +18,11 @@ pub const PLUGIN_L3: u16 = 0b0010;
 /// Indicates the plugin register for Layer 4 data
 pub const PLUGIN_L4: u16 = 0b0100;
 
+/// Indicates the plugin registers for 'new flow' events
+pub const PLUGIN_NEWFLOW: u16 = 0b0001_0000;
+
 /// Indicates the plugin register for all layers
-pub const PLUGIN_ALL: u16 = 0b1111;
+pub const PLUGIN_ALL: u16 = 0b1111_1111;
 
 pub trait Plugin: Sync + Send {
     fn name(&self) -> &'static str;
@@ -31,7 +34,8 @@ pub trait Plugin: Sync + Send {
 
     fn handle_l4(&mut self, _packet: &Packet, _pdata: &PacketData) {}
 
-    fn flow_terminate(&mut self, _flow: &Flow) {}
+    fn flow_created(&mut self, _flow: &Flow) {}
+    fn flow_destroyed(&mut self, _flow: &Flow) {}
 
     fn pre_process(&mut self) {}
     fn post_process(&mut self) {}

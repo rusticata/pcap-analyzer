@@ -518,6 +518,7 @@ impl Analyzer {
             Some(id) => id,
             None => {
                 let flow = Flow::new(&five_tuple, packet.header.ts_sec, packet.header.ts_usec);
+                self.gen_event_new_flow(&flow);
                 self.insert_flow(five_tuple.clone(), flow)
             }
         };
@@ -598,6 +599,19 @@ impl Analyzer {
         self.flows_id.insert(five_t, id);
         id
     }
+
+    fn gen_event_new_flow(&mut self, flow: &Flow) {
+        // let start = ::std::time::Instant::now();
+        self.plugins
+            .storage
+            .par_iter_mut()
+            .filter(|(_, p)| p.plugin_type() & PLUGIN_NEWFLOW != 0)
+            .for_each(|(_name, p)| {
+                let _ = p.flow_created(flow);
+            });
+        // let elapsed = start.elapsed();
+        // debug!("Time to run flow_created: {}.{}", elapsed.as_secs(), elapsed.as_millis());
+    }
 }
 
 impl PcapAnalyzer for Analyzer {
@@ -671,7 +685,7 @@ impl PcapAnalyzer for Analyzer {
         debug!("{} flows remaining in table", self.flows.len());
         for f in self.flows.values() {
             for p in self.plugins.storage.values_mut() {
-                p.flow_terminate(&f);
+                p.flow_destroyed(&f);
             }
         }
         self.flows.clear();
