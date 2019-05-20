@@ -49,11 +49,11 @@ macro_rules! default_plugin_builder {
     ($name:ident,$builder:ident) => {
         pub struct $builder;
 
-        impl $crate::plugin::PluginBuilder for $builder {
+        impl $crate::PluginBuilder for $builder {
             fn name(&self) -> &'static str {
                 "$builder"
             }
-            fn build(&self, _config: &libpcap_tools::Config) -> Box<$crate::plugin::Plugin> {
+            fn build(&self, _config: &libpcap_tools::Config) -> Box<$crate::Plugin> {
                 Box::new($name::default())
             }
         }

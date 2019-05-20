@@ -7,8 +7,8 @@ extern crate rand;
 
 mod packet_data;
 
-pub mod plugin;
-use plugin::*;
+mod plugin;
+pub use plugin::*;
 
 pub mod plugins;
 

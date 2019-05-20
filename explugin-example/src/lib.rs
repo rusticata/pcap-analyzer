@@ -1,7 +1,7 @@
 //! Example of libpcap-analyzer plugin, in an external directory
 
 use libpcap_analyzer::default_plugin_builder;
-use libpcap_analyzer::plugin::{Plugin, PLUGIN_NONE};
+use libpcap_analyzer::{Plugin, PLUGIN_NONE};
 
 /// Example plugin, without configuration
 #[derive(Default)]
