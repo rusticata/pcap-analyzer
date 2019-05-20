@@ -32,22 +32,6 @@ impl PluginsFactory {
         PluginsFactory { list: Vec::new() }
     }
 
-    /// Create a new empty plugin factory, loading all plugins
-    pub fn new_all_plugins() -> PluginsFactory {
-        let mut v: Vec<Box<PluginBuilder>> = Vec::new();
-
-        v.push(Box::new(basic_stats::BasicStatsBuilder));
-        #[cfg(feature = "plugin_community_id")]
-        v.push(Box::new(community_id::CommunityIDBuilder));
-        v.push(Box::new(tcp_states::TcpStatesBuilder));
-        #[cfg(feature = "plugin_rusticata")]
-        v.push(Box::new(rusticata::RusticataBuilder));
-        v.push(Box::new(examples::EmptyBuilder));
-        v.push(Box::new(examples::EmptyWithConfigBuilder));
-
-        PluginsFactory { list: v }
-    }
-
     /// Add a new plugin builder to the factory
     pub fn add_builder(&mut self, b: Box<PluginBuilder>) {
         self.list.push(b);
@@ -70,5 +54,23 @@ impl PluginsFactory {
         });
 
         Plugins { storage: h }
+    }
+}
+
+impl Default for PluginsFactory {
+    /// Create a new plugin factory, with all default plugins
+    fn default() -> Self {
+        let mut v: Vec<Box<PluginBuilder>> = Vec::new();
+
+        v.push(Box::new(basic_stats::BasicStatsBuilder));
+        #[cfg(feature = "plugin_community_id")]
+        v.push(Box::new(community_id::CommunityIDBuilder));
+        v.push(Box::new(tcp_states::TcpStatesBuilder));
+        #[cfg(feature = "plugin_rusticata")]
+        v.push(Box::new(rusticata::RusticataBuilder));
+        v.push(Box::new(examples::EmptyBuilder));
+        v.push(Box::new(examples::EmptyWithConfigBuilder));
+
+        PluginsFactory { list: v }
     }
 }

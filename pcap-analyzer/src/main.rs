@@ -66,7 +66,7 @@ fn main() -> io::Result<()> {
     debug!("Pcap analyser {}", crate_version!());
 
     // create plugin factory with all available plugins
-    let mut factory = plugins::PluginsFactory::new_all_plugins();
+    let mut factory = plugins::PluginsFactory::default();
     // add external plugins
     factory.add_builder(Box::new(ExEmptyPluginBuilder));
     let mut config = Config::default();
