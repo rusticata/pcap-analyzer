@@ -605,7 +605,7 @@ impl Analyzer {
         self.plugins
             .storage
             .par_iter_mut()
-            .filter(|(_, p)| p.plugin_type() & PLUGIN_NEWFLOW != 0)
+            .filter(|(_, p)| p.plugin_type() & PLUGIN_FLOW_NEW != 0)
             .for_each(|(_name, p)| {
                 let _ = p.flow_created(flow);
             });
@@ -681,13 +681,21 @@ impl PcapAnalyzer for Analyzer {
 
     /// Finalize analysis and notify plugins
     fn teardown(&mut self) {
+        let flows = &self.flows;
         // expire remaining flows
-        debug!("{} flows remaining in table", self.flows.len());
-        for f in self.flows.values() {
-            for p in self.plugins.storage.values_mut() {
-                p.flow_destroyed(&f);
-            }
-        }
+        debug!("{} flows remaining in table", flows.len());
+        // let start = ::std::time::Instant::now();
+        self.plugins
+            .storage
+            .par_iter_mut()
+            .filter(|(_, p)| p.plugin_type() & PLUGIN_FLOW_DEL != 0)
+            .for_each(|(_name, p)| {
+                flows.values().for_each(|flow| {
+                    let _ = p.flow_destroyed(flow);
+                });
+            });
+        // let elapsed = start.elapsed();
+        // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
         self.flows.clear();
         self.flows_id.clear();
 

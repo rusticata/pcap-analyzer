@@ -18,8 +18,10 @@ pub const PLUGIN_L3: u16 = 0b0010;
 /// Indicates the plugin register for Layer 4 data
 pub const PLUGIN_L4: u16 = 0b0100;
 
-/// Indicates the plugin registers for 'new flow' events
-pub const PLUGIN_NEWFLOW: u16 = 0b0001_0000;
+/// Indicates the plugin registers for 'flow created' events
+pub const PLUGIN_FLOW_NEW: u16 = 0b0001_0000;
+/// Indicates the plugin registers for 'flow destroyed' events
+pub const PLUGIN_FLOW_DEL: u16 = 0b0010_0000;
 
 /// Indicates the plugin register for all layers
 pub const PLUGIN_ALL: u16 = 0b1111_1111;
