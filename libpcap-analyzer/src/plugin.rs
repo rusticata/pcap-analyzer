@@ -10,8 +10,9 @@ use libpcap_tools::{Config, Flow, ThreeTuple};
 pub trait PluginBuilder: Sync + Send {
     /// Name of the plugin builder
     fn name(&self) -> &'static str;
-    /// Builder function: instanciates a plugin
-    fn build(&self, config: &Config) -> Box<Plugin>;
+    /// Builder function: instanciates zero or more plugins from configuration.
+    /// The returned list can be empty if no plugins were created.
+    fn build(&self, config: &Config) -> Vec<Box<Plugin>>;
 }
 
 /// Indicates the plugin does not register any callback function
@@ -81,8 +82,8 @@ macro_rules! default_plugin_builder {
             fn name(&self) -> &'static str {
                 "$builder"
             }
-            fn build(&self, _config: &libpcap_tools::Config) -> Box<$crate::Plugin> {
-                Box::new($name::default())
+            fn build(&self, _config: &libpcap_tools::Config) -> Vec<Box<$crate::Plugin>> {
+                vec![Box::new($name::default())]
             }
         }
     };

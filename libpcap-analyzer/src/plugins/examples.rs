@@ -36,11 +36,11 @@ pub struct EmptyWithConfigBuilder;
 
 impl crate::plugin::PluginBuilder for EmptyWithConfigBuilder {
     fn name(&self) -> &'static str { "$builder" }
-    fn build(&self, config:&Config) -> Box<Plugin> {
+    fn build(&self, config:&Config) -> Vec<Box<Plugin>> {
         let name = config.get("plugin.emptywithconfig.name");
         let plugin = EmptyWithConfig {
             name: name.map(|s| s.to_string()),
         };
-        Box::new(plugin)
+        vec![Box::new(plugin)]
     }
 }

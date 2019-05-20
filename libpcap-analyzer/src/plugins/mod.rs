@@ -58,12 +58,14 @@ impl PluginsFactory {
         let mut h: HashMap<String, Box<Plugin>> = HashMap::new();
 
         self.list.iter().for_each(|b| {
-            let plugin = b.build(&config);
-            let name = plugin.name().to_string();
-            if h.contains_key(&name) {
-                warn!("Attempt to insert plugin {} twice", name);
-            } else {
-                h.insert(plugin.name().to_string(), plugin);
+            let plugin_list = b.build(&config);
+            for plugin in plugin_list {
+                let name = plugin.name().to_string();
+                if h.contains_key(&name) {
+                    warn!("Attempt to insert plugin {} twice", name);
+                } else {
+                    h.insert(plugin.name().to_string(), plugin);
+                }
             }
         });
 
