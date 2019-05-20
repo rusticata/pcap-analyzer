@@ -28,6 +28,7 @@ impl Plugin for Rusticata {
         m.insert("dns_udp", Box::new(DnsUDPBuilder{}) as Box<_>);
         m.insert("dns_tcp", Box::new(DnsTCPBuilder{}) as Box<_>);
         m.insert("ikev2", Box::new(IPsecBuilder{}) as Box<_>);
+        m.insert("ikev2_natt", Box::new(IPsecNatTBuilder{}) as Box<_>);
         m.insert("kerberos_tcp", Box::new(KerberosTCPBuilder{}) as Box<_>);
         m.insert("kerberos_udp", Box::new(KerberosUDPBuilder{}) as Box<_>);
         m.insert("ntp", Box::new(NTPBuilder{}) as Box<_>);
@@ -95,6 +96,7 @@ fn probe(i:&[u8], l4_type: u8) -> Option<String> {
     if l4_type == 17 {
         if dns_probe_udp(i) { return Some("dns_udp".to_string()); }
         if ipsec_probe(i) { return Some("ikev2".to_string()); }
+        if ikev2_natt_probe(i) { return Some("ikev2_natt".to_string()); }
         if kerberos_probe_udp(i) { return Some("kerberos_udp".to_string()); }
         if ntp_probe(i) { return Some("ntp".to_string()); }
         if openvpn_udp_probe(i) { return Some("openvpn_udp".to_string()); }
