@@ -1,3 +1,5 @@
+//! Plugin factory definition and default plugins implementation
+
 use std::collections::HashMap;
 
 use crate::{Plugin, PluginBuilder};
@@ -17,6 +19,9 @@ pub struct Plugins {
 }
 
 /// Plugin Factory
+///
+/// A plugin factory stores all registered builders, and is used to
+/// create all plugin instances on request.
 pub struct PluginsFactory {
     list: Vec<Box<PluginBuilder>>,
 }

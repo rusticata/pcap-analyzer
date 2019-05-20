@@ -35,6 +35,19 @@ struct L3Info {
     three_tuple: ThreeTuple,
 }
 
+/// Pcap/Pcap-ng analyzer
+///
+/// Read input pcap/pcap-ng data, parse it and call plugin callbacks
+/// for each ISO layer (L2 if available, L3 and L4).
+/// Flows are created for L4 sessions. Events are sent when plugins
+/// are created or destroyed.
+///
+/// The number of worker threads can be configured from the `num_threads`
+/// configuration variable. By default, it is 0 (auto-detect the number
+/// of cores and create the same number of threads).
+///
+/// All callbacks for a single ISO layer will be called concurrently before
+/// calling the next level callbacks.
 pub struct Analyzer {
     flows: HashMap<FlowID, Flow>,
     flows_id: HashMap<FiveTuple, FlowID>,
