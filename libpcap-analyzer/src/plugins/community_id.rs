@@ -1,10 +1,10 @@
 //! Plugin to build Community ID Flow Hash
 //! See https://github.com/corelight/community-id-spec
 
+use libpcap_tools::Config;
 use pcap_parser::Packet;
 
 use super::Plugin;
-use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
 use crate::plugin::PLUGIN_L4;
 use base64;
@@ -13,9 +13,20 @@ use sha1::Sha1;
 use std::net::IpAddr;
 
 #[derive(Default)]
-pub struct CommunityID {}
+pub struct CommunityID {
+    seed: u16,
+}
 
-default_plugin_builder!(CommunityID, CommunityIDBuilder);
+pub struct CommunityIDBuilder;
+
+impl crate::plugin::PluginBuilder for CommunityIDBuilder {
+    fn name(&self) -> &'static str { "$builder" }
+    fn build(&self, config:&Config) -> Vec<Box<Plugin>> {
+        let seed = config.get_usize("plugin.community_id.seed").unwrap_or(0) as u16;
+        let plugin = CommunityID{ seed };
+        vec![Box::new(plugin)]
+    }
+}
 
 #[inline]
 fn update(m: &mut Sha1, d: &[u8]) {
@@ -79,9 +90,8 @@ impl Plugin for CommunityID {
     }
 
     fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketData) {
-        let seed: u16 = 0;
         debug!("five_tuple: {}", pdata.five_tuple);
-        let hash = hash_community_id(&pdata.five_tuple, pdata.l4_type, seed);
+        let hash = hash_community_id(&pdata.five_tuple, pdata.l4_type, self.seed);
         debug!("flow community ID: {}", hash);
     }
 }
