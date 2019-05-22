@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 
 use rand::prelude::*;
-use rayon::prelude::*;
+// use rayon::prelude::*;
 
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
@@ -85,7 +85,7 @@ impl Analyzer {
         // let start = ::std::time::Instant::now();
         self.plugins
             .storage
-            .par_iter_mut()
+            .iter_mut()
             .filter(|(_, p)| p.plugin_type() & PLUGIN_L2 != 0)
             .for_each(|(_name, p)| {
                 let _ = p.handle_l2(&packet, &data);
@@ -293,7 +293,7 @@ impl Analyzer {
         // let start = ::std::time::Instant::now();
         self.plugins
             .storage
-            .par_iter_mut()
+            .iter_mut()
             .filter(|(_, p)| p.plugin_type() & PLUGIN_L3 != 0)
             .for_each(|(_name, p)| {
                 let _ = p.handle_l3(packet, data, ethertype, three_tuple);
@@ -558,7 +558,7 @@ impl Analyzer {
         // let start = ::std::time::Instant::now();
         self.plugins
             .storage
-            .par_iter_mut()
+            .iter_mut()
             .filter(|(_, p)| p.plugin_type() & PLUGIN_L4 != 0)
             .for_each(|(_name, p)| {
                 let _ = p.handle_l4(&packet, &pdata);
@@ -617,7 +617,7 @@ impl Analyzer {
         // let start = ::std::time::Instant::now();
         self.plugins
             .storage
-            .par_iter_mut()
+            .iter_mut()
             .filter(|(_, p)| p.plugin_type() & PLUGIN_FLOW_NEW != 0)
             .for_each(|(_name, p)| {
                 let _ = p.flow_created(flow);
@@ -700,7 +700,7 @@ impl PcapAnalyzer for Analyzer {
         // let start = ::std::time::Instant::now();
         self.plugins
             .storage
-            .par_iter_mut()
+            .iter_mut()
             .filter(|(_, p)| p.plugin_type() & PLUGIN_FLOW_DEL != 0)
             .for_each(|(_name, p)| {
                 flows.values().for_each(|flow| {
