@@ -9,6 +9,7 @@ mod basic_stats;
 #[cfg(feature = "plugin_community_id")]
 mod community_id;
 mod examples;
+#[cfg(debug_assertions)] mod hexdump;
 #[cfg(feature = "plugin_rusticata")]
 mod rusticata;
 mod tcp_states;
@@ -73,6 +74,7 @@ impl Default for PluginsFactory {
         v.push(Box::new(basic_stats::BasicStatsBuilder));
         #[cfg(feature = "plugin_community_id")]
         v.push(Box::new(community_id::CommunityIDBuilder));
+        #[cfg(debug_assertions)] v.push(Box::new(hexdump::HexDumpBuilder));
         v.push(Box::new(tcp_states::TcpStatesBuilder));
         #[cfg(feature = "plugin_rusticata")]
         v.push(Box::new(rusticata::RusticataBuilder));

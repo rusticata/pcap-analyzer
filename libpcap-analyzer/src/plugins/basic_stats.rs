@@ -8,8 +8,6 @@ use crate::packet_data::PacketData;
 use crate::plugin::{PLUGIN_L3, PLUGIN_L4};
 use libpcap_tools::{ThreeTuple, FiveTuple};
 
-use nom::HexDisplay;
-
 #[derive(Default)]
 pub struct Count {
     pub num_bytes : usize,
@@ -41,31 +39,9 @@ impl Plugin for BasicStats {
     }
 
     fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketData) {
-        let five_tuple = &pdata.five_tuple;
-
-        info!("BasicStats::handle_l4");
-        debug!("    5t: {}", five_tuple);
-        debug!("    to_server: {}", pdata.to_server);
-        debug!("    l3_type: {}", pdata.l3_type);
-        debug!("    l3_data_len: {}", pdata.l3_data.len());
-        debug!("    l4_type: {}", pdata.l4_type);
-        debug!("    l4_data_len: {}", pdata.l4_data.map_or(0, |d| d.len()));
         let entry = self.l4_conversations.entry(pdata.five_tuple.clone()).or_insert_with(|| Count::default());
         entry.num_bytes += pdata.l4_data.map(|l4| l4.len()).unwrap_or(0);
         entry.num_packets += 1;
-        if let Some(flow) = pdata.flow {
-            let five_tuple = &flow.five_tuple;
-            debug!("    flow: [{}]:{} -> [{}]:{} [{}]",
-                   five_tuple.src,
-                   five_tuple.src_port,
-                   five_tuple.dst,
-                   five_tuple.dst_port,
-                   five_tuple.proto);
-        }
-        debug!("    l3_data:\n{}", pdata.l3_data.to_hex(16));
-        pdata.l4_data.map(|d| {
-            debug!("    l4_data:\n{}", d.to_hex(16));
-        });
     }
 
     fn post_process(&mut self) {
