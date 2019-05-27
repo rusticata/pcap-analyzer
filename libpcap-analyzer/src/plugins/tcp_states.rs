@@ -1,9 +1,10 @@
+use libpcap_tools::Config;
+use crate::plugin_registry::PluginRegistry;
 use pcap_parser::Packet;
 
 use super::Plugin;
-use crate::default_plugin_builder;
 use crate::packet_data::PacketData;
-use crate::plugin::{PLUGIN_FLOW_DEL, PLUGIN_L4};
+use crate::plugin::{PLUGIN_FLOW_DEL, PLUGIN_L4, TRANSPORT_TCP};
 use libpcap_tools::{FlowID,Flow};
 
 use std::collections::HashMap;
@@ -47,7 +48,19 @@ pub struct TcpStates {
     ctx_map: HashMap<FlowID,(TcpContext,TcpContext)>,
 }
 
-default_plugin_builder!(TcpStates, TcpStatesBuilder);
+pub struct TcpStatesBuilder;
+
+impl crate::plugin::PluginBuilder for TcpStatesBuilder {
+    fn name(&self) -> &'static str { "TcpStatesBuilder" }
+    fn build(&self, registry:&mut PluginRegistry, _config:&Config) {
+        let plugin = TcpStates::default();
+        // do not register, there is no callback ?
+        let safe_p = build_safeplugin!(plugin);
+        registry.add_plugin(safe_p.clone());
+        registry.register_transport_layer(TRANSPORT_TCP, safe_p);
+    }
+}
+// default_plugin_builder!(TcpStates, TcpStatesBuilder);
 
 impl Plugin for TcpStates {
     fn name(&self) -> &'static str { "TcpStates" }

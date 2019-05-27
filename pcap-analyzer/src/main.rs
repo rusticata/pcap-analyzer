@@ -74,30 +74,31 @@ fn main() -> io::Result<()> {
         load_config(&mut config, filename)?;
     }
     // instanciate all plugins
-    let mut plugins = factory.build_plugins(&config);
-    // eventually, filter plugin instances
+    let registry =
     if let Some(plugin_names) = matches.value_of("plugins") {
         debug!("Restricting plugins to: {}", plugin_names);
         let names: Vec<_> = plugin_names.split(",").collect();
-        plugins
-            .storage
-            .retain(|k, _| names.iter().any(|&x| k.contains(x)));
-    }
-
-    debug!("  Plugins loaded: {}", plugins.storage.len());
-    debug!(
-        "  Plugins: {}",
-        plugins
-            .storage
-            .keys()
-            .map(|s| s.as_ref())
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
-    if plugins.storage.is_empty() {
+        factory.build_filter_plugins(
+            |n| {
+                debug!("n: {}", n);
+                names.iter().any(|&x| n.contains(x))
+            },
+            &config,
+        )
+    } else {
+        factory.build_plugins(&config)
+    };
+    if registry.num_plugins() == 0 {
         warn!("No plugins loaded");
     }
-    let analyzer = Analyzer::new(plugins, &config);
+    debug!("Plugins loaded:");
+    registry.run_plugins(
+        |_| true,
+        |p| {
+            debug!("  {}", p.name());
+        },
+    );
+    let analyzer = Analyzer::new(registry, &config);
     let mut engine = PcapEngine::new(Box::new(analyzer), &config);
 
     let input_filename = matches.value_of("INPUT").unwrap();

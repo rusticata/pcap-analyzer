@@ -1,3 +1,4 @@
+use crate::plugin_registry::PluginRegistry;
 use pcap_parser::Packet;
 
 use crate::packet_data::PacketData;
@@ -12,7 +13,7 @@ pub trait PluginBuilder: Sync + Send {
     fn name(&self) -> &'static str;
     /// Builder function: instanciates zero or more plugins from configuration.
     /// The returned list can be empty if no plugins were created.
-    fn build(&self, config: &Config) -> Vec<Box<Plugin>>;
+    fn build(&self, registry:&mut PluginRegistry, config: &Config);
 }
 
 /// Indicates the plugin does not register any callback function
@@ -32,6 +33,12 @@ pub const PLUGIN_FLOW_DEL: u16 = 0b0010_0000;
 
 /// Indicates the plugin register for all layers
 pub const PLUGIN_ALL: u16 = 0b1111_1111;
+
+pub const ETHERTYPE_IPV4 : u16 = 0x8000;
+pub const ETHERTYPE_IPV6 : u16 = 0x86dd;
+
+pub const TRANSPORT_TCP : u8 = 6;
+pub const TRANSPORT_UDP : u8 = 17;
 
 /// Pcap/Pcap-ng analyzis plugin instance
 ///
@@ -80,10 +87,22 @@ macro_rules! default_plugin_builder {
 
         impl $crate::PluginBuilder for $builder {
             fn name(&self) -> &'static str {
-                "$builder"
+                stringify!($builder)
             }
-            fn build(&self, _config: &libpcap_tools::Config) -> Vec<Box<$crate::Plugin>> {
-                vec![Box::new($name::default())]
+            fn build(&self, registry: &mut $crate::PluginRegistry, _config: &libpcap_tools::Config) {
+                let plugin = $name::default();
+                let protos = plugin.plugin_type();
+                let safe_p = $crate::build_safeplugin!(plugin);
+                registry.add_plugin(safe_p.clone());
+                if protos & $crate::PLUGIN_L2 != 0 {
+                    registry.register_l2(safe_p.clone());
+                }
+                if protos & $crate::PLUGIN_L3 != 0 {
+                    registry.register_ethertype_all(safe_p.clone());
+                }
+                if protos & $crate::PLUGIN_L4 != 0 {
+                    registry.register_transport_layer_all(safe_p.clone());
+                }
             }
         }
     };

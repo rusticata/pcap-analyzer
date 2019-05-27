@@ -1,6 +1,7 @@
 //! Plugin to build Community ID Flow Hash
 //! See https://github.com/corelight/community-id-spec
 
+use crate::plugin_registry::PluginRegistry;
 use libpcap_tools::Config;
 use pcap_parser::Packet;
 
@@ -20,11 +21,12 @@ pub struct CommunityID {
 pub struct CommunityIDBuilder;
 
 impl crate::plugin::PluginBuilder for CommunityIDBuilder {
-    fn name(&self) -> &'static str { "$builder" }
-    fn build(&self, config:&Config) -> Vec<Box<Plugin>> {
+    fn name(&self) -> &'static str { "CommunityIDBuilder" }
+    fn build(&self, registry:&mut PluginRegistry, config:&Config) {
         let seed = config.get_usize("plugin.community_id.seed").unwrap_or(0) as u16;
         let plugin = CommunityID{ seed };
-        vec![Box::new(plugin)]
+        let safe_p = build_safeplugin!(plugin);
+        registry.register_transport_layer_all(safe_p.clone());
     }
 }
 

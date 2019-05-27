@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::{Plugin, PluginBuilder};
+use crate::{Plugin, PluginBuilder, PluginRegistry};
 use libpcap_tools::Config;
 
 mod basic_stats;
@@ -38,22 +38,30 @@ impl PluginsFactory {
     }
 
     /// Instanciate all plugins
-    pub fn build_plugins(&self, config: &Config) -> Plugins {
-        let mut h: HashMap<String, Box<Plugin>> = HashMap::new();
+    pub fn build_plugins(&self, config: &Config) -> PluginRegistry {
+        let mut registry = PluginRegistry::new();
 
         self.list.iter().for_each(|b| {
-            let plugin_list = b.build(&config);
-            for plugin in plugin_list {
-                let name = plugin.name().to_string();
-                if h.contains_key(&name) {
-                    warn!("Attempt to insert plugin {} twice", name);
-                } else {
-                    h.insert(plugin.name().to_string(), plugin);
-                }
+            let _ = b.build(&mut registry, &config);
+        });
+
+        registry
+    }
+
+    /// Instanciate plugins if they match predicate
+    pub fn build_filter_plugins<P>(&self, predicate: P, config: &Config) -> PluginRegistry
+    where
+        P: Fn(&str) -> bool,
+    {
+        let mut registry = PluginRegistry::new();
+
+        self.list.iter().for_each(|b| {
+            if predicate(b.name()) {
+                let _ = b.build(&mut registry, &config);
             }
         });
 
-        Plugins { storage: h }
+        registry
     }
 }
 

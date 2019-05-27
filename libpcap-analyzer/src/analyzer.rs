@@ -1,3 +1,4 @@
+use crate::plugin_registry::PluginRegistry;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -28,7 +29,6 @@ use crate::packet_data::PacketData;
 use libpcap_tools::{FiveTuple, Flow, FlowID, ThreeTuple};
 
 use crate::plugin::*;
-use crate::plugins::Plugins;
 
 struct L3Info {
     l3_proto: u16,
@@ -51,7 +51,7 @@ struct L3Info {
 pub struct Analyzer {
     flows: HashMap<FlowID, Flow>,
     flows_id: HashMap<FiveTuple, FlowID>,
-    plugins: Plugins,
+    registry: PluginRegistry,
     trng: ThreadRng,
 
     ipv4_defrag: Box<DefragEngine>,
@@ -59,7 +59,7 @@ pub struct Analyzer {
 }
 
 impl Analyzer {
-    pub fn new(plugins: Plugins, config: &Config) -> Analyzer {
+    pub fn new(registry: PluginRegistry, config: &Config) -> Analyzer {
         let n = config.get_usize("num_threads").unwrap_or(0);
         rayon::ThreadPoolBuilder::new()
             .num_threads(n)
@@ -68,7 +68,7 @@ impl Analyzer {
         Analyzer {
             flows: HashMap::new(),
             flows_id: HashMap::new(),
-            plugins,
+            registry,
             trng: rand::thread_rng(),
             ipv4_defrag: Box::new(IPDefragEngine::new()),
             ipv6_defrag: Box::new(IPDefragEngine::new()),
@@ -83,13 +83,7 @@ impl Analyzer {
         let data = &packet.data[..datalen];
 
         // let start = ::std::time::Instant::now();
-        self.plugins
-            .storage
-            .iter_mut()
-            .filter(|(_, p)| p.plugin_type() & PLUGIN_L2 != 0)
-            .for_each(|(_name, p)| {
-                let _ = p.handle_l2(&packet, &data);
-            });
+        self.registry.run_plugins_l2(&packet, &data);
         // let elapsed = start.elapsed();
         // debug!("Time to run l2 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
@@ -291,13 +285,8 @@ impl Analyzer {
     ) {
         // run l3 plugins
         // let start = ::std::time::Instant::now();
-        self.plugins
-            .storage
-            .iter_mut()
-            .filter(|(_, p)| p.plugin_type() & PLUGIN_L3 != 0)
-            .for_each(|(_name, p)| {
-                let _ = p.handle_l3(packet, data, ethertype, three_tuple);
-            });
+        self.registry
+            .run_plugins_ethertype(packet, ethertype, three_tuple, data);
         // let elapsed = start.elapsed();
         // debug!("Time to run l3 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
     }
@@ -556,13 +545,8 @@ impl Analyzer {
             flow: Some(flow),
         };
         // let start = ::std::time::Instant::now();
-        self.plugins
-            .storage
-            .iter_mut()
-            .filter(|(_, p)| p.plugin_type() & PLUGIN_L4 != 0)
-            .for_each(|(_name, p)| {
-                let _ = p.handle_l4(&packet, &pdata);
-            });
+        self.registry
+            .run_plugins_transport(pdata.l4_type, packet, &pdata);
         // let elapsed = start.elapsed();
         // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
@@ -615,13 +599,10 @@ impl Analyzer {
 
     fn gen_event_new_flow(&mut self, flow: &Flow) {
         // let start = ::std::time::Instant::now();
-        self.plugins
-            .storage
-            .iter_mut()
-            .filter(|(_, p)| p.plugin_type() & PLUGIN_FLOW_NEW != 0)
-            .for_each(|(_name, p)| {
-                let _ = p.flow_created(flow);
-            });
+        self.registry.run_plugins(
+            |p| p.plugin_type() & PLUGIN_FLOW_NEW != 0,
+            |p| p.flow_created(flow),
+        );
         // let elapsed = start.elapsed();
         // debug!("Time to run flow_created: {}.{}", elapsed.as_secs(), elapsed.as_millis());
     }
@@ -630,10 +611,7 @@ impl Analyzer {
 impl PcapAnalyzer for Analyzer {
     /// Initialize all plugins
     fn init(&mut self) -> Result<(), Error> {
-        self.plugins
-            .storage
-            .values_mut()
-            .for_each(|plugin| plugin.pre_process());
+        self.registry.run_plugins(|_| true, |p| p.pre_process());
         Ok(())
     }
 
@@ -698,23 +676,19 @@ impl PcapAnalyzer for Analyzer {
         // expire remaining flows
         debug!("{} flows remaining in table", flows.len());
         // let start = ::std::time::Instant::now();
-        self.plugins
-            .storage
-            .iter_mut()
-            .filter(|(_, p)| p.plugin_type() & PLUGIN_FLOW_DEL != 0)
-            .for_each(|(_name, p)| {
+        self.registry.run_plugins(
+            |p| p.plugin_type() & PLUGIN_FLOW_DEL != 0,
+            |p| {
                 flows.values().for_each(|flow| {
                     let _ = p.flow_destroyed(flow);
                 });
-            });
+            },
+        );
         // let elapsed = start.elapsed();
         // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
         self.flows.clear();
         self.flows_id.clear();
 
-        self.plugins
-            .storage
-            .values_mut()
-            .for_each(|plugin| plugin.post_process());
+        self.registry.run_plugins(|_| true, |p| p.post_process());
     }
 }
