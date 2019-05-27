@@ -12,7 +12,7 @@ pub trait PluginBuilder: Sync + Send {
     /// Name of the plugin builder
     fn name(&self) -> &'static str;
     /// Builder function: instanciates zero or more plugins from configuration.
-    /// The returned list can be empty if no plugins were created.
+    /// All created plugins must be registered to `registry`
     fn build(&self, registry:&mut PluginRegistry, config: &Config);
 }
 
@@ -37,6 +37,7 @@ pub const PLUGIN_ALL: u16 = 0b1111_1111;
 pub const ETHERTYPE_IPV4 : u16 = 0x8000;
 pub const ETHERTYPE_IPV6 : u16 = 0x86dd;
 
+pub const TRANSPORT_ICMP : u8 = 1;
 pub const TRANSPORT_TCP : u8 = 6;
 pub const TRANSPORT_UDP : u8 = 17;
 
