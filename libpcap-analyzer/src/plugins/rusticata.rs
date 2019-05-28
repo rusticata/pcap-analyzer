@@ -51,7 +51,7 @@ impl Plugin for Rusticata {
                     return;
                 }
         };
-        pdata.l4_data.map(|d| {
+        pdata.l4_payload.map(|d| {
             if d.is_empty() { return; }
             let parser = {
                 // check if we already have a parser

@@ -6,9 +6,11 @@ pub struct PacketData<'l3, 'l4, 't, 'f> {
     /// seen in this flow
     pub to_server: bool,
     pub l3_type: u16,
-    pub l3_data: &'l3 [u8],
+    /// Raw L4 data
+    pub l4_data: &'l3 [u8],
+    /// L4 payload type
     pub l4_type: u8,
-    /// L4 data, if protocol is known by core engine
-    pub l4_data: Option<&'l4 [u8]>,
+    /// L4 payload, if protocol is known by core engine
+    pub l4_payload: Option<&'l4 [u8]>,
     pub flow: Option<&'f Flow>,
 }

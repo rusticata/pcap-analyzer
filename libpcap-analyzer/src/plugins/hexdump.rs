@@ -33,10 +33,10 @@ impl Plugin for HexDump {
         info!("HexDump::handle_l4");
         debug!("    5t: {}", five_tuple);
         debug!("    to_server: {}", pdata.to_server);
-        debug!("    l3_type: {}", pdata.l3_type);
-        debug!("    l3_data_len: {}", pdata.l3_data.len());
+        debug!("    l3_type: 0x{:x}", pdata.l3_type);
+        debug!("    l4_data_len: {}", pdata.l4_data.len());
         debug!("    l4_type: {}", pdata.l4_type);
-        debug!("    l4_data_len: {}", pdata.l4_data.map_or(0, |d| d.len()));
+        debug!("    l4_payload_len: {}", pdata.l4_payload.map_or(0, |d| d.len()));
         if let Some(flow) = pdata.flow {
             let five_tuple = &flow.five_tuple;
             debug!("    flow: [{}]:{} -> [{}]:{} [{}]",
@@ -46,8 +46,8 @@ impl Plugin for HexDump {
                    five_tuple.dst_port,
                    five_tuple.proto);
         }
-        pdata.l4_data.map(|d| {
-            debug!("    l4_data:\n{}", d.to_hex(16));
+        pdata.l4_payload.map(|d| {
+            debug!("    l4_payload:\n{}", d.to_hex(16));
         });
     }
 }

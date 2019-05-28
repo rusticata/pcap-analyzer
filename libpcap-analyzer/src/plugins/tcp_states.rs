@@ -81,7 +81,7 @@ impl Plugin for TcpStates {
 
         let e = self.ctx_map.entry(flow.flow_id).or_default();
 
-        let tcp = TcpPacket::new(pdata.l3_data).expect("TcpPacket");
+        let tcp = TcpPacket::new(pdata.l4_data).expect("TcpPacket");
         let tcp_flags = tcp.get_flags();
         let seq = tcp.get_sequence();
         let ack = tcp.get_acknowledgement();
@@ -177,7 +177,7 @@ debug!("SYN");
                 }
                 // XXX end debug
                 // if pdata.to_server {
-                    conn.next_seq += pdata.l4_data.map(|d| d.len() as u32).unwrap_or(0);
+                    conn.next_seq += pdata.l4_payload.map(|d| d.len() as u32).unwrap_or(0);
                 // } else {
                 //     rev_conn.next_ack += pdata.l4_data.map(|d| d.len() as u32).unwrap_or(0);
                 // }

@@ -324,16 +324,15 @@ impl Analyzer {
         l3_info: &L3Info,
     ) -> Result<(), Error> {
         debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
-        let l3_data = data;
-        debug!("    l3_data len: {}", l3_data.len());
-        let tcp = TcpPacket::new(l3_data).ok_or("Could not build TCP packet from data")?;
+        debug!("    l4_data len: {}", data.len());
+        let tcp = TcpPacket::new(data).ok_or("Could not build TCP packet from data")?;
 
         // XXX handle TCP defrag
-        let l4_data = Some(tcp.payload());
+        let l4_payload = Some(tcp.payload());
         let src_port = tcp.get_source();
         let dst_port = tcp.get_destination();
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
+        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
     }
 
     fn handle_l4_udp(
@@ -344,15 +343,14 @@ impl Analyzer {
         l3_info: &L3Info,
     ) -> Result<(), Error> {
         debug!("handle_l4_udp (idx={})", ctx.pcap_index);
-        let l3_data = data;
-        debug!("    l3_data len: {}", l3_data.len());
-        let udp = UdpPacket::new(l3_data).ok_or("Could not build UDP packet from data")?;
+        debug!("    l4_data len: {}", data.len());
+        let udp = UdpPacket::new(data).ok_or("Could not build UDP packet from data")?;
 
-        let l4_data = Some(udp.payload());
+        let l4_payload = Some(udp.payload());
         let src_port = udp.get_source();
         let dst_port = udp.get_destination();
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
+        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
     }
 
     fn handle_l4_icmp(
@@ -363,20 +361,18 @@ impl Analyzer {
         l3_info: &L3Info,
     ) -> Result<(), Error> {
         debug!("handle_l4_icmp (idx={})", ctx.pcap_index);
-        let l3_data = data;
-
-        let icmp = IcmpPacket::new(l3_data).ok_or("Could not build ICMP packet from data")?;
+        let icmp = IcmpPacket::new(data).ok_or("Could not build ICMP packet from data")?;
         debug!(
             "ICMP type={:?} code={:?}",
             icmp.get_icmp_type(),
             icmp.get_icmp_code()
         );
 
-        let l4_data = Some(icmp.payload());
+        let l4_payload = Some(icmp.payload());
         let src_port = icmp.get_icmp_type().0 as u16;
         let dst_port = icmp.get_icmp_code().0 as u16;
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
+        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
     }
 
     fn handle_l4_icmpv6(
@@ -387,20 +383,18 @@ impl Analyzer {
         l3_info: &L3Info,
     ) -> Result<(), Error> {
         debug!("handle_l4_icmpv6 (idx={})", ctx.pcap_index);
-        let l3_data = data;
-
-        let icmpv6 = Icmpv6Packet::new(l3_data).ok_or("Could not build ICMPv6 packet from data")?;
+        let icmpv6 = Icmpv6Packet::new(data).ok_or("Could not build ICMPv6 packet from data")?;
         debug!(
             "ICMPv6 type={:?} code={:?}",
             icmpv6.get_icmpv6_type(),
             icmpv6.get_icmpv6_code()
         );
 
-        let l4_data = Some(icmpv6.payload());
+        let l4_payload = Some(icmpv6.payload());
         let src_port = 0;
         let dst_port = 0;
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
+        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
     }
 
     fn handle_l4_gre(
@@ -492,24 +486,23 @@ impl Analyzer {
             "handle_l4_generic (idx={}, l4_proto={})",
             ctx.pcap_index, l3_info.three_tuple.proto
         );
-        let l3_data = data;
-        // in generic function, we don't know how to get l4_data
-        let l4_data = None;
+        // in generic function, we don't know how to get l4_payload
+        let l4_payload = None;
         let src_port = 0;
         let dst_port = 0;
 
-        self.handle_l4_common(packet, ctx, l3_data, l3_info, src_port, dst_port, l4_data)
+        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
     }
 
     fn handle_l4_common(
         &mut self,
         packet: &pcap_parser::Packet,
         _ctx: &ParseContext,
-        l3_data: &[u8],
+        l4_data: &[u8],
         l3_info: &L3Info,
         src_port: u16,
         dst_port: u16,
-        l4_data: Option<&[u8]>,
+        l4_payload: Option<&[u8]>,
     ) -> Result<(), Error> {
         let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
         debug!("5t: {}", five_tuple);
@@ -539,9 +532,9 @@ impl Analyzer {
             five_tuple: &five_tuple,
             to_server,
             l3_type: l3_info.l3_proto,
-            l3_data,
-            l4_type: l3_info.three_tuple.proto,
             l4_data,
+            l4_type: l3_info.three_tuple.proto,
+            l4_payload,
             flow: Some(flow),
         };
         // let start = ::std::time::Instant::now();
