@@ -96,12 +96,13 @@ impl Analyzer {
                     // Multicast
                     if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) {
                         warn!("Cisco CDP/VTP/UDLD");
+                        return Ok(());
                     } else if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) {
                         warn!("Cisco Multicast address");
+                        return Ok(());
                     } else {
                         warn!("Ethernet broadcast (unknown)");
                     }
-                    return Ok(());
                 }
                 debug!("    ethertype: 0x{:x}", eth.get_ethertype().0);
                 self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype())
