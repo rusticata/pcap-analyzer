@@ -151,8 +151,8 @@ impl Analyzer {
         // remove padding
         let (data, ipv4) = {
             if ip_len < data.len() && ip_len > 0 {
-                let d = &data[..ipv4.get_total_length() as usize];
-                let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
+                let d = &data[..ip_len];
+                let ipv4 = Ipv4Packet::new(d).ok_or("Could not build IPv4 packet from data")?;
                 (d, ipv4)
             } else {
                 (data, ipv4)
