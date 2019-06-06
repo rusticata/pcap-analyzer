@@ -19,6 +19,7 @@ use xz2::read::XzDecoder;
 
 use explugin_example::ExEmptyPluginBuilder;
 use libpcap_analyzer::{plugins, Analyzer};
+use libpcap_analyzer::engine::ThreadedPcapEngine;
 use libpcap_tools::{Config, PcapEngine};
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
@@ -98,8 +99,9 @@ fn main() -> io::Result<()> {
             debug!("  {}", p.name());
         },
     );
-    let analyzer = Analyzer::new(registry, &config);
-    let mut engine = PcapEngine::new(Box::new(analyzer), &config);
+    let analyzer = Analyzer::new(registry.clone(), &config);
+    // let mut engine = PcapEngine::new(Box::new(analyzer), &config);
+    let mut engine = ThreadedPcapEngine::new(Box::new(analyzer), registry, &config);
 
     let input_filename = matches.value_of("INPUT").unwrap();
 

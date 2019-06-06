@@ -1,10 +1,10 @@
 use crate::plugin_registry::PluginRegistry;
+use rand::prelude::*;
+use rand_chacha::*;
+use std::cell::RefCell;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::net::IpAddr;
-
-use rand::prelude::*;
-// use rayon::prelude::*;
 
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
@@ -30,9 +30,20 @@ use libpcap_tools::{FiveTuple, Flow, FlowID, ThreeTuple};
 
 use crate::plugin::*;
 
+thread_local!(pub(crate) static TAD : RefCell<ThreadAnalyzerData> = RefCell::new(ThreadAnalyzerData::new()));
+
 struct L3Info {
     l3_proto: u16,
     three_tuple: ThreeTuple,
+}
+
+pub(crate) struct ThreadAnalyzerData {
+    pub(crate) flows: HashMap<FlowID, Flow>,
+    flows_id: HashMap<FiveTuple, FlowID>,
+    trng: ChaChaRng,
+
+    ipv4_defrag: Box<DefragEngine>,
+    ipv6_defrag: Box<DefragEngine>,
 }
 
 /// Pcap/Pcap-ng analyzer
@@ -49,29 +60,15 @@ struct L3Info {
 /// All callbacks for a single ISO layer will be called concurrently before
 /// calling the next level callbacks.
 pub struct Analyzer {
-    flows: HashMap<FlowID, Flow>,
-    flows_id: HashMap<FiveTuple, FlowID>,
     registry: PluginRegistry,
-    trng: ThreadRng,
-
-    ipv4_defrag: Box<DefragEngine>,
-    ipv6_defrag: Box<DefragEngine>,
+    tdata: ThreadAnalyzerData,
 }
 
 impl Analyzer {
-    pub fn new(registry: PluginRegistry, config: &Config) -> Analyzer {
-        let n = config.get_usize("num_threads").unwrap_or(0);
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(n)
-            .build_global()
-            .unwrap();
+    pub fn new(registry: PluginRegistry, _config: &Config) -> Analyzer {
         Analyzer {
-            flows: HashMap::new(),
-            flows_id: HashMap::new(),
             registry,
-            trng: rand::thread_rng(),
-            ipv4_defrag: Box::new(IPDefragEngine::new()),
-            ipv6_defrag: Box::new(IPDefragEngine::new()),
+            tdata: ThreadAnalyzerData::new(),
         }
     }
 
@@ -105,7 +102,13 @@ impl Analyzer {
                     }
                 }
                 debug!("    ethertype: 0x{:x}", eth.get_ethertype().0);
-                self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype())
+                handle_l3(
+                    &packet,
+                    &ctx,
+                    eth.payload(),
+                    eth.get_ethertype(),
+                    &self.registry,
+                )
             }
             None => {
                 // packet too small to be ethernet
@@ -113,332 +116,344 @@ impl Analyzer {
             }
         }
     }
+}
 
-    fn handle_l3(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        ethertype: EtherType,
-    ) -> Result<(), Error> {
-        if data.is_empty() {
-            return Ok(());
-        }
-
-        match ethertype {
-            EtherTypes::Ipv4 => self.handle_l3_ipv4(packet, ctx, data, ethertype),
-            EtherTypes::Ipv6 => self.handle_l3_ipv6(packet, ctx, data, ethertype),
-            EtherTypes::Vlan => self.handle_l3_vlan_801q(packet, ctx, data, ethertype),
-            _ => {
-                warn!("Unsupported ethertype {} (0x{:x})", ethertype, ethertype.0);
-                self.handle_l3_generic(packet, ctx, data, ethertype)
-            }
-        }
+pub(crate) fn handle_l3(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    ethertype: EtherType,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    if data.is_empty() {
+        return Ok(());
     }
 
-    fn handle_l3_ipv4(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        ethertype: EtherType,
-    ) -> Result<(), Error> {
-        debug!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
-        let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
+    match ethertype {
+        EtherTypes::Ipv4 => handle_l3_ipv4(packet, ctx, data, ethertype, registry),
+        EtherTypes::Ipv6 => handle_l3_ipv6(packet, ctx, data, ethertype, registry),
+        EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, data, ethertype, registry),
+        e => {
+            warn!("Unsupported ethertype {} (0x{:x})", e, e.0);
+            handle_l3_generic(packet, ctx, data, e, registry)
+        }
+    }
+}
 
-        let ip_len = ipv4.get_total_length() as usize;
+fn handle_l3_ipv4(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    ethertype: EtherType,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
+    let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
+    // eprintln!("ABORT pkt {:?}", ipv4);
+    let orig_len = data.len();
 
-        // remove padding
-        let (data, ipv4) = {
-            if ip_len < data.len() && ip_len > 0 {
-                let d = &data[..ip_len];
-                let ipv4 = Ipv4Packet::new(d).ok_or("Could not build IPv4 packet from data")?;
-                (d, ipv4)
-            } else {
-                (data, ipv4)
-            }
-        };
+    let ip_len = ipv4.get_total_length() as usize;
 
-        let l4_proto = ipv4.get_next_level_protocol();
-        let t3 = ThreeTuple {
-            proto: l4_proto.0,
-            src: IpAddr::V4(ipv4.get_source()),
-            dst: IpAddr::V4(ipv4.get_destination()),
-        };
-
-        self.run_l3_plugins(packet, data, ethertype.0, &t3);
-
-        // if get_total_length is 0, assume TSO offloading and no padding
-        let payload = if ip_len == 0 {
-            warn!("IPv4: packet reported length is 0. Assuming TSO");
-            // the payload() function from pnet will fail
-            let start = ipv4.get_header_length() as usize * 4;
-            if start > data.len() {
-                warn!("IPv4: ip_len == 0 and ipv4.get_header_length is invalid!");
-                return Ok(());
-            }
-            &data[start..]
+    // remove padding
+    let (data, ipv4) = {
+        if ip_len < data.len() && ip_len > 0 {
+            let d = &data[..ip_len];
+            let ipv4 = Ipv4Packet::new(d).ok_or("Could not build IPv4 packet from data")?;
+            (d, ipv4)
         } else {
-            ipv4.payload()
-        };
+            (data, ipv4)
+        }
+    };
 
-        // check IP fragmentation before calling handle_l4
-        let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
-        let more_fragments = ipv4.get_flags() & Ipv4Flags::MoreFragments != 0;
-        let defrag = self.ipv4_defrag.update(
+    let l4_proto = ipv4.get_next_level_protocol();
+    let t3 = ThreeTuple {
+        proto: l4_proto.0,
+        src: IpAddr::V4(ipv4.get_source()),
+        dst: IpAddr::V4(ipv4.get_destination()),
+    };
+
+    run_l3_plugins(packet, data, ethertype.0, &t3, &registry);
+
+    // if get_total_length is 0, assume TSO offloading and no padding
+    let payload = if ip_len == 0 {
+        warn!(
+            "IPv4: packet reported length is 0. Assuming TSO (idx={})",
+            ctx.pcap_index
+        );
+        // the payload() function from pnet will fail
+        let start = ipv4.get_header_length() as usize * 4;
+        if start > data.len() {
+            warn!("IPv4: ip_len == 0 and ipv4.get_header_length is invalid!");
+            return Ok(());
+        }
+        &data[start..]
+    } else {
+        ipv4.payload()
+    };
+
+    // check IP fragmentation before calling handle_l4
+    let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
+    let more_fragments = ipv4.get_flags() & Ipv4Flags::MoreFragments != 0;
+    let defrag = TAD.with(|f| {
+        let mut f = f.borrow_mut();
+        f.ipv4_defrag.update(
             ipv4.get_identification().into(),
             frag_offset,
             more_fragments,
             payload,
-        );
-        let data = match defrag {
-            Fragment::NoFrag(d) => d,
-            Fragment::Complete(ref v) => {
-                warn!("IPv4 defrag done, using defrag buffer len={}", v.len());
-                &v
-            }
-            Fragment::Incomplete => {
-                debug!("IPv4 defragmentation incomplete");
-                return Ok(());
-            }
-            Fragment::Error => {
-                warn!("IPv4 defragmentation error");
-                return Ok(());
-            }
-        };
+        )
+    });
+    let payload = match defrag {
+        Fragment::NoFrag(d) => d,
+        Fragment::Complete(ref v) => {
+            warn!("IPv4 defrag done, using defrag buffer len={}", v.len());
+            &v
+        }
+        Fragment::Incomplete => {
+            debug!("IPv4 defragmentation incomplete");
+            return Ok(());
+        }
+        Fragment::Error => {
+            warn!("IPv4 defragmentation error");
+            return Ok(());
+        }
+    };
 
-        let l3_info = L3Info {
-            three_tuple: t3,
-            l3_proto: ethertype.0,
-        };
+    let l3_info = L3Info {
+        three_tuple: t3,
+        l3_proto: ethertype.0,
+    };
 
-        self.handle_l3_common(packet, ctx, data, &l3_info)
-    }
+    debug_assert!(payload.len() < orig_len);
 
-    fn handle_l3_ipv6(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        ethertype: EtherType,
-    ) -> Result<(), Error> {
-        debug!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
-        let ipv6 = Ipv6Packet::new(data).ok_or("Could not build IPv6 packet from data")?;
-        let l4_proto = ipv6.get_next_header();
+    handle_l3_common(packet, ctx, payload, &l3_info, &registry)
+}
 
-        // XXX remove padding ?
+fn handle_l3_ipv6(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    ethertype: EtherType,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
+    let ipv6 = Ipv6Packet::new(data).ok_or("Could not build IPv6 packet from data")?;
+    let l4_proto = ipv6.get_next_header();
 
-        let t3 = ThreeTuple {
-            proto: l4_proto.0,
-            src: IpAddr::V6(ipv6.get_source()),
-            dst: IpAddr::V6(ipv6.get_destination()),
-        };
+    // XXX remove padding ?
 
-        self.run_l3_plugins(packet, data, ethertype.0, &t3);
+    let t3 = ThreeTuple {
+        proto: l4_proto.0,
+        src: IpAddr::V6(ipv6.get_source()),
+        dst: IpAddr::V6(ipv6.get_destination()),
+    };
 
-        let l3_info = L3Info {
-            three_tuple: t3,
-            l3_proto: ethertype.0,
-        };
+    run_l3_plugins(packet, data, ethertype.0, &t3, registry);
 
-        let data = ipv6.payload();
-        self.handle_l3_common(packet, ctx, data, &l3_info)
-    }
+    let l3_info = L3Info {
+        three_tuple: t3,
+        l3_proto: ethertype.0,
+    };
 
-    fn handle_l3_vlan_801q(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        _ethertype: EtherType,
-    ) -> Result<(), Error> {
-        debug!("handle_l3_vlan_801q (idx={})", ctx.pcap_index);
-        let vlan = VlanPacket::new(data).ok_or("Could not build 802.1Q Vlan packet from data")?;
-        let next_ethertype = vlan.get_ethertype();
-        debug!("    802.1q: VLAN id={}", vlan.get_vlan_identifier());
+    let data = ipv6.payload();
+    handle_l3_common(packet, ctx, data, &l3_info, &registry)
+}
 
-        self.handle_l3(&packet, &ctx, vlan.payload(), next_ethertype)
-    }
+fn handle_l3_vlan_801q(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    _ethertype: EtherType,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l3_vlan_801q (idx={})", ctx.pcap_index);
+    let vlan = VlanPacket::new(data).ok_or("Could not build 802.1Q Vlan packet from data")?;
+    let next_ethertype = vlan.get_ethertype();
+    debug!("    802.1q: VLAN id={}", vlan.get_vlan_identifier());
 
-    // Called when L3 layer is unknown
-    fn handle_l3_generic(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        ethertype: EtherType,
-    ) -> Result<(), Error> {
-        debug!("handle_l3_generic (idx={})", ctx.pcap_index);
-        // we don't know if there is padding to remove
-        //run Layer 3 plugins
-        self.run_l3_plugins(packet, data, ethertype.0, &ThreeTuple::default());
-        // don't try to parse l4, we don't know how to get L4 data
-        Ok(())
-    }
+    handle_l3(&packet, &ctx, vlan.payload(), next_ethertype, registry)
+}
 
-    // Run all Layer 3 plugins
-    fn run_l3_plugins(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        data: &[u8],
-        ethertype: u16,
-        three_tuple: &ThreeTuple,
-    ) {
-        // run l3 plugins
-        // let start = ::std::time::Instant::now();
-        self.registry
-            .run_plugins_ethertype(packet, ethertype, three_tuple, data);
-        // let elapsed = start.elapsed();
-        // debug!("Time to run l3 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
-    }
+// Called when L3 layer is unknown
+fn handle_l3_generic(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    ethertype: EtherType,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l3_generic (idx={})", ctx.pcap_index);
+    // we don't know if there is padding to remove
+    //run Layer 3 plugins
+    // self.run_l3_plugins(packet, data, ethertype.0, &ThreeTuple::default());
+    // run l3 plugins
+    // let start = ::std::time::Instant::now();
+    registry.run_plugins_ethertype(packet, ethertype.0, &ThreeTuple::default(), data);
+    // let elapsed = start.elapsed();
+    // debug!("Time to run l3 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
+    // don't try to parse l4, we don't know how to get L4 data
+    Ok(())
+}
 
-    // Dispatcher function, when l3 layer has been parsed
-    fn handle_l3_common(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        l3_info: &L3Info,
-    ) -> Result<(), Error> {
-        match IpNextHeaderProtocol(l3_info.three_tuple.proto) {
-            IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Icmp => self.handle_l4_icmp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Icmpv6 => self.handle_l4_icmpv6(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Esp => self.handle_l4_generic(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Gre => self.handle_l4_gre(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Ipv4 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv4),
-            IpNextHeaderProtocols::Ipv6 => self.handle_l3(packet, ctx, data, EtherTypes::Ipv6),
-            IpNextHeaderProtocols::Ipv6Frag => self.handle_l4_ipv6frag(packet, ctx, data, &l3_info),
-            p => {
-                warn!("Unsupported L4 proto {}", p);
-                self.handle_l4_generic(packet, ctx, data, &l3_info)
-            }
+fn handle_l3_common(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    l3_info: &L3Info,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    match IpNextHeaderProtocol(l3_info.three_tuple.proto) {
+        IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, &l3_info, registry),
+        IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, &l3_info, registry),
+        IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, &l3_info, registry),
+        IpNextHeaderProtocols::Icmpv6 => handle_l4_icmpv6(packet, ctx, data, &l3_info, registry),
+        IpNextHeaderProtocols::Esp => handle_l4_generic(packet, ctx, data, &l3_info, registry),
+        IpNextHeaderProtocols::Gre => handle_l4_gre(packet, ctx, data, &l3_info, registry),
+        IpNextHeaderProtocols::Ipv4 => handle_l3(packet, ctx, data, EtherTypes::Ipv4, registry),
+        IpNextHeaderProtocols::Ipv6 => handle_l3(packet, ctx, data, EtherTypes::Ipv6, registry),
+        IpNextHeaderProtocols::Ipv6Frag => {
+            handle_l4_ipv6frag(packet, ctx, data, &l3_info, registry)
+        }
+        p => {
+            warn!("Unsupported L4 proto {}", p);
+            handle_l4_generic(packet, ctx, data, &l3_info, registry)
         }
     }
+}
 
-    fn handle_l4_tcp(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        l3_info: &L3Info,
-    ) -> Result<(), Error> {
-        debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
-        debug!("    l4_data len: {}", data.len());
-        let tcp = TcpPacket::new(data).ok_or("Could not build TCP packet from data")?;
+fn handle_l4_tcp(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    l3_info: &L3Info,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
+    debug!("    l4_data len: {}", data.len());
+    let tcp = TcpPacket::new(data).ok_or("Could not build TCP packet from data")?;
 
-        // XXX handle TCP defrag
-        let l4_payload = Some(tcp.payload());
-        let src_port = tcp.get_source();
-        let dst_port = tcp.get_destination();
+    // XXX handle TCP defrag
+    let l4_payload = Some(tcp.payload());
+    let src_port = tcp.get_source();
+    let dst_port = tcp.get_destination();
 
-        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
-    }
+    handle_l4_common(
+        packet, ctx, data, l3_info, src_port, dst_port, l4_payload, &registry,
+    )
+}
 
-    fn handle_l4_udp(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        l3_info: &L3Info,
-    ) -> Result<(), Error> {
-        debug!("handle_l4_udp (idx={})", ctx.pcap_index);
-        debug!("    l4_data len: {}", data.len());
-        let udp = UdpPacket::new(data).ok_or("Could not build UDP packet from data")?;
+fn handle_l4_udp(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    l3_info: &L3Info,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l4_udp (idx={})", ctx.pcap_index);
+    debug!("    l4_data len: {}", data.len());
+    let udp = UdpPacket::new(data).ok_or("Could not build UDP packet from data")?;
 
-        let l4_payload = Some(udp.payload());
-        let src_port = udp.get_source();
-        let dst_port = udp.get_destination();
+    let l4_payload = Some(udp.payload());
+    let src_port = udp.get_source();
+    let dst_port = udp.get_destination();
 
-        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
-    }
+    handle_l4_common(
+        packet, ctx, data, l3_info, src_port, dst_port, l4_payload, &registry,
+    )
+}
 
-    fn handle_l4_icmp(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        l3_info: &L3Info,
-    ) -> Result<(), Error> {
-        debug!("handle_l4_icmp (idx={})", ctx.pcap_index);
-        let icmp = IcmpPacket::new(data).ok_or("Could not build ICMP packet from data")?;
-        debug!(
-            "ICMP type={:?} code={:?}",
-            icmp.get_icmp_type(),
-            icmp.get_icmp_code()
-        );
+fn handle_l4_icmp(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    l3_info: &L3Info,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l4_icmp (idx={})", ctx.pcap_index);
+    let icmp = IcmpPacket::new(data).ok_or("Could not build ICMP packet from data")?;
+    debug!(
+        "ICMP type={:?} code={:?}",
+        icmp.get_icmp_type(),
+        icmp.get_icmp_code()
+    );
 
-        let l4_payload = Some(icmp.payload());
-        let src_port = icmp.get_icmp_type().0 as u16;
-        let dst_port = icmp.get_icmp_code().0 as u16;
+    let l4_payload = Some(icmp.payload());
+    let src_port = icmp.get_icmp_type().0 as u16;
+    let dst_port = icmp.get_icmp_code().0 as u16;
 
-        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
-    }
+    handle_l4_common(
+        packet, ctx, data, l3_info, src_port, dst_port, l4_payload, registry,
+    )
+}
 
-    fn handle_l4_icmpv6(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        l3_info: &L3Info,
-    ) -> Result<(), Error> {
-        debug!("handle_l4_icmpv6 (idx={})", ctx.pcap_index);
-        let icmpv6 = Icmpv6Packet::new(data).ok_or("Could not build ICMPv6 packet from data")?;
-        debug!(
-            "ICMPv6 type={:?} code={:?}",
-            icmpv6.get_icmpv6_type(),
-            icmpv6.get_icmpv6_code()
-        );
+fn handle_l4_icmpv6(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    l3_info: &L3Info,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l4_icmpv6 (idx={})", ctx.pcap_index);
+    let icmpv6 = Icmpv6Packet::new(data).ok_or("Could not build ICMPv6 packet from data")?;
+    debug!(
+        "ICMPv6 type={:?} code={:?}",
+        icmpv6.get_icmpv6_type(),
+        icmpv6.get_icmpv6_code()
+    );
 
-        let l4_payload = Some(icmpv6.payload());
-        let src_port = 0;
-        let dst_port = 0;
+    let l4_payload = Some(icmpv6.payload());
+    let src_port = 0;
+    let dst_port = 0;
 
-        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
-    }
+    handle_l4_common(
+        packet, ctx, data, l3_info, src_port, dst_port, l4_payload, registry,
+    )
+}
 
-    fn handle_l4_gre(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        _l3_info: &L3Info,
-    ) -> Result<(), Error> {
-        debug!("handle_l4_gre (idx={})", ctx.pcap_index);
-        let l3_data = data;
+fn handle_l4_gre(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    _l3_info: &L3Info,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l4_gre (idx={})", ctx.pcap_index);
+    let l3_data = data;
 
-        let gre = GrePacket::new(l3_data).ok_or("Could not build GRE packet from data")?;
+    let gre = GrePacket::new(l3_data).ok_or("Could not build GRE packet from data")?;
 
-        let next_proto = gre.get_protocol_type();
-        let data = gre.payload();
+    let next_proto = gre.get_protocol_type();
+    // XXX can panic: 'Source routed GRE packets not supported'
+    let data = gre.payload();
 
-        self.handle_l3(packet, ctx, data, EtherType(next_proto))
-    }
+    handle_l3(packet, ctx, data, EtherType(next_proto), registry)
+}
 
-    fn handle_l4_ipv6frag(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        l3_info: &L3Info,
-    ) -> Result<(), Error> {
-        debug!("handle_l4_ipv6frag (idx={})", ctx.pcap_index);
-        let l3_data = data;
+fn handle_l4_ipv6frag(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    l3_info: &L3Info,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!("handle_l4_ipv6frag (idx={})", ctx.pcap_index);
+    let l3_data = data;
 
-        let ip6frag = IPv6FragmentPacket::new(l3_data)
-            .ok_or("Could not build IPv6FragmentPacket packet from data")?;
-        debug!(
-            "IPv6FragmentPacket more_fragments={} next_header={} id=0x{:x}",
-            ip6frag.more_fragments(),
-            ip6frag.get_next_header(),
-            ip6frag.get_identification()
-        );
+    let ip6frag = IPv6FragmentPacket::new(l3_data)
+        .ok_or("Could not build IPv6FragmentPacket packet from data")?;
+    debug!(
+        "IPv6FragmentPacket more_fragments={} next_header={} id=0x{:x}",
+        ip6frag.more_fragments(),
+        ip6frag.get_next_header(),
+        ip6frag.get_identification()
+    );
 
+    TAD.with(|f| {
+        let mut f = f.borrow_mut();
         // check IP fragmentation before calling handle_l4
         let frag_offset = (ip6frag.get_fragment_offset() * 8) as usize;
         let more_fragments = ip6frag.more_fragments();
-        let defrag = self.ipv6_defrag.update(
+        let defrag = f.ipv6_defrag.update(
             ip6frag.get_identification().into(),
             frag_offset,
             more_fragments,
@@ -466,61 +481,67 @@ impl Analyzer {
         let l4_proto = ip6frag.get_next_header();
 
         match l4_proto {
-            IpNextHeaderProtocols::Tcp => self.handle_l4_tcp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Udp => self.handle_l4_udp(packet, ctx, data, &l3_info),
-            IpNextHeaderProtocols::Icmp => self.handle_l4_icmp(packet, ctx, data, &l3_info),
+            IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, &l3_info, registry),
+            IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, &l3_info, registry),
+            IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, &l3_info, registry),
             _ => {
                 warn!("IPv6Fragment: Unsupported L4 proto {}", l4_proto);
-                self.handle_l4_generic(packet, ctx, data, &l3_info)
+                handle_l4_generic(packet, ctx, data, &l3_info, registry)
             }
         }
-    }
+    })
+}
 
-    fn handle_l4_generic(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        ctx: &ParseContext,
-        data: &[u8],
-        l3_info: &L3Info,
-    ) -> Result<(), Error> {
-        debug!(
-            "handle_l4_generic (idx={}, l4_proto={})",
-            ctx.pcap_index, l3_info.three_tuple.proto
-        );
-        // in generic function, we don't know how to get l4_payload
-        let l4_payload = None;
-        let src_port = 0;
-        let dst_port = 0;
+fn handle_l4_generic(
+    packet: &pcap_parser::Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    l3_info: &L3Info,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    debug!(
+        "handle_l4_generic (idx={}, l4_proto={})",
+        ctx.pcap_index, l3_info.three_tuple.proto
+    );
+    // in generic function, we don't know how to get l4_payload
+    let l4_payload = None;
+    let src_port = 0;
+    let dst_port = 0;
 
-        self.handle_l4_common(packet, ctx, data, l3_info, src_port, dst_port, l4_payload)
-    }
+    handle_l4_common(
+        packet, ctx, data, l3_info, src_port, dst_port, l4_payload, registry,
+    )
+}
 
-    fn handle_l4_common(
-        &mut self,
-        packet: &pcap_parser::Packet,
-        _ctx: &ParseContext,
-        l4_data: &[u8],
-        l3_info: &L3Info,
-        src_port: u16,
-        dst_port: u16,
-        l4_payload: Option<&[u8]>,
-    ) -> Result<(), Error> {
-        let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
-        debug!("5t: {}", five_tuple);
-        let now = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
+fn handle_l4_common(
+    packet: &pcap_parser::Packet,
+    _ctx: &ParseContext,
+    l4_data: &[u8],
+    l3_info: &L3Info,
+    src_port: u16,
+    dst_port: u16,
+    l4_payload: Option<&[u8]>,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
+    debug!("5t: {}", five_tuple);
+    let now = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
 
-        // lookup flow
-        let flow_id = match self.lookup_flow(&five_tuple) {
+    // lookup flow
+    // let flow_id = match a.lookup_flow(&five_tuple) {
+    TAD.with(|f| {
+        let mut f = f.borrow_mut();
+        let flow_id = match f.lookup_flow(&five_tuple) {
             Some(id) => id,
             None => {
                 let flow = Flow::new(&five_tuple, packet.header.ts_sec, packet.header.ts_usec);
-                self.gen_event_new_flow(&flow);
-                self.insert_flow(five_tuple.clone(), flow)
+                gen_event_new_flow(&flow, registry);
+                f.insert_flow(five_tuple.clone(), flow)
             }
         };
 
         // take flow ownership
-        let flow = self
+        let flow = f
             .flows
             .get_mut(&flow_id)
             .ok_or("could not get flow from ID")?;
@@ -539,8 +560,7 @@ impl Analyzer {
             flow: Some(flow),
         };
         // let start = ::std::time::Instant::now();
-        self.registry
-            .run_plugins_transport(pdata.l4_type, packet, &pdata);
+        registry.run_plugins_transport(pdata.l4_type, packet, &pdata);
         // let elapsed = start.elapsed();
         // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
@@ -559,47 +579,32 @@ impl Analyzer {
         // }
 
         Ok(())
-    }
+    })
+}
 
-    fn lookup_flow(&mut self, five_t: &FiveTuple) -> Option<FlowID> {
-        self.flows_id.get(&five_t).map(|&id| id)
-    }
+// Run all Layer 3 plugins
+pub(crate) fn run_l3_plugins(
+    packet: &pcap_parser::Packet,
+    data: &[u8],
+    ethertype: u16,
+    three_tuple: &ThreeTuple,
+    registry: &PluginRegistry,
+) {
+    // run l3 plugins
+    // let start = ::std::time::Instant::now();
+    registry.run_plugins_ethertype(packet, ethertype, three_tuple, data);
+    // let elapsed = start.elapsed();
+    // debug!("Time to run l3 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
+}
 
-    /// Insert a flow in the hash tables.
-    /// Takes ownership of five_t and flow
-    fn insert_flow(&mut self, five_t: FiveTuple, flow: Flow) -> FlowID {
-        // try reverse flow first
-        // self.flows_id.entry(&five_t.get_reverse())
-        //     .or_insert_with(
-        //         );
-        let rev_id = self.flows_id.get(&five_t.get_reverse()).map(|&id| id);
-        match rev_id {
-            Some(id) => {
-                // insert reverse flow ID
-                debug!("inserting reverse flow ID {}", id);
-                self.flows_id.insert(five_t, id);
-                return id;
-            }
-            _ => (),
-        }
-        // get a new flow index (XXX currently: random number)
-        let id = self.trng.gen();
-        debug!("Inserting new flow (id={})", id);
-        debug!("    flow: {:?}", flow);
-        self.flows.insert(id, flow);
-        self.flows_id.insert(five_t, id);
-        id
-    }
-
-    fn gen_event_new_flow(&mut self, flow: &Flow) {
-        // let start = ::std::time::Instant::now();
-        self.registry.run_plugins(
-            |p| p.plugin_type() & PLUGIN_FLOW_NEW != 0,
-            |p| p.flow_created(flow),
-        );
-        // let elapsed = start.elapsed();
-        // debug!("Time to run flow_created: {}.{}", elapsed.as_secs(), elapsed.as_millis());
-    }
+pub(crate) fn gen_event_new_flow(flow: &Flow, registry: &PluginRegistry) {
+    // let start = ::std::time::Instant::now();
+    registry.run_plugins(
+        |p| p.plugin_type() & PLUGIN_FLOW_NEW != 0,
+        |p| p.flow_created(flow),
+    );
+    // let elapsed = start.elapsed();
+    // debug!("Time to run flow_created: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 }
 
 impl PcapAnalyzer for Analyzer {
@@ -630,16 +635,16 @@ impl PcapAnalyzer for Analyzer {
         match link_type {
             Linktype::NULL => {
                 // XXX read first u32 in *host order*: 2 if IPv4, etc.
-                self.handle_l3(&packet, &ctx, &packet.data[4..], EtherTypes::Ipv4) // XXX overflow
+                handle_l3(&packet, &ctx, &packet.data[4..], EtherTypes::Ipv4, &self.registry) // XXX overflow
             }
             Linktype::RAW => {
                 // XXX may be IPv4 or IPv6, check IP header ...
-                self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4)
+                handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4, &self.registry)
             }
-            Linktype(228) /* IPV4 */ => self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4),
-            Linktype(229) /* IPV6 */ => self.handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv6),
+            Linktype(228) /* IPV4 */ => handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4, &self.registry),
+            Linktype(229) /* IPV6 */ => handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv6, &self.registry),
             Linktype::ETHERNET => self.handle_l2(&packet, &ctx),
-            Linktype::FDDI => self.handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4),
+            Linktype::FDDI => handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4, &self.registry),
             Linktype::NFLOG => match pcap_parser::data::parse_nflog(packet.data) {
                 Ok((_, nf)) => {
                     let ethertype = match nf.header.af {
@@ -653,7 +658,7 @@ impl PcapAnalyzer for Analyzer {
                     let data = nf
                         .get_payload()
                         .ok_or("Unable to get payload from nflog data")?;
-                    self.handle_l3(&packet, &ctx, &data, ethertype)
+                    handle_l3(&packet, &ctx, &data, ethertype, &self.registry)
                 }
                 _ => Ok(()),
             },
@@ -666,7 +671,7 @@ impl PcapAnalyzer for Analyzer {
 
     /// Finalize analysis and notify plugins
     fn teardown(&mut self) {
-        let flows = &self.flows;
+        let flows = &self.tdata.flows;
         // expire remaining flows
         debug!("{} flows remaining in table", flows.len());
         // let start = ::std::time::Instant::now();
@@ -680,9 +685,48 @@ impl PcapAnalyzer for Analyzer {
         );
         // let elapsed = start.elapsed();
         // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
-        self.flows.clear();
-        self.flows_id.clear();
+        self.tdata.flows.clear();
+        self.tdata.flows_id.clear();
 
         self.registry.run_plugins(|_| true, |p| p.post_process());
+    }
+}
+
+impl SafePcapAnalyzer for Analyzer {}
+
+impl ThreadAnalyzerData {
+    pub fn new() -> ThreadAnalyzerData {
+        ThreadAnalyzerData {
+            flows: HashMap::new(),
+            flows_id: HashMap::new(),
+            trng: ChaChaRng::from_rng(rand::thread_rng()).unwrap(),
+            ipv4_defrag: Box::new(IPDefragEngine::new()),
+            ipv6_defrag: Box::new(IPDefragEngine::new()),
+        }
+    }
+
+    pub fn lookup_flow(&mut self, five_t: &FiveTuple) -> Option<FlowID> {
+        self.flows_id.get(&five_t).map(|&id| id)
+    }
+    /// Insert a flow in the hash tables.
+    /// Takes ownership of five_t and flow
+    pub fn insert_flow(&mut self, five_t: FiveTuple, flow: Flow) -> FlowID {
+        let rev_id = self.flows_id.get(&five_t.get_reverse()).map(|&id| id);
+        match rev_id {
+            Some(id) => {
+                // insert reverse flow ID
+                debug!("inserting reverse flow ID {}", id);
+                self.flows_id.insert(five_t, id);
+                return id;
+            }
+            _ => (),
+        }
+        // get a new flow index (XXX currently: random number)
+        let id = self.trng.gen();
+        debug!("Inserting new flow (id={})", id);
+        debug!("    flow: {:?}", flow);
+        self.flows.insert(id, flow);
+        self.flows_id.insert(five_t, id);
+        id
     }
 }

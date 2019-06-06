@@ -12,16 +12,19 @@ plugin_rusticata = ["rusticata"]
 
 [dependencies]
 base64 = { version="0.10", optional=true }
+circular = { git="https://github.com/chifflier/circular.git", branch="consume-noshift01" }
+crossbeam-queue = "0.1.2"
 env_logger = "0.6"
 lazy_static = "1.2"
 libpcap-tools = { path="../libpcap-tools" }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 nom = "4.2"
+num_cpus = "1.10"
 pnet_base = "0.22.0"
 pnet_macros_support = "0.22.0"
 pnet_packet = "0.22.0"
 rand="0.6"
-rayon="1.0"
+rand_chacha = "0.1"
 sha1 = { version="0.6", features=["std"], optional=true }
 
 [dependencies.rusticata]

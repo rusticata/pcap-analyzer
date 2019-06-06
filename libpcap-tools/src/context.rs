@@ -3,7 +3,7 @@ use nom::le_u64;
 use pcap_parser::*;
 
 /// pcap parsing context
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ParseContext {
     pub interfaces: Vec<InterfaceInfo>,
     pub bigendian: bool,
@@ -16,6 +16,7 @@ pub struct ParseContext {
 }
 
 /// Information related to a network interface used for capture
+#[derive(Clone)]
 pub struct InterfaceInfo {
     /// The `Linktype` used for data format
     pub link_type: Linktype,
@@ -34,7 +35,7 @@ impl Default for InterfaceInfo {
         }
     }
 }
-pub(crate) fn pcapng_build_interface<'a>(idb: &'a InterfaceDescriptionBlock<'a>) -> InterfaceInfo {
+pub fn pcapng_build_interface<'a>(idb: &'a InterfaceDescriptionBlock<'a>) -> InterfaceInfo {
     let link_type = Linktype(idb.linktype as i32);
     // extract if_tsoffset and if_tsresol
     let mut if_tsresol: u8 = 6;
@@ -61,7 +62,7 @@ pub(crate) fn pcapng_build_interface<'a>(idb: &'a InterfaceDescriptionBlock<'a>)
     }
 }
 
-pub(crate) fn pcapng_build_packet<'a>(
+pub fn pcapng_build_packet<'a>(
     if_info: &InterfaceInfo,
     block: Block<'a>,
 ) -> Option<Packet<'a>> {

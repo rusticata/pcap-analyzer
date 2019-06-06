@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 /// Defragmentation engine
-pub trait DefragEngine {
+pub trait DefragEngine : Send + Sync {
     /// This function updates the engine with a new Fragment
     /// Returns a Fragment describing the defragmentation operation result
     fn update<'a>(

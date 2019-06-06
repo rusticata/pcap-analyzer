@@ -18,3 +18,6 @@ pub trait PcapAnalyzer {
     /// Teardown function, called after reading pcap data (optional)
     fn teardown(&mut self) {}
 }
+
+/// Common trait for pcap/pcap-ng analyzers (thread-safe version)
+pub trait SafePcapAnalyzer: PcapAnalyzer + Send + Sync {}

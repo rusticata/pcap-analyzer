@@ -5,7 +5,7 @@ authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 edition = "2018"
 
 [dependencies]
-circular = "0.2"
+circular = { git="https://github.com/chifflier/circular.git", branch="consume-noshift01" }
 lazy_static = "1.2"
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 nom = "4.2"

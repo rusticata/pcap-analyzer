@@ -3,22 +3,21 @@ use crate::plugin::*;
 use libpcap_tools::ThreeTuple;
 use pcap_parser::Packet;
 use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Shorthand definition for wrapped plugin
-pub type SafePlugin = Rc<Mutex<Plugin>>;
+pub type SafePlugin = Arc<Mutex<Plugin>>;
 /// Unique identifier for a plugin instance
 pub type PluginID = usize;
 
 #[macro_export]
 macro_rules! build_safeplugin {
     ($p:expr) => {
-        ::std::rc::Rc::new(::std::sync::Mutex::new($p))
+        ::std::sync::Arc::new(::std::sync::Mutex::new($p))
     };
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PluginRegistry {
     plugins_l2: Vec<SafePlugin>,
     plugins_ethertype_ipv4: Vec<SafePlugin>,

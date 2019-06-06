@@ -16,10 +16,13 @@ pub mod plugins;
 
 mod analyzer;
 pub use analyzer::*;
+pub mod engine;
 
 mod ip6_defrag;
 mod ip_defrag;
 pub use ip6_defrag::*;
+
+mod toeplitz;
 
 #[derive(Debug, PartialEq)]
 pub struct Error;
