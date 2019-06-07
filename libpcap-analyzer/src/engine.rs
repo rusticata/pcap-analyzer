@@ -22,7 +22,6 @@ pub enum Job<'a> {
         ParseContext,
         &'a [u8],
         EtherType,
-        Arc<PluginRegistry>,
     ),
 }
 
@@ -113,7 +112,7 @@ impl ThreadedPcapEngine {
         let workers: Vec<_> = (0..self.n_workers)
             .map(|i| {
                 let local_q = local_jobs[i].clone();
-                // let arc_registry = arc_registry.clone();
+                let arc_registry = self.registry.clone();
                 let handler = ::std::thread::spawn(move || {
                     debug!("worker thread {} starting", i);
                     loop {
@@ -129,7 +128,7 @@ impl ThreadedPcapEngine {
                                         );
                                     });
                                 }
-                                Job::New(packet, ctx, data, ethertype, arc_registry) => {
+                                Job::New(packet, ctx, data, ethertype) => {
                                     debug!("thread {}: got a job", i);
                                     // extern_l2(&s, &registry);
                                     let res =
@@ -343,7 +342,6 @@ impl ThreadedPcapEngine {
                     &ctx,
                     payload,
                     eth.get_ethertype(),
-                    self.registry.clone(),
                 )
             }
             None => {
@@ -360,12 +358,11 @@ fn extern_dispatch_l3<'a>(
     ctx: &ParseContext,
     data: &'a [u8],
     ethertype: EtherType,
-    registry: Arc<PluginRegistry>,
 ) -> Result<(), Error> {
     let n_workers = jobs.len();
     let i = fan_out(data, ethertype, n_workers);
     debug_assert!(i < n_workers);
-    jobs[i].push(Job::New(packet, ctx.clone(), data, ethertype, registry));
+    jobs[i].push(Job::New(packet, ctx.clone(), data, ethertype));
     Ok(())
 }
 

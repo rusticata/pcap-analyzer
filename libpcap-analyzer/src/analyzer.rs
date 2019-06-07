@@ -61,14 +61,12 @@ pub(crate) struct ThreadAnalyzerData {
 /// calling the next level callbacks.
 pub struct Analyzer {
     registry: PluginRegistry,
-    tdata: ThreadAnalyzerData,
 }
 
 impl Analyzer {
     pub fn new(registry: PluginRegistry, _config: &Config) -> Analyzer {
         Analyzer {
             registry,
-            tdata: ThreadAnalyzerData::new(),
         }
     }
 
@@ -671,24 +669,27 @@ impl PcapAnalyzer for Analyzer {
 
     /// Finalize analysis and notify plugins
     fn teardown(&mut self) {
-        let flows = &self.tdata.flows;
-        // expire remaining flows
-        debug!("{} flows remaining in table", flows.len());
-        // let start = ::std::time::Instant::now();
-        self.registry.run_plugins(
-            |p| p.plugin_type() & PLUGIN_FLOW_DEL != 0,
-            |p| {
-                flows.values().for_each(|flow| {
-                    let _ = p.flow_destroyed(flow);
-                });
-            },
-        );
-        // let elapsed = start.elapsed();
-        // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
-        self.tdata.flows.clear();
-        self.tdata.flows_id.clear();
+        TAD.with(|f| {
+            let mut f = f.borrow_mut();
+            let flows = &f.flows;
+            // expire remaining flows
+            debug!("{} flows remaining in table", flows.len());
+            // let start = ::std::time::Instant::now();
+            self.registry.run_plugins(
+                |p| p.plugin_type() & PLUGIN_FLOW_DEL != 0,
+                |p| {
+                    flows.values().for_each(|flow| {
+                        let _ = p.flow_destroyed(flow);
+                    });
+                },
+                );
+            // let elapsed = start.elapsed();
+            // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
+            f.flows.clear();
+            f.flows_id.clear();
 
-        self.registry.run_plugins(|_| true, |p| p.post_process());
+            self.registry.run_plugins(|_| true, |p| p.post_process());
+        });
     }
 }
 
