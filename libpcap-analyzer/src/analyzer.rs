@@ -1,3 +1,4 @@
+use crate::engine::{LayerType, get_packet_data};
 use crate::plugin_registry::PluginRegistry;
 use rand::prelude::*;
 use rand_chacha::*;
@@ -18,8 +19,6 @@ use pnet_packet::tcp::TcpPacket;
 use pnet_packet::udp::UdpPacket;
 use pnet_packet::vlan::VlanPacket;
 use pnet_packet::Packet;
-
-use pcap_parser::*;
 
 use libpcap_tools::*;
 
@@ -630,39 +629,17 @@ impl PcapAnalyzer for Analyzer {
             }
         };
         debug!("linktype: {}", link_type);
-        match link_type {
-            Linktype::NULL => {
-                // XXX read first u32 in *host order*: 2 if IPv4, etc.
-                handle_l3(&packet, &ctx, &packet.data[4..], EtherTypes::Ipv4, &self.registry) // XXX overflow
-            }
-            Linktype::RAW => {
-                // XXX may be IPv4 or IPv6, check IP header ...
-                handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4, &self.registry)
-            }
-            Linktype(228) /* IPV4 */ => handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv4, &self.registry),
-            Linktype(229) /* IPV6 */ => handle_l3(&packet, &ctx, &packet.data, EtherTypes::Ipv6, &self.registry),
-            Linktype::ETHERNET => self.handle_l2(&packet, &ctx),
-            Linktype::FDDI => handle_l3(&packet, &ctx, &packet.data[21..], EtherTypes::Ipv4, &self.registry),
-            Linktype::NFLOG => match pcap_parser::data::parse_nflog(packet.data) {
-                Ok((_, nf)) => {
-                    let ethertype = match nf.header.af {
-                        2 => EtherTypes::Ipv4,
-                        10 => EtherTypes::Ipv6,
-                        af => {
-                            warn!("NFLOG: unsupported address family {}", af);
-                            EtherType::new(0)
-                        }
-                    };
-                    let data = nf
-                        .get_payload()
-                        .ok_or("Unable to get payload from nflog data")?;
-                    handle_l3(&packet, &ctx, &data, ethertype, &self.registry)
-                }
-                _ => Ok(()),
-            },
-            l => {
-                warn!("Unsupported link type {}", l);
-                Ok(())
+        let (layer_type, data) = get_packet_data(link_type, &packet)?;
+        match layer_type {
+            LayerType::L2 => self.handle_l2(packet, &ctx),
+            LayerType::L3(ethertype) => {
+                handle_l3(
+                    packet,
+                    &ctx,
+                    data,
+                    ethertype,
+                    &self.registry,
+                )
             }
         }
     }
