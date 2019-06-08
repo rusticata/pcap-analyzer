@@ -330,13 +330,13 @@ impl ThreadedPcapEngine {
                 if dest.0 == 1 {
                     // Multicast
                     if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) {
-                        warn!("Cisco CDP/VTP/UDLD");
+                        info!("Cisco CDP/VTP/UDLD");
                         return Ok(());
                     } else if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) {
-                        warn!("Cisco Multicast address");
+                        info!("Cisco Multicast address");
                         return Ok(());
                     } else {
-                        warn!("Ethernet broadcast (unknown)");
+                        info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
                     }
                 }
                 debug!("    ethertype: 0x{:x}", eth.get_ethertype().0);
