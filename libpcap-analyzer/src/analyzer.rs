@@ -512,7 +512,7 @@ fn handle_l4_generic(
 
 fn handle_l4_common(
     packet: &pcap_parser::Packet,
-    _ctx: &ParseContext,
+    ctx: &ParseContext,
     l4_data: &[u8],
     l3_info: &L3Info,
     src_port: u16,
@@ -555,6 +555,7 @@ fn handle_l4_common(
             l4_type: l3_info.three_tuple.proto,
             l4_payload,
             flow: Some(flow),
+            pcap_index: ctx.pcap_index,
         };
         // let start = ::std::time::Instant::now();
         registry.run_plugins_transport(pdata.l4_type, packet, &pdata);

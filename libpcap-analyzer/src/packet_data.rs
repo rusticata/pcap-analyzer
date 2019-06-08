@@ -13,4 +13,5 @@ pub struct PacketData<'l3, 'l4, 't, 'f> {
     /// L4 payload, if protocol is known by core engine
     pub l4_payload: Option<&'l4 [u8]>,
     pub flow: Option<&'f Flow>,
+    pub pcap_index: usize,
 }
