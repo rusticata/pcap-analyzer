@@ -78,8 +78,9 @@ impl Plugin for Rusticata {
             let direction = if pdata.to_server { STREAM_TOSERVER } else { STREAM_TOCLIENT };
             let res = parser.parse(d, direction);
             if res == R_STATUS_FAIL {
-                warn!("rusticata: parser failed");
+                warn!("rusticata: parser failed (idx={}) (5t: {})", pdata.pcap_index, pdata.five_tuple);
                 // remove or disable parser for flow?
+                let _ = self.flow_parsers.remove(&flow_id);
             }
         });
     }
