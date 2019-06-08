@@ -130,6 +130,8 @@ pub(crate) fn handle_l3(
         EtherTypes::Ipv4 => handle_l3_ipv4(packet, ctx, data, ethertype, registry),
         EtherTypes::Ipv6 => handle_l3_ipv6(packet, ctx, data, ethertype, registry),
         EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, data, ethertype, registry),
+        // ignore ARP packets
+        EtherTypes::Arp => Ok(()),
         e => {
             warn!("Unsupported ethertype {} (0x{:x})", e, e.0);
             handle_l3_generic(packet, ctx, data, e, registry)
