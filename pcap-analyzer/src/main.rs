@@ -12,14 +12,15 @@ extern crate xz2;
 
 use std::fs::File;
 use std::io;
+use std::io::{Error, ErrorKind};
 use std::path::Path;
 
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
 use explugin_example::ExEmptyPluginBuilder;
-use libpcap_analyzer::{plugins, Analyzer};
 use libpcap_analyzer::engine::ThreadedPcapEngine;
+use libpcap_analyzer::{plugins, Analyzer};
 use libpcap_tools::{Config, PcapEngine};
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
@@ -39,6 +40,13 @@ fn main() -> io::Result<()> {
                 .help("Be verbose")
                 .short("v")
                 .long("verbose"),
+        )
+        .arg(
+            Arg::with_name("jobs")
+                .help("Number of concurrent jobs to run (default: number of cpus)")
+                .short("j")
+                .long("jobs")
+                .takes_value(true),
         )
         .arg(
             Arg::with_name("plugins")
@@ -74,9 +82,15 @@ fn main() -> io::Result<()> {
     if let Some(filename) = matches.value_of("config") {
         load_config(&mut config, filename)?;
     }
+    if let Some(jobs) = matches.value_of("jobs") {
+        let j = jobs.parse::<u32>().or(Err(Error::new(
+            ErrorKind::Other,
+            "Invalid value for 'jobs' argument",
+        )))?;
+        config.set("num_threads", j);
+    }
     // instanciate all plugins
-    let registry =
-    if let Some(plugin_names) = matches.value_of("plugins") {
+    let registry = if let Some(plugin_names) = matches.value_of("plugins") {
         debug!("Restricting plugins to: {}", plugin_names);
         let names: Vec<_> = plugin_names.split(",").collect();
         factory.build_filter_plugins(
