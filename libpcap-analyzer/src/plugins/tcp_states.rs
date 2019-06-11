@@ -124,7 +124,7 @@ debug!("SYN");
                             return;
                         }
                         // check ack value
-                        if ack != rev_conn.syn_seq + 1 {
+                        if ack != rev_conn.syn_seq.wrapping_add(1) {
                             warn!("NEW/SYN-ACK: ack number is wrong");
                             return;
                         }
@@ -133,7 +133,7 @@ debug!("SYN");
                 // ACK as last part of 3-way handshake
                 if rev_conn.syn_seen && tcp_flags & TH_ARSF == TcpFlags::ACK {
                     // check ack value
-                    if ack != rev_conn.syn_seq + 1 {
+                    if ack != rev_conn.syn_seq.wrapping_add(1) {
                         warn!("NEW/ACK: ack number is wrong");
                         return;
                     }
@@ -157,7 +157,7 @@ debug!("SYN");
                 // sender initiates a teardown
                 if tcp_flags & TcpFlags::FIN == TcpFlags::FIN {
                     conn.fin_seen = true;
-                    conn.next_seq += 1; // receiver needs to ack FIN
+                    conn.next_seq = conn.next_seq.wrapping_add(1); // receiver needs to ack FIN
                     conn.state = TcpState::Closing;
                 }
                 // Connection has been reset
@@ -177,7 +177,7 @@ debug!("SYN");
                 }
                 // XXX end debug
                 // if pdata.to_server {
-                    conn.next_seq += pdata.l4_payload.map(|d| d.len() as u32).unwrap_or(0);
+                    conn.next_seq = conn.next_seq.wrapping_add(pdata.l4_payload.map(|d| d.len() as u32).unwrap_or(0));
                 // } else {
                 //     rev_conn.next_ack += pdata.l4_data.map(|d| d.len() as u32).unwrap_or(0);
                 // }
