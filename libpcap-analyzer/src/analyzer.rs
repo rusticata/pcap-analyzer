@@ -1,4 +1,3 @@
-use crate::engine::{LayerType, get_packet_data};
 use crate::plugin_registry::PluginRegistry;
 use rand::prelude::*;
 use rand_chacha::*;
@@ -640,7 +639,7 @@ impl PcapAnalyzer for Analyzer {
                     packet,
                     &ctx,
                     data,
-                    ethertype,
+                    EtherType(ethertype),
                     &self.registry,
                 )
             }
