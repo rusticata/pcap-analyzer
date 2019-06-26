@@ -3,6 +3,10 @@ name = "libpcap-analyzer"
 version = "0.1.0"
 authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 edition = "2018"
+description = "Pcap Analysis Library (main library)"
+license = "MIT/Apache-2.0"
+keywords = ["pcap","network","parser","nom"]
+categories = ["network-programming"]
 
 [features]
 default = []
