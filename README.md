@@ -28,7 +28,51 @@ PAL is split into several components:
 - `pcap-rewrite`: a tool to rewrite a pcap file format and link type to another
 - `explugin-example`: an example of plugin developed in a separate crate
 
+## Building pcap-analyzer
+
+Use `cargo` to build pcap-analyzer:
+
+```
+# release mode
+cargo build --release
+# debug mode
+cargo build
+```
+
+## Running pcap-analyzer
+
+Just run `pcap-analyzer` with the names of pcap files as arguments:
+
+```
+pcap-analyzer file.pcap
+pcap-analyzer -c config.toml file.pcap
+```
+
+The `-p` option can be used to restrict the list of plugins to load.
+
+Logging is done using the `log` cargo crate. However, in release mode, only messages with a severity
+of `warn` or more are displayed. The `RUST_LOG` environment variable can be used to set the log
+level.
+
+To debug a plugin, use the debug build:
+
+```
+RUST_LOG=pcap_analyzer,libpcap_analyzer=Debug,libpcap_tools=Debug,rusticata=Debug cargo run -p pcap-analyzer -- file.pcap
+```
+
 ## Plugins
+
+Plugins are modules that are selected during build, and can be activated during execution. They are
+embedded into the resulting library.
+
+Not all plugins are built by default, those that are not yet stable or have many dependencies are
+conditioned by a build feature. To build all plugins, activate the `all` feature, or select features
+individually:
+
+```
+cargo build --all-features
+cargo build --features plugin_community_id
+```
 
 Plugins can declare functions that will be called either when receiving data for a network layer, or
 for some events:
