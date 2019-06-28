@@ -16,7 +16,7 @@ plugin_rusticata = ["rusticata"]
 
 [dependencies]
 base64 = { version="0.10", optional=true }
-circular = { git="https://github.com/chifflier/circular.git", branch="consume-noshift01" }
+circular = "0.3.0"
 crossbeam-queue = "0.1.2"
 env_logger = "0.6"
 lazy_static = "1.2"
