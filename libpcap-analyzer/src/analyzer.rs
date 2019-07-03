@@ -202,7 +202,10 @@ fn handle_l3_ipv4(
         )
     });
     let payload = match defrag {
-        Fragment::NoFrag(d) => d,
+        Fragment::NoFrag(d) => {
+            debug_assert!(d.len() < orig_len);
+            d
+        },
         Fragment::Complete(ref v) => {
             warn!("IPv4 defrag done, using defrag buffer len={}", v.len());
             &v
@@ -221,8 +224,6 @@ fn handle_l3_ipv4(
         three_tuple: t3,
         l3_proto: ethertype.0,
     };
-
-    debug_assert!(payload.len() < orig_len);
 
     handle_l3_common(packet, ctx, payload, &l3_info, &registry)
 }
