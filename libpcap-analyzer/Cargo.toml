@@ -9,10 +9,11 @@ keywords = ["pcap","network","parser","nom"]
 categories = ["network-programming"]
 
 [features]
-default = []
-all = ["plugin_community_id", "plugin_rusticata"]
+default = ["all"]
+all = ["plugin_community_id", "plugin_rusticata", "plugin_tls_stats"]
 plugin_community_id = ["sha1", "base64"]
 plugin_rusticata = ["rusticata"]
+plugin_tls_stats = ["rusticata","tls-parser"]
 
 [dependencies]
 base64 = { version="0.10", optional=true }
@@ -30,6 +31,7 @@ pnet_packet = "0.22.0"
 rand="0.7"
 rand_chacha = "0.2"
 sha1 = { version="0.6", features=["std"], optional=true }
+tls-parser = { version="0.8", optional=true }
 
 [dependencies.rusticata]
 # path = "../../rusticata"
