@@ -70,9 +70,16 @@ conditioned by a build feature. To build all plugins, activate the `all` feature
 individually:
 
 ```
-cargo build --all-features
-cargo build --features plugin_community_id
+cargo build --all --all-features
 ```
+
+You can also edit `libpcap-analyzer/Cargo.toml` to edit the `default` feature.
+
+Note that due to limitations in the handling of features in workspaces by cargo, there seems to be
+no easy way to enable one feature only when building the package.
+Also note that, due to the same limitations, `cargo run` will not use the features.
+
+*For the moment, the only "stable" method is to edit `libpcap-analyzer/Cargo.toml`.*
 
 Plugins can declare functions that will be called either when receiving data for a network layer, or
 for some events:
