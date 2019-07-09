@@ -66,6 +66,16 @@ impl PluginsFactory {
 
         registry
     }
+
+    /// Iterate builder names
+    pub fn iter_builders<Op>(&self, op: Op)
+    where
+        Op: Fn(&str),
+    {
+        self.list.iter().for_each(|b| {
+            op(b.name())
+        });
+    }
 }
 
 impl Default for PluginsFactory {

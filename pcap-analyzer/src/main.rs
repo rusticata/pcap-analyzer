@@ -20,7 +20,7 @@ use xz2::read::XzDecoder;
 
 use explugin_example::ExEmptyPluginBuilder;
 use libpcap_analyzer::engine::ThreadedPcapEngine;
-use libpcap_analyzer::{plugins, Analyzer};
+use libpcap_analyzer::*;
 use libpcap_tools::{Config, PcapEngine};
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
@@ -47,6 +47,17 @@ fn main() -> io::Result<()> {
                 .short("j")
                 .long("jobs")
                 .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("list-builders")
+                .help("List plugin builders and exit")
+                .long("list-builders")
+        )
+        .arg(
+            Arg::with_name("list-plugins")
+                .help("List instanciated plugins and exit")
+                .short("l")
+                .long("list-plugins")
         )
         .arg(
             Arg::with_name("plugins")
@@ -78,10 +89,19 @@ fn main() -> io::Result<()> {
     let mut factory = plugins::PluginsFactory::default();
     // add external plugins
     factory.add_builder(Box::new(ExEmptyPluginBuilder));
+    // check if asked to list plugin builders
+    if matches.is_present("list-builders") {
+        println!("pcap-analyzer available plugin builders:");
+        factory.iter_builders(|name|
+                              println!("    {}", name));
+        ::std::process::exit(0);
+    }
+    // load config
     let mut config = Config::default();
     if let Some(filename) = matches.value_of("config") {
         load_config(&mut config, filename)?;
     }
+    // override config options from command-line arguments
     if let Some(jobs) = matches.value_of("jobs") {
         let j = jobs.parse::<u32>().or(Err(Error::new(
             ErrorKind::Other,
@@ -103,6 +123,27 @@ fn main() -> io::Result<()> {
     } else {
         factory.build_plugins(&config)
     };
+    // check if asked to list plugins
+    if matches.is_present("list-plugins") {
+        println!("pcap-analyzer instanciated plugins:");
+        registry.run_plugins(
+            |_| true,
+            |p| {
+                println!("  {}", p.name());
+                let t = p.plugin_type();
+                print!("    layers: ");
+                if t & PLUGIN_L2 != 0 { print!("  L2"); }
+                if t & PLUGIN_L3 != 0 { print!("  L3"); }
+                if t & PLUGIN_L4 != 0 { print!("  L4"); }
+                println!("");
+                print!("    events: ");
+                if t & PLUGIN_FLOW_NEW != 0 { print!("  FLOW_NEW"); }
+                if t & PLUGIN_FLOW_DEL != 0 { print!("  FLOW_DEL"); }
+                println!("");
+            },
+            );
+        ::std::process::exit(0);
+    }
     if registry.num_plugins() == 0 {
         warn!("No plugins loaded");
     }
