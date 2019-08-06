@@ -1,8 +1,7 @@
 use crate::plugin_registry::PluginRegistry;
-use pcap_parser::Packet;
 
-use crate::packet_data::PacketData;
-use libpcap_tools::{Config, Flow, ThreeTuple};
+use crate::packet_info::PacketInfo;
+use libpcap_tools::{Config, Flow, Packet, ThreeTuple};
 
 /// Plugin builder
 ///
@@ -69,9 +68,9 @@ pub trait Plugin: Sync + Send {
     /// Callback function when layer 4 data is available
     /// `data` is the layer 4 data, defragmented if possible
     /// `packet` is the initial layer 3 packet information
-    /// `pdata` is the flow and layers information
+    /// `pinfo` is the flow and layers information
     /// `PLUGIN_L4` must be added to `plugin_type()` return
-    fn handle_l4(&mut self, _packet: &Packet, _pdata: &PacketData) {}
+    fn handle_l4(&mut self, _packet: &Packet, _pinfo: &PacketInfo) {}
     /// Callback function when a new flow is created
     /// `PLUGIN_FLOW_NEW` must be added to `plugin_type()` return
     fn flow_created(&mut self, _flow: &Flow) {}

@@ -5,12 +5,11 @@ authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 edition = "2018"
 
 [dependencies]
-circular = "0.3.0"
 lazy_static = "1.2"
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 nom = "4.2"
 toml="0.5"
 
 [dependencies.pcap-parser]
-version = "0.5"
+version = "0.6.1"
 features = ["data"]

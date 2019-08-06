@@ -3,13 +3,12 @@
 
 use crate::plugin_registry::PluginRegistry;
 use libpcap_tools::Config;
-use pcap_parser::Packet;
 
 use super::Plugin;
-use crate::packet_data::PacketData;
+use crate::packet_info::PacketInfo;
 use crate::plugin::PLUGIN_L4;
 use base64;
-use libpcap_tools::FiveTuple;
+use libpcap_tools::{FiveTuple, Packet};
 use sha1::Sha1;
 use std::net::IpAddr;
 
@@ -91,7 +90,7 @@ impl Plugin for CommunityID {
         PLUGIN_L4
     }
 
-    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketData) {
+    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketInfo) {
         debug!("five_tuple: {}", pdata.five_tuple);
         let hash = hash_community_id(&pdata.five_tuple, pdata.l4_type, self.seed);
         debug!("flow community ID: {}", hash);

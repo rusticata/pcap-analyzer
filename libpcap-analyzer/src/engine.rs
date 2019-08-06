@@ -1,8 +1,8 @@
 use crate::analyzer::*;
 use crate::plugin_registry::PluginRegistry;
-use circular::Buffer;
-use nom::{HexDisplay, IResult, Needed, Offset};
+use nom::ErrorKind;
 use pcap_parser::*;
+use pcap_parser::data::PacketData;
 use std::cmp::min;
 use std::io::Read;
 
@@ -18,7 +18,7 @@ pub enum Job<'a> {
     Exit,
     PrintDebug,
     New(
-        pcap_parser::Packet<'a>,
+        Packet<'a>,
         ParseContext,
         &'a [u8],
         EtherType,
@@ -37,13 +37,6 @@ pub struct ThreadedPcapEngine {
     buffer_max_size: usize,
     buffer_initial_capacity: usize,
     n_workers: usize,
-}
-
-enum PcapType {
-    Pcap,
-    PcapBE,
-    PcapNG,
-    PcapNGBE,
 }
 
 impl ThreadedPcapEngine {
@@ -65,46 +58,33 @@ impl ThreadedPcapEngine {
 
     /// Main function: given a reader, read all pcap data and call analyzer for each Packet
     pub fn run<R: Read>(&mut self, f: &mut R) -> Result<(), Error> {
-        let mut capacity = self.buffer_initial_capacity;
-        let mut b = Buffer::with_capacity(capacity);
-        let sz = f.read(b.space())?;
-        b.fill(sz);
+        let capacity = self.buffer_initial_capacity;
+        let mut reader = pcap_parser::create_reader(capacity, f)?;
 
         self.a.init()?;
         let mut ctx = ParseContext::default();
-        ctx.pcap_index = 1;
+        ctx.pcap_index = 0;
 
-        let (length, in_pcap_type) = {
-            if let Ok((remaining, h)) = pcapng::parse_sectionheaderblock(b.data()) {
-                ctx.bigendian = h.is_bigendian();
-                if h.is_bigendian() {
-                    (b.data().offset(remaining), PcapType::PcapNGBE)
-                } else {
-                    (b.data().offset(remaining), PcapType::PcapNG)
-                }
-            } else if let Ok((remaining, h)) = pcap::parse_pcap_header(b.data()) {
+        let (offset, block) = reader.next()?;
+        match block {
+            PcapBlockOwned::NG(Block::SectionHeader(ref shb)) => {
+                ctx.bigendian = shb.is_bigendian();
+            },
+            PcapBlockOwned::LegacyHeader(ref hdr) => {
                 let if_info = InterfaceInfo {
-                    link_type: Linktype(h.network),
+                    link_type: hdr.network,
                     if_tsresol: 0,
                     if_tsoffset: 0,
+                    snaplen: hdr.snaplen,
                 };
                 ctx.interfaces.push(if_info);
-                ctx.bigendian = h.is_bigendian();
-                if h.is_bigendian() {
-                    (b.data().offset(remaining), PcapType::PcapBE)
-                } else {
-                    (b.data().offset(remaining), PcapType::Pcap)
-                }
-            } else {
-                return Err(Error::Generic("couldn't parse input file header"));
-            }
+                ctx.bigendian = hdr.is_bigendian();
+            },
+            _ => unreachable!(),
         };
+        reader.consume(offset);
 
-        // println!("consumed {} bytes", length);
-        b.consume(length);
-
-        let mut consumed = length;
-        let mut last_incomplete_offset = 0;
+        let mut last_incomplete_index = 0;
 
         let local_jobs: Vec<_> = (0..self.n_workers)
             .map(|_| Arc::new(SegQueue::new()))
@@ -147,93 +127,127 @@ impl ThreadedPcapEngine {
                 // (q, exit.clone(), handler)
             })
             .collect();
-
-        let get_next_packet = match in_pcap_type {
-            PcapType::Pcap => pcap_get_raw_data,
-            PcapType::PcapBE => pcap_get_raw_data_be,
-            PcapType::PcapNG => pcapng_get_raw_data,
-            PcapType::PcapNGBE => pcapng_get_raw_data_be,
-        };
         loop {
-            let needed: Option<Needed>;
-
-            // println!("{}", (&b.data()[..min(b.available_data(), 128)]).to_hex(16));
-
-            loop {
-                let length = {
-                    // read block
-                    let data = b.data();
-                    let data_unsafe =
-                        unsafe { ::std::slice::from_raw_parts(data.as_ptr(), data.len()) };
-                    match get_next_packet(data_unsafe, &mut ctx) {
-                        Ok((remaining, opt_packet)) => {
-                            // eprintln!("parse_block ok, index {}", pcap_index);
-                            // println!("parsed packet: {:?}", opt_packet);
-
-                            if let Some(packet) = opt_packet {
-                                debug!("**************************************************************");
-                                let ts = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
-                                if ctx.pcap_index == 1 {
-                                    ctx.first_packet_ts = ts;
-                                }
-                                debug!(
-                                    "    time  : {} / {}",
-                                    packet.header.ts_sec, packet.header.ts_usec
-                                );
-                                ctx.rel_ts = ts - ctx.first_packet_ts; // an underflow is weird but not critical
-                                debug!("    reltime  : {}.{}", ctx.rel_ts.secs, ctx.rel_ts.micros);
-                                self.dispatch(&local_jobs, packet, &ctx)?;
-                                ctx.pcap_index += 1;
+            ctx.pcap_index += 1;
+            match reader.next() {
+                Ok((offset, block)) => {
+                    let packet = match block {
+                        PcapBlockOwned::NG(Block::SectionHeader(ref _shb)) => {
+                            debug!("pcap-ng: new section");
+                            ctx.interfaces = Vec::new();
+                            reader.consume_noshift(offset);
+                            continue;
+                        },
+                        PcapBlockOwned::NG(Block::InterfaceDescription(ref idb)) => {
+                            let if_info = pcapng_build_interface(idb);
+                            ctx.interfaces.push(if_info);
+                            reader.consume_noshift(offset);
+                            continue;
+                        },
+                        PcapBlockOwned::NG(Block::EnhancedPacket(ref epb)) => {
+                            assert!((epb.if_id as usize) < ctx.interfaces.len());
+                            let if_info = &ctx.interfaces[epb.if_id as usize];
+                            let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(epb.ts_high, epb.ts_low, 
+                                                                                if_info.if_tsoffset, if_info.if_tsresol);
+                            let unit = unit as u32; // XXX lossy cast
+                            let ts_usec = if unit != MICROS_PER_SEC {
+                                ts_frac/ ((unit / MICROS_PER_SEC) as u32) } else { ts_frac };
+                            let ts = Duration::new(ts_sec, ts_usec);
+                            let data = pcap_parser::data::get_packetdata(epb.data, if_info.link_type, epb.caplen as usize)
+                                .ok_or(Error::Generic("Parsing PacketData failed (EnhancedPacket)"))?;
+                            Packet {
+                                interface: epb.if_id,
+                                ts,
+                                data,
+                                origlen: epb.origlen,
+                                caplen: epb.caplen,
+                                pcap_index: ctx.pcap_index,
                             }
-
-                            b.data().offset(remaining)
+                        },
+                        PcapBlockOwned::NG(Block::SimplePacket(ref spb)) => {
+                            assert!(ctx.interfaces.len() > 0);
+                            let if_info = &ctx.interfaces[0];
+                            let blen = (spb.block_len1 - 16) as usize;
+                            let data = pcap_parser::data::get_packetdata(spb.data, if_info.link_type, blen)
+                                .ok_or(Error::Generic("Parsing PacketData failed (SimplePacket)"))?;
+                            Packet {
+                                interface: 0,
+                                ts: Duration::default(),
+                                data,
+                                origlen: spb.origlen,
+                                caplen: if_info.snaplen,
+                                pcap_index: ctx.pcap_index,
+                            }
+                        },
+                        PcapBlockOwned::LegacyHeader(ref hdr) => {
+                            let if_info = InterfaceInfo{
+                                link_type: hdr.network,
+                                if_tsoffset: 0,
+                                if_tsresol: 6,
+                                snaplen: hdr.snaplen,
+                            };
+                            ctx.interfaces.push(if_info);
+                            debug!("Legacy pcap,  link type: {}", hdr.network);
+                            reader.consume_noshift(offset);
+                            continue;
+                        },
+                        PcapBlockOwned::Legacy(ref b) => {
+                            assert!(ctx.interfaces.len() > 0);
+                            let if_info = &ctx.interfaces[0];
+                            let blen = b.caplen as usize;
+                            let data = pcap_parser::data::get_packetdata(b.data, if_info.link_type, blen)
+                                .ok_or(Error::Generic("Parsing PacketData failed (Legacy Packet)"))?;
+                            Packet {
+                                interface: 0,
+                                ts: Duration::new(b.ts_sec, b.ts_usec),
+                                data,
+                                origlen: b.origlen,
+                                caplen: b.caplen,
+                                pcap_index: ctx.pcap_index,
+                            }
+                        },
+                        PcapBlockOwned::NG(Block::InterfaceStatistics(_)) |
+                        PcapBlockOwned::NG(Block::NameResolution(_)) => {
+                            // XXX just ignore block
+                            reader.consume_noshift(offset);
+                            continue;
+                        },
+                        _ => {
+                            warn!("unsupported block");
+                            reader.consume_noshift(offset);
+                            continue;
                         }
-                        Err(nom::Err::Incomplete(n)) => {
-                            // println!("not enough data, needs a refill: {:?}", n);
-
-                            needed = Some(n);
-                            break;
-                        }
-                        Err(nom::Err::Failure(e)) => {
-                            error!("pcap parse failure: {:?}", e);
-                            return Err(Error::Generic("parse error"));
-                        }
-                        Err(nom::Err::Error(_e)) => {
-                            // panic!("parse error: {:?}", e);
-                            error!("Error while parsing pcap data");
-                            debug!("{:?}", _e);
-                            debug!("{}", (&b.data()[..min(b.available_data(), 128)]).to_hex(16));
-                            return Err(Error::Generic("parse error"));
-                        }
+                    };
+                    debug!("**************************************************************");
+                    // build ts
+                    if ctx.first_packet_ts.is_null() {
+                        ctx.first_packet_ts = packet.ts;
                     }
-                };
-                // println!("consuming {} of {} bytes", length, b.available_data());
-                b.consume_noshift(length);
-                consumed += length;
-            }
-
-            if let Some(Needed::Size(sz)) = needed {
-                if sz > b.capacity() {
-                    // println!("growing buffer capacity from {} bytes to {} bytes", capacity, capacity*2);
-                    capacity = (capacity * 3) / 2;
-                    if capacity > self.buffer_max_size {
-                        warn!(
-                            "requesting capacity {} over buffer_max_size {}",
-                            capacity, self.buffer_max_size
-                        );
-                        return Err(Error::Generic("buffer size too small"));
+                    debug!("    time  : {} / {:06}", packet.ts.secs, packet.ts.micros);
+                    ctx.rel_ts = packet.ts - ctx.first_packet_ts; // an underflow is weird but not critical
+                    debug!("    reltime  : {}.{:06}", ctx.rel_ts.secs, ctx.rel_ts.micros);
+                    // call engine
+                    // XXX remove packet from lifetime management, it must be made 'static
+                    // to be sent to threads
+                    // "by doing this, I solely declare that I am responsible of the lifetime
+                    // and safety of packet"
+                    let packet : Packet<'static> = unsafe {
+                        ::std::mem::transmute(packet)
+                    };
+                    self.dispatch(&local_jobs, packet, &ctx)?;
+                    reader.consume_noshift(offset);
+                    continue;
+                },
+                Err(ErrorKind::Eof) => break,
+                Err(ErrorKind::Complete) => {
+                    if last_incomplete_index == ctx.pcap_index {
+                        warn!("Could not read complete data block.");
+                        warn!("Hint: the reader buffer size may be too small, or the input file nay be truncated.");
+                        break;
                     }
-                    debug!("grow (refill?)");
-                    b.grow(capacity);
-                } else {
-                    // eprintln!("incomplete, but less missing bytes {} than buffer size {} consumed {}", sz, capacity, consumed);
-                    // XXX if last_incomplete_offset == consumed {
-                    // XXX     warn!("seems file is truncated, exiting (idx={})", ctx.pcap_index);
-                    // XXX     break;
-                    // XXX }
-                    last_incomplete_offset = consumed;
+                    last_incomplete_index = ctx.pcap_index;
                     // wait for current threads to finish
-                    // eprintln!("wait for threads (pcap_index: {})", ctx.pcap_index);
+                    debug!("wait for threads (pcap_index: {})", ctx.pcap_index);
                     for (i, j) in local_jobs.iter().enumerate() {
                         debug!("waiting for job {}", i);
                         while !j.is_empty() {
@@ -241,20 +255,12 @@ impl ThreadedPcapEngine {
                             ::std::thread::sleep(::std::time::Duration::from_millis(1));
                         }
                     }
-                    debug!("refill");
                     // refill the buffer
-                    let sz = f.read(b.space())?;
-                    b.fill(sz);
-                    // println!("refill: {} more bytes, available data: {} bytes, consumed: {} bytes",
-                    //          sz, b.available_data(), consumed);
-
-                    // if there's no more available data in the buffer after a write, that means we reached
-                    // the end of the file
-                    if b.available_data() == 0 {
-                        // println!("no more data to read or parse, stopping the reading loop");
-                        break;
-                    }
-                }
+                    debug!("refill");
+                    reader.refill()?;
+                    continue;
+                },
+                Err(e) => panic!("error while reading: {:?}", e),
             }
         }
 
@@ -276,7 +282,7 @@ impl ThreadedPcapEngine {
     fn dispatch<'a>(
         &self,
         jobs: &Vec<Arc<SegQueue<Job<'a>>>>,
-        packet: pcap_parser::Packet<'static>,
+        packet: Packet<'static>,
         ctx: &ParseContext,
     ) -> Result<(), Error> {
         // get layer type and data
@@ -291,10 +297,9 @@ impl ThreadedPcapEngine {
             }
         };
         debug!("linktype: {}", link_type);
-        let (layer_type, data) = get_packet_data(link_type, &packet)?;
-        match layer_type {
-            LayerType::L2 => self.handle_l2(jobs, packet, &ctx),
-            LayerType::L3(ethertype) => {
+        match packet.data {
+            PacketData::L2(data) => self.handle_l2(jobs, packet, &ctx, data),
+            PacketData::L3(ethertype, data) => {
                 extern_dispatch_l3(
                     &jobs,
                     packet,
@@ -302,20 +307,23 @@ impl ThreadedPcapEngine {
                     data,
                     EtherType(ethertype),
                 )
-            }
+            },
+            PacketData::L4(_,_) => unimplemented!(), // XXX
+            PacketData::Unsupported(_) => unimplemented!( ), // XXX
         }
     }
 
     fn handle_l2<'a>(
         &self,
         jobs: &Vec<Arc<SegQueue<Job<'a>>>>,
-        packet: pcap_parser::Packet<'static>,
+        packet: Packet<'static>,
         ctx: &ParseContext,
+        data: &'static [u8],
     ) -> Result<(), Error> {
         debug!("handle_l2 (idx={})", ctx.pcap_index);
         // resize slice to remove padding
-        let datalen = min(packet.header.caplen as usize, packet.data.len());
-        let data = &packet.data[..datalen];
+        let datalen = min(packet.caplen as usize, data.len());
+        let data = &data[..datalen];
 
         // let start = ::std::time::Instant::now();
         self.registry.run_plugins_l2(&packet, &data);
@@ -360,7 +368,7 @@ impl ThreadedPcapEngine {
 
 fn extern_dispatch_l3<'a>(
     jobs: &Vec<Arc<SegQueue<Job<'a>>>>,
-    packet: pcap_parser::Packet<'a>,
+    packet: Packet<'a>,
     ctx: &ParseContext,
     data: &'a [u8],
     ethertype: EtherType,
@@ -417,92 +425,4 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
         }
         _ => 0,
     }
-}
-
-fn pcap_get_raw_data<'a, 'ctx>(
-    i: &'a [u8],
-    _ctx: &'ctx mut ParseContext,
-) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
-    pcap::parse_pcap_frame(i).map(|(rem, p)| (rem, Some(p)))
-}
-
-fn pcap_get_raw_data_be<'a, 'ctx>(
-    i: &'a [u8],
-    _ctx: &'ctx mut ParseContext,
-) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
-    pcap::parse_pcap_frame_be(i).map(|(rem, p)| (rem, Some(p)))
-}
-
-fn pcapng_get_raw_cont<'a, 'ctx>(
-    i: &'a [u8],
-    block: Block<'a>,
-    ctx: &'ctx mut ParseContext,
-) -> (&'a [u8], Option<pcap_parser::Packet<'a>>) {
-    match block {
-        Block::SectionHeader(ref _hdr) => {
-            warn!("new section header block");
-            // XXX we may have to change endianess
-            // XXX invalidate all interfaces
-            // (i, None)
-            unimplemented!();
-        }
-        Block::InterfaceDescription(ref ifdesc) => {
-            let if_info = pcapng_build_interface(ifdesc);
-            ctx.interfaces.push(if_info);
-            (i, None)
-        }
-        Block::EnhancedPacket(ref p) => {
-            let if_info = match ctx.interfaces.get(p.if_id as usize) {
-                Some(if_info) => if_info,
-                None => {
-                    warn!("Could not get interface for EnhancedPacket");
-                    return (i, None);
-                }
-            };
-            match pcapng_build_packet(if_info, block) {
-                Some(packet) => (i, Some(packet)),
-                None => {
-                    warn!("could not convert block to packet (idx={})", ctx.pcap_index);
-                    (i, None)
-                }
-            }
-        }
-        Block::SimplePacket(_) => {
-            let if_info = match ctx.interfaces.first() {
-                Some(if_info) => if_info,
-                None => {
-                    warn!("Could not get interface for SimplePacket");
-                    return (i, None);
-                }
-            };
-            match pcapng_build_packet(if_info, block) {
-                Some(packet) => (i, Some(packet)),
-                None => {
-                    warn!("could not convert block to packet (idx={})", ctx.pcap_index);
-                    (i, None)
-                }
-            }
-        }
-        // ignore some block types
-        Block::InterfaceStatistics(_) => (i, None),
-        // warn if parser does not recognize block
-        Block::Unknown(ref block) => {
-            warn!("pcap-ng: unknown block (type = 0x{:x})", block.block_type);
-            (i, None)
-        }
-    }
-}
-
-fn pcapng_get_raw_data<'a, 'ctx>(
-    i: &'a [u8],
-    ctx: &'ctx mut ParseContext,
-) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
-    pcapng::parse_block(i).map(|(rem, block)| pcapng_get_raw_cont(rem, block, ctx))
-}
-
-fn pcapng_get_raw_data_be<'a, 'ctx>(
-    i: &'a [u8],
-    ctx: &'ctx mut ParseContext,
-) -> IResult<&'a [u8], Option<pcap_parser::Packet<'a>>> {
-    pcapng::parse_block_be(i).map(|(rem, block)| pcapng_get_raw_cont(rem, block, ctx))
 }

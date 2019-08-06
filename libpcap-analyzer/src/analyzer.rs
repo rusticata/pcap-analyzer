@@ -1,4 +1,11 @@
 use crate::plugin_registry::PluginRegistry;
+use crate::ip6_defrag::IPv6FragmentPacket;
+use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
+use crate::packet_info::PacketInfo;
+use crate::plugin::*;
+use libpcap_tools::*;
+
+use pcap_parser::data::PacketData;
 use rand::prelude::*;
 use rand_chacha::*;
 use std::cell::RefCell;
@@ -17,16 +24,7 @@ use pnet_packet::ipv6::Ipv6Packet;
 use pnet_packet::tcp::TcpPacket;
 use pnet_packet::udp::UdpPacket;
 use pnet_packet::vlan::VlanPacket;
-use pnet_packet::Packet;
-
-use libpcap_tools::*;
-
-use crate::ip6_defrag::IPv6FragmentPacket;
-use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
-use crate::packet_data::PacketData;
-use libpcap_tools::{FiveTuple, Flow, FlowID, ThreeTuple};
-
-use crate::plugin::*;
+use pnet_packet::Packet as PnetPacket;
 
 thread_local!(pub(crate) static TAD : RefCell<ThreadAnalyzerData> = RefCell::new(ThreadAnalyzerData::new()));
 
@@ -68,12 +66,12 @@ impl Analyzer {
         }
     }
 
-    fn handle_l2(&mut self, packet: &pcap_parser::Packet, ctx: &ParseContext) -> Result<(), Error> {
+    fn handle_l2(&mut self, packet: &Packet, ctx: &ParseContext, data: &[u8]) -> Result<(), Error> {
         debug!("handle_l2 (idx={})", ctx.pcap_index);
 
         // resize slice to remove padding
-        let datalen = min(packet.header.caplen as usize, packet.data.len());
-        let data = &packet.data[..datalen];
+        let datalen = min(packet.caplen as usize, data.len());
+        let data = &data[..datalen];
 
         // let start = ::std::time::Instant::now();
         self.registry.run_plugins_l2(&packet, &data);
@@ -115,7 +113,7 @@ impl Analyzer {
 }
 
 pub(crate) fn handle_l3(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     ethertype: EtherType,
@@ -139,7 +137,7 @@ pub(crate) fn handle_l3(
 }
 
 fn handle_l3_ipv4(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     ethertype: EtherType,
@@ -229,7 +227,7 @@ fn handle_l3_ipv4(
 }
 
 fn handle_l3_ipv6(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     ethertype: EtherType,
@@ -259,7 +257,7 @@ fn handle_l3_ipv6(
 }
 
 fn handle_l3_vlan_801q(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     _ethertype: EtherType,
@@ -275,7 +273,7 @@ fn handle_l3_vlan_801q(
 
 // Called when L3 layer is unknown
 fn handle_l3_generic(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     ethertype: EtherType,
@@ -295,7 +293,7 @@ fn handle_l3_generic(
 }
 
 fn handle_l3_common(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
@@ -321,7 +319,7 @@ fn handle_l3_common(
 }
 
 fn handle_l4_tcp(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
@@ -342,7 +340,7 @@ fn handle_l4_tcp(
 }
 
 fn handle_l4_udp(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
@@ -362,7 +360,7 @@ fn handle_l4_udp(
 }
 
 fn handle_l4_icmp(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
@@ -386,7 +384,7 @@ fn handle_l4_icmp(
 }
 
 fn handle_l4_icmpv6(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
@@ -410,7 +408,7 @@ fn handle_l4_icmpv6(
 }
 
 fn handle_l4_gre(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     _l3_info: &L3Info,
@@ -429,7 +427,7 @@ fn handle_l4_gre(
 }
 
 fn handle_l4_ipv6frag(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
@@ -492,7 +490,7 @@ fn handle_l4_ipv6frag(
 }
 
 fn handle_l4_generic(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
@@ -513,7 +511,7 @@ fn handle_l4_generic(
 }
 
 fn handle_l4_common(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     ctx: &ParseContext,
     l4_data: &[u8],
     l3_info: &L3Info,
@@ -524,7 +522,7 @@ fn handle_l4_common(
 ) -> Result<(), Error> {
     let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
     debug!("5t: {}", five_tuple);
-    let now = Duration::new(packet.header.ts_sec, packet.header.ts_usec);
+    let now = packet.ts.clone();
 
     // lookup flow
     // let flow_id = match a.lookup_flow(&five_tuple) {
@@ -533,7 +531,7 @@ fn handle_l4_common(
         let flow_id = match f.lookup_flow(&five_tuple) {
             Some(id) => id,
             None => {
-                let flow = Flow::new(&five_tuple, packet.header.ts_sec, packet.header.ts_usec);
+                let flow = Flow::new(&five_tuple, packet.ts.secs, packet.ts.micros);
                 gen_event_new_flow(&flow, registry);
                 f.insert_flow(five_tuple.clone(), flow)
             }
@@ -549,7 +547,7 @@ fn handle_l4_common(
 
         let to_server = flow.five_tuple == five_tuple;
 
-        let pdata = PacketData {
+        let pinfo = PacketInfo {
             five_tuple: &five_tuple,
             to_server,
             l3_type: l3_info.l3_proto,
@@ -560,7 +558,7 @@ fn handle_l4_common(
             pcap_index: ctx.pcap_index,
         };
         // let start = ::std::time::Instant::now();
-        registry.run_plugins_transport(pdata.l4_type, packet, &pdata);
+        registry.run_plugins_transport(pinfo.l4_type, packet, &pinfo);
         // let elapsed = start.elapsed();
         // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
@@ -584,7 +582,7 @@ fn handle_l4_common(
 
 // Run all Layer 3 plugins
 pub(crate) fn run_l3_plugins(
-    packet: &pcap_parser::Packet,
+    packet: &Packet,
     data: &[u8],
     ethertype: u16,
     three_tuple: &ThreeTuple,
@@ -618,24 +616,12 @@ impl PcapAnalyzer for Analyzer {
     /// call the matching handling function (some pcap blocks encode ethernet, or IPv4 etc.)
     fn handle_packet(
         &mut self,
-        packet: &pcap_parser::Packet,
+        packet: &Packet,
         ctx: &ParseContext,
     ) -> Result<(), Error> {
-        let link_type = match ctx.interfaces.get(packet.interface as usize) {
-            Some(if_info) => if_info.link_type,
-            None => {
-                warn!(
-                    "Could not get link_type (missing interface info) for packet idx={}",
-                    ctx.pcap_index
-                );
-                return Err(Error::Generic("Missing interface info"));
-            }
-        };
-        debug!("linktype: {}", link_type);
-        let (layer_type, data) = get_packet_data(link_type, &packet)?;
-        match layer_type {
-            LayerType::L2 => self.handle_l2(packet, &ctx),
-            LayerType::L3(ethertype) => {
+        match packet.data {
+            PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
+            PacketData::L3(ethertype, data) => {
                 handle_l3(
                     packet,
                     &ctx,
@@ -644,6 +630,8 @@ impl PcapAnalyzer for Analyzer {
                     &self.registry,
                 )
             }
+            PacketData::L4(_,_) => unimplemented!(), // XXX
+            PacketData::Unsupported(_) => unimplemented!( ), // XXX
         }
     }
 

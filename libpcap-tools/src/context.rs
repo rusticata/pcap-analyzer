@@ -24,6 +24,8 @@ pub struct InterfaceInfo {
     pub if_tsresol: u8,
     /// Time offset
     pub if_tsoffset: u64,
+    /// Maximum number of octets captured from each packet.
+    pub snaplen: u32,
 }
 
 impl Default for InterfaceInfo {
@@ -32,11 +34,12 @@ impl Default for InterfaceInfo {
             link_type: Linktype(0),
             if_tsresol: 0,
             if_tsoffset: 0,
+            snaplen: 0,
         }
     }
 }
 pub fn pcapng_build_interface<'a>(idb: &'a InterfaceDescriptionBlock<'a>) -> InterfaceInfo {
-    let link_type = Linktype(idb.linktype as i32);
+    let link_type = idb.linktype;
     // extract if_tsoffset and if_tsresol
     let mut if_tsresol: u8 = 6;
     let mut if_tsoffset: u64 = 0;
@@ -59,12 +62,13 @@ pub fn pcapng_build_interface<'a>(idb: &'a InterfaceDescriptionBlock<'a>) -> Int
         link_type,
         if_tsresol,
         if_tsoffset,
+        snaplen: idb.snaplen,
     }
 }
 
-pub fn pcapng_build_packet<'a>(
-    if_info: &InterfaceInfo,
-    block: Block<'a>,
-) -> Option<Packet<'a>> {
-    pcapng::packet_of_block(block, if_info.if_tsoffset, if_info.if_tsresol)
-}
+// pub fn pcapng_build_packet<'a>(
+//     if_info: &InterfaceInfo,
+//     block: Block<'a>,
+// ) -> Option<Packet<'a>> {
+//     pcapng::packet_of_block(block, if_info.if_tsoffset, if_info.if_tsresol)
+// }

@@ -1,6 +1,6 @@
 use libpcap_tools::{FiveTuple, Flow};
 
-pub struct PacketData<'l3, 'l4, 't, 'f> {
+pub struct PacketInfo<'l3, 'l4, 't, 'f> {
     /// The five-tuple for *this packet*
     pub five_tuple: &'t FiveTuple,
     /// true if this packet is in same direction as the first packet

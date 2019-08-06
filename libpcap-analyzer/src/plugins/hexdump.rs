@@ -1,12 +1,11 @@
 //! Plugin to debug packets/flows/layers by displaying hex data
 
-use pcap_parser::Packet;
 use super::Plugin;
 use crate::default_plugin_builder;
-use crate::packet_data::PacketData;
+use crate::packet_info::PacketInfo;
 use crate::plugin::{PLUGIN_L3, PLUGIN_L4};
 use nom::HexDisplay;
-use libpcap_tools::ThreeTuple;
+use libpcap_tools::{Packet, ThreeTuple};
 
 #[derive(Default)]
 pub struct HexDump;
@@ -28,7 +27,7 @@ impl Plugin for HexDump {
         debug!("    l3_data:\n{}", data.to_hex(16));
     }
 
-    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketData) {
+    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketInfo) {
         let five_tuple = &pdata.five_tuple;
         info!("HexDump::handle_l4");
         debug!("    5t: {}", five_tuple);

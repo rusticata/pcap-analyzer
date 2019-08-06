@@ -1,8 +1,7 @@
-use crate::packet_data::PacketData;
+use crate::packet_info::PacketInfo;
 use crate::plugin::PLUGIN_L4;
 use crate::{default_plugin_builder, Plugin};
-use libpcap_tools::FiveTuple;
-use pcap_parser::Packet;
+use libpcap_tools::{FiveTuple, Packet};
 use rusticata::*;
 use std::collections::HashMap;
 use tls_parser::TlsVersion;
@@ -30,7 +29,7 @@ impl<'a> Plugin for TlsStats<'a> {
     fn plugin_type(&self) -> u16 {
         PLUGIN_L4
     }
-    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketData) {
+    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketInfo) {
         let data = match pdata.l4_payload {
             Some(data) => data,
             None => return,
@@ -139,7 +138,7 @@ impl<'a> Stats<'a> {
         }
     }
 
-    fn update(&mut self, data: &[u8], pdata: &PacketData) {
+    fn update(&mut self, data: &[u8], pdata: &PacketInfo) {
         if self.bypass {
             return;
         }

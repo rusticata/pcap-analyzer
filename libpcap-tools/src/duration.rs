@@ -10,12 +10,17 @@ pub struct Duration {
     pub micros: u32,
 }
 
-const MICROS_PER_SEC: u32 = 1_000_000;
+pub const MICROS_PER_SEC: u32 = 1_000_000;
 
 impl Duration {
     /// Build Duration from secs and micros
     pub fn new(secs:u32, micros:u32) -> Duration {
         Duration{ secs, micros }
+    }
+    /// Test if Duration object is null
+    #[inline]
+    pub fn is_null(&self) -> bool {
+        self.secs == 0 && self.micros == 0
     }
 }
 

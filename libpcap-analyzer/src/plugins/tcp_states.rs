@@ -1,11 +1,10 @@
 use libpcap_tools::Config;
 use crate::plugin_registry::PluginRegistry;
-use pcap_parser::Packet;
 
 use super::Plugin;
-use crate::packet_data::PacketData;
+use crate::packet_info::PacketInfo;
 use crate::plugin::{PLUGIN_FLOW_DEL, PLUGIN_L4, TRANSPORT_TCP};
-use libpcap_tools::{FlowID,Flow};
+use libpcap_tools::{FlowID, Flow, Packet};
 
 use std::collections::HashMap;
 
@@ -66,7 +65,7 @@ impl Plugin for TcpStates {
     fn name(&self) -> &'static str { "TcpStates" }
     fn plugin_type(&self) -> u16 { PLUGIN_FLOW_DEL|PLUGIN_L4 }
 
-    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketData) {
+    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketInfo) {
         debug!("proto {}", pdata.five_tuple.proto);
 
         if pdata.l4_type != 6 { return; }

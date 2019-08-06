@@ -1,7 +1,6 @@
-use crate::packet_data::PacketData;
+use crate::packet_info::PacketInfo;
 use crate::plugin::*;
-use libpcap_tools::ThreeTuple;
-use pcap_parser::Packet;
+use libpcap_tools::{Packet, ThreeTuple};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -132,13 +131,13 @@ impl PluginRegistry {
         }
     }
 
-    pub fn run_plugins_transport(&self, proto: u8, packet: &Packet, pdata: &PacketData) {
+    pub fn run_plugins_transport(&self, proto: u8, packet: &Packet, pinfo: &PacketInfo) {
         let l = &self.plugins_transport[proto as usize];
         for p in &*l {
-            let _ = p.lock().unwrap().handle_l4(&packet, &pdata);
+            let _ = p.lock().unwrap().handle_l4(&packet, &pinfo);
         }
         for p in &self.plugins_transport_all {
-            let _ = p.lock().unwrap().handle_l4(&packet, &pdata);
+            let _ = p.lock().unwrap().handle_l4(&packet, &pinfo);
         }
     }
 

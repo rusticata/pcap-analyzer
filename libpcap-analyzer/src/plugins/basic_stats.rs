@@ -1,12 +1,10 @@
-use pcap_parser::Packet;
-
 use std::collections::HashMap;
 
 use super::Plugin;
 use crate::default_plugin_builder;
-use crate::packet_data::PacketData;
+use crate::packet_info::PacketInfo;
 use crate::plugin::{PLUGIN_L3, PLUGIN_L4};
-use libpcap_tools::{ThreeTuple, FiveTuple};
+use libpcap_tools::{FiveTuple, Packet, ThreeTuple};
 
 #[derive(Default)]
 pub struct Count {
@@ -38,7 +36,7 @@ impl Plugin for BasicStats {
         self.total_packets += 1;
     }
 
-    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketData) {
+    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketInfo) {
         let entry = self.l4_conversations.entry(pdata.five_tuple.clone()).or_insert_with(|| Count::default());
         entry.num_bytes += pdata.l4_payload.map(|l4| l4.len()).unwrap_or(0);
         entry.num_packets += 1;

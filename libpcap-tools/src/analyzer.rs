@@ -1,5 +1,6 @@
 use crate::context::ParseContext;
 use crate::error::Error;
+use crate::packet::Packet;
 
 /// Common trait for pcap/pcap-ng analyzers
 pub trait PcapAnalyzer {
@@ -8,10 +9,10 @@ pub trait PcapAnalyzer {
         Ok(())
     }
 
-    /// Callback function for every pcap Packet read
+    /// Callback function for every pcap Packet containing data
     fn handle_packet(
         &mut self,
-        packet: &pcap_parser::Packet,
+        packet: &Packet,
         ctx: &ParseContext,
     ) -> Result<(), Error>;
 

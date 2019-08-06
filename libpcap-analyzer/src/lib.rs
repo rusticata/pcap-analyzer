@@ -5,7 +5,7 @@ extern crate nom;
 extern crate pcap_parser;
 extern crate rand;
 
-mod packet_data;
+mod packet_info;
 
 mod plugin;
 #[macro_use] mod plugin_registry;

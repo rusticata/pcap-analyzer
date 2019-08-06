@@ -1,6 +1,7 @@
-use libpcap_tools::{get_packet_data, Error, LayerType, ParseContext, PcapAnalyzer};
+use libpcap_tools::{Error, Packet, ParseContext, PcapAnalyzer};
 
-use pcap_parser::Packet;
+use pcap_parser::data::*;
+use pcap_parser::{LegacyPcapBlock, Linktype};
 use std::io;
 use std::io::Write;
 
@@ -49,18 +50,19 @@ where
                 return Err(Error::Generic("Missing interface info"));
             }
         };
-        let (layer_type, data) = get_packet_data(link_type, &packet)?;
-        let l3_data = match layer_type {
-            LayerType::L2 => {
+        let l3_data = match packet.data {
+            PacketData::L2(data) => {
                 if data.len() < 14 {
                     return Err(Error::Generic("L2 data too small for ethernet"));
                 }
                 &data[14..]
             }
-            LayerType::L3(_) => data,
+            PacketData::L3(_, data) => data,
+            PacketData::L4(_, _) => unimplemented!(),
+            PacketData::Unsupported(_) => unimplemented!(),
         };
         let data = {
-            if data.len() > self.snaplen {
+            if l3_data.len() > self.snaplen {
                 eprintln!(
                     "truncating index {} to {} bytes",
                     ctx.pcap_index, self.snaplen
@@ -92,8 +94,8 @@ where
 fn pcap_write_header<W: Write>(to: &mut W, snaplen: usize) -> Result<usize, io::Error> {
     let mut hdr = pcap_parser::PcapHeader::new();
     hdr.snaplen = snaplen as u32;
-    hdr.network = 228; // DATALINK_RAWIPV4
-    let s = hdr.to_string();
+    hdr.network = Linktype::IPV4;
+    let s = hdr.to_vec();
     to.write(&s)?;
     Ok(s.len())
 }
@@ -103,16 +105,17 @@ fn pcap_write_packet<W: Write>(
     packet: &Packet,
     data: &[u8],
 ) -> Result<usize, io::Error> {
-    let rec_hdr = pcap_parser::PacketHeader {
-        ts_sec: packet.header.ts_sec as u32,
-        ts_usec: packet.header.ts_usec as u32,
-        caplen: data.len() as u32, // packet.header.caplen,
-        len: data.len() as u32,    // packet.header.len,
+    let record = LegacyPcapBlock {
+        ts_sec: packet.ts.secs as u32,
+        ts_usec: packet.ts.micros as u32,
+        caplen: data.len() as u32,  // packet.header.caplen,
+        origlen: data.len() as u32, // packet.header.len,
+        data,
     };
     // debug!("rec_hdr: {:?}", rec_hdr);
     // debug!("data (len={}): {}", data.len(), data.to_hex(16));
-    let s = rec_hdr.to_string();
-    let sz = to.write(&s)? + to.write(&data)?;
+    let s = record.to_vec();
+    let sz = to.write(&s)?;
 
     Ok(sz)
 }
