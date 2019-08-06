@@ -17,13 +17,12 @@ plugin_tls_stats = ["rusticata","tls-parser"]
 
 [dependencies]
 base64 = { version="0.10", optional=true }
-circular = "0.3.0"
 crossbeam-queue = "0.1.2"
 env_logger = "0.6"
 lazy_static = "1.2"
 libpcap-tools = { path="../libpcap-tools" }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
-nom = "4.2"
+nom = "5.0"
 num_cpus = "1.10"
 pnet_base = "0.22.0"
 pnet_macros_support = "0.22.0"
@@ -39,5 +38,5 @@ git = "https://github.com/rusticata/rusticata.git"
 optional = true
 
 [dependencies.pcap-parser]
-version = "0.6.1"
+version = "0.7.0"
 features = ["data"]

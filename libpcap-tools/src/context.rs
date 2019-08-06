@@ -1,6 +1,6 @@
 use crate::duration::Duration;
-use nom::le_u64;
 use pcap_parser::*;
+use std::convert::TryFrom;
 
 /// pcap parsing context
 #[derive(Clone, Default)]
@@ -52,7 +52,8 @@ pub fn pcapng_build_interface<'a>(idb: &'a InterfaceDescriptionBlock<'a>) -> Int
             }
             OptionCode::IfTsoffset => {
                 if opt.value.len() >= 8 {
-                    if_tsoffset = le_u64(opt.value).unwrap_or((&[],0)).1 /* LittleEndian::read_u64(opt.value) */;
+                    let int_bytes = <[u8; 8]>::try_from(opt.value).expect("Convert bytes to u64");
+                    if_tsoffset = u64::from_le_bytes(int_bytes) /* LittleEndian::read_u64(opt.value) */;
                 }
             }
             _ => (),

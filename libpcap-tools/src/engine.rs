@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::packet::Packet;
-use nom::ErrorKind;
+use nom::error::ErrorKind;
 use pcap_parser::*;
 use std::io::Read;
 
@@ -166,8 +166,8 @@ impl PcapEngine {
                     reader.consume(offset);
                     continue;
                 },
-                Err(ErrorKind::Eof) => break,
-                Err(ErrorKind::Complete) => {
+                Err(PcapError::Eof) => break,
+                Err(PcapError::NomError(ErrorKind::Complete)) => {
                     if last_incomplete_index == ctx.pcap_index {
                         warn!("Could not read complete data block.");
                         warn!("Hint: the reader buffer size may be too small, or the input file nay be truncated.");

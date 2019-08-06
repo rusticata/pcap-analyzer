@@ -1,11 +1,14 @@
+use nom::error::ErrorKind;
+use pcap_parser::PcapError;
 use std::convert::From;
 use std::io;
 
 #[derive(Debug)]
 pub enum Error {
     Generic(&'static str),
-    Nom(nom::ErrorKind),
+    Nom(ErrorKind),
     IoError(io::Error),
+    Pcap(PcapError),
 }
 
 impl From<&'static str> for Error {
@@ -20,8 +23,14 @@ impl From<io::Error> for Error {
     }
 }
 
-impl From<nom::ErrorKind> for Error {
-    fn from(e: nom::ErrorKind) -> Self {
+impl From<ErrorKind> for Error {
+    fn from(e: ErrorKind) -> Self {
         Error::Nom(e)
+    }
+}
+
+impl From<PcapError> for Error {
+    fn from(e: PcapError) -> Self {
+        Error::Pcap(e)
     }
 }

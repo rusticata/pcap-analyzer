@@ -9,7 +9,7 @@ edition = "2018"
 libpcap-tools = { path="../libpcap-tools" }
 log = "0.4"
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
-pcap-parser = { version = "0.6.1", features = ["data"] }
+pcap-parser = { version = "0.7.0", features = ["data"] }
 std-logger = "0.3"
 xz2 = "0.1"
 

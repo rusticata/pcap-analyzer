@@ -7,9 +7,9 @@ edition = "2018"
 [dependencies]
 lazy_static = "1.2"
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
-nom = "4.2"
+nom = "5.0"
 toml="0.5"
 
 [dependencies.pcap-parser]
-version = "0.6.1"
+version = "0.7.0"
 features = ["data"]
