@@ -1,6 +1,5 @@
 use crate::analyzer::*;
 use crate::plugin_registry::PluginRegistry;
-use nom::error::ErrorKind;
 use pcap_parser::*;
 use pcap_parser::data::PacketData;
 use std::cmp::min;
@@ -239,7 +238,7 @@ impl ThreadedPcapEngine {
                     continue;
                 },
                 Err(PcapError::Eof) => break,
-                Err(PcapError::NomError(ErrorKind::Complete)) => {
+                Err(PcapError::Incomplete) => {
                     if last_incomplete_index == ctx.pcap_index {
                         warn!("Could not read complete data block.");
                         warn!("Hint: the reader buffer size may be too small, or the input file nay be truncated.");
