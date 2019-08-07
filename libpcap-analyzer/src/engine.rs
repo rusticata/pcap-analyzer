@@ -421,7 +421,30 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
             }
         }
         EtherTypes::Ipv6 => {
-            unimplemented!();
+            if data.len() >= 40 {
+                let mut buf: [u8; 40] = [0; 40];
+                let sz = 32;
+                // source IP + destination IP, in network-order
+                buf[0..32].copy_from_slice(&data[8..40]);
+                // we may append source and destination ports
+                // XXX breaks fragmentation
+                // if data[6] == crate::plugin::TRANSPORT_TCP || data[6] == crate::plugin::TRANSPORT_UDP {
+                //     if data.len() >= 44 {
+                //         // source port, in network-order
+                //         buf[33] = data[40];
+                //         buf[34] = data[41];
+                //         // destination port, in network-order
+                //         buf[35] = data[42];
+                //         buf[36] = data[43];
+                //         sz += 4;
+                //     }
+                // }
+                let hash = crate::toeplitz::toeplitz_hash(crate::toeplitz::KEY, &buf[..sz]);
+                // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
+                ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
+            } else {
+                n_workers - 1
+            }
         }
         _ => 0,
     }
