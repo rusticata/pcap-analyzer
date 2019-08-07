@@ -445,48 +445,48 @@ fn handle_l4_ipv6frag(
         ip6frag.get_identification()
     );
 
-    TAD.with(|f| {
+    let defrag = TAD.with(|f| {
         let mut f = f.borrow_mut();
         // check IP fragmentation before calling handle_l4
         let frag_offset = (ip6frag.get_fragment_offset() * 8) as usize;
         let more_fragments = ip6frag.more_fragments();
-        let defrag = f.ipv6_defrag.update(
+        f.ipv6_defrag.update(
             ip6frag.get_identification().into(),
             frag_offset,
             more_fragments,
             ip6frag.payload(),
-        );
-        let data = match defrag {
-            Fragment::NoFrag(d) => d,
-            Fragment::Complete(ref v) => {
-                warn!(
-                    "IPv6Fragment defrag done, using defrag buffer len={}",
-                    v.len()
-                );
-                &v
-            }
-            Fragment::Incomplete => {
-                debug!("IPv6Fragment defragmentation incomplete");
-                return Ok(());
-            }
-            Fragment::Error => {
-                warn!("IPv6Fragment defragmentation error");
-                return Ok(());
-            }
-        };
-
-        let l4_proto = ip6frag.get_next_header();
-
-        match l4_proto {
-            IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, &l3_info, registry),
-            IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, &l3_info, registry),
-            IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, &l3_info, registry),
-            _ => {
-                warn!("IPv6Fragment: Unsupported L4 proto {}", l4_proto);
-                handle_l4_generic(packet, ctx, data, &l3_info, registry)
-            }
+        )
+    });
+    let data = match defrag {
+        Fragment::NoFrag(d) => d,
+        Fragment::Complete(ref v) => {
+            warn!(
+                "IPv6Fragment defrag done, using defrag buffer len={}",
+                v.len()
+            );
+            &v
         }
-    })
+        Fragment::Incomplete => {
+            debug!("IPv6Fragment defragmentation incomplete");
+            return Ok(());
+        }
+        Fragment::Error => {
+            warn!("IPv6Fragment defragmentation error");
+            return Ok(());
+        }
+    };
+
+    let l4_proto = ip6frag.get_next_header();
+
+    match l4_proto {
+        IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, &l3_info, registry),
+        IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, &l3_info, registry),
+        IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, &l3_info, registry),
+        _ => {
+            warn!("IPv6Fragment: Unsupported L4 proto {}", l4_proto);
+            handle_l4_generic(packet, ctx, data, &l3_info, registry)
+        }
+    }
 }
 
 fn handle_l4_generic(
@@ -526,7 +526,7 @@ fn handle_l4_common(
 
     // lookup flow
     // let flow_id = match a.lookup_flow(&five_tuple) {
-    TAD.with(|f| {
+    let flow = TAD.with(|f| {
         let mut f = f.borrow_mut();
         let flow_id = match f.lookup_flow(&five_tuple) {
             Some(id) => id,
@@ -541,43 +541,44 @@ fn handle_l4_common(
         let flow = f
             .flows
             .get_mut(&flow_id)
-            .ok_or("could not get flow from ID")?;
+            .expect("could not get flow from ID");
         flow.flow_id = flow_id;
         flow.last_seen = now;
+        flow.clone()
+    });
 
-        let to_server = flow.five_tuple == five_tuple;
+    let to_server = flow.five_tuple == five_tuple;
 
-        let pinfo = PacketInfo {
-            five_tuple: &five_tuple,
-            to_server,
-            l3_type: l3_info.l3_proto,
-            l4_data,
-            l4_type: l3_info.three_tuple.proto,
-            l4_payload,
-            flow: Some(flow),
-            pcap_index: ctx.pcap_index,
-        };
-        // let start = ::std::time::Instant::now();
-        registry.run_plugins_transport(pinfo.l4_type, packet, &pinfo);
-        // let elapsed = start.elapsed();
-        // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
+    let pinfo = PacketInfo {
+        five_tuple: &five_tuple,
+        to_server,
+        l3_type: l3_info.l3_proto,
+        l4_data,
+        l4_type: l3_info.three_tuple.proto,
+        l4_payload,
+        flow: Some(&flow),
+        pcap_index: ctx.pcap_index,
+    };
+    // let start = ::std::time::Instant::now();
+    registry.run_plugins_transport(pinfo.l4_type, packet, &pinfo);
+    // let elapsed = start.elapsed();
+    // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
-        // XXX do other stuff
+    // XXX do other stuff
 
-        // XXX check session expiration
-        // const FLOW_EXPIRATION: u32 = 100;
-        // for (flow_id, flow) in self.flows.iter() {
-        //     if (now - flow.last_seen).secs > FLOW_EXPIRATION {
-        //         warn!(
-        //             "Flow {} candidate for expiration (delay: {} secs)",
-        //             flow_id,
-        //             (now - flow.last_seen).secs
-        //         );
-        //     }
-        // }
+    // XXX check session expiration
+    // const FLOW_EXPIRATION: u32 = 100;
+    // for (flow_id, flow) in self.flows.iter() {
+    //     if (now - flow.last_seen).secs > FLOW_EXPIRATION {
+    //         warn!(
+    //             "Flow {} candidate for expiration (delay: {} secs)",
+    //             flow_id,
+    //             (now - flow.last_seen).secs
+    //         );
+    //     }
+    // }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 // Run all Layer 3 plugins

@@ -7,7 +7,7 @@ use crate::five_tuple::FiveTuple;
 pub type FlowID = u64;
 
 /// Generic definiction of a Flow
-#[derive(PartialEq, Eq, Default, Debug)]
+#[derive(Clone, PartialEq, Eq, Default, Debug)]
 pub struct Flow {
     /// The `Flow` identifier
     pub flow_id: FlowID,
