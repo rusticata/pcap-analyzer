@@ -30,7 +30,7 @@ pnet_packet = "0.22.0"
 rand="0.7"
 rand_chacha = "0.2"
 sha1 = { version="0.6", features=["std"], optional=true }
-tls-parser = { version="0.8", optional=true }
+tls-parser = { version="0.9", optional=true }
 
 [dependencies.rusticata]
 # path = "../../rusticata"
