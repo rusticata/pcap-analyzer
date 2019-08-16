@@ -38,8 +38,8 @@ pub(crate) struct ThreadAnalyzerData {
     flows_id: HashMap<FiveTuple, FlowID>,
     trng: ChaChaRng,
 
-    ipv4_defrag: Box<DefragEngine>,
-    ipv6_defrag: Box<DefragEngine>,
+    ipv4_defrag: Box<dyn DefragEngine>,
+    ipv6_defrag: Box<dyn DefragEngine>,
 }
 
 /// Pcap/Pcap-ng analyzer

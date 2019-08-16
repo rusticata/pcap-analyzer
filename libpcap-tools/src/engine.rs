@@ -10,14 +10,14 @@ use crate::error::Error;
 
 /// pcap/pcap-ng analyzer engine
 pub struct PcapEngine {
-    a: Box<PcapAnalyzer>,
+    a: Box<dyn PcapAnalyzer>,
     buffer_max_size: usize,
     buffer_initial_capacity: usize,
 }
 
 impl PcapEngine {
     /// Build a new PcapEngine, taking ownership of the input PcapAnalyzer
-    pub fn new(a: Box<PcapAnalyzer>, config: &Config) -> Self {
+    pub fn new(a: Box<dyn PcapAnalyzer>, config: &Config) -> Self {
         let buffer_max_size = config.get_usize("buffer_max_size").unwrap_or(65536 * 8);
         let buffer_initial_capacity = config
             .get_usize("buffer_initial_capacity")

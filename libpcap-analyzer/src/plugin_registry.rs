@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Shorthand definition for wrapped plugin
-pub type SafePlugin = Arc<Mutex<Plugin>>;
+pub type SafePlugin = Arc<Mutex<dyn Plugin>>;
 /// Unique identifier for a plugin instance
 pub type PluginID = usize;
 
@@ -143,8 +143,8 @@ impl PluginRegistry {
 
     pub fn run_plugins<F, P>(&self, mut predicate: P, mut f: F)
     where
-        F: FnMut(&mut Plugin) -> (),
-        P: FnMut(&Plugin) -> bool,
+        F: FnMut(&mut dyn Plugin) -> (),
+        P: FnMut(& dyn Plugin) -> bool,
     {
         self.plugins_all.iter().for_each(|p| {
             let mut p = p.lock().unwrap();

@@ -18,7 +18,7 @@ mod tls_stats;
 
 /// Storage of plugin instances
 pub struct Plugins {
-    pub storage: HashMap<String, Box<Plugin>>,
+    pub storage: HashMap<String, Box<dyn Plugin>>,
 }
 
 /// Plugin Factory
@@ -26,7 +26,7 @@ pub struct Plugins {
 /// A plugin factory stores all registered builders, and is used to
 /// create all plugin instances on request.
 pub struct PluginsFactory {
-    list: Vec<Box<PluginBuilder>>,
+    list: Vec<Box<dyn PluginBuilder>>,
 }
 
 impl PluginsFactory {
@@ -36,7 +36,7 @@ impl PluginsFactory {
     }
 
     /// Add a new plugin builder to the factory
-    pub fn add_builder(&mut self, b: Box<PluginBuilder>) {
+    pub fn add_builder(&mut self, b: Box<dyn PluginBuilder>) {
         self.list.push(b);
     }
 
@@ -81,7 +81,7 @@ impl PluginsFactory {
 impl Default for PluginsFactory {
     /// Create a new plugin factory, with all default plugins
     fn default() -> Self {
-        let mut v: Vec<Box<PluginBuilder>> = Vec::new();
+        let mut v: Vec<Box<dyn PluginBuilder>> = Vec::new();
 
         v.push(Box::new(basic_stats::BasicStatsBuilder));
         #[cfg(feature = "plugin_community_id")]

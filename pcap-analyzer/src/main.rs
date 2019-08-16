@@ -161,18 +161,18 @@ fn main() -> io::Result<()> {
     let input_filename = matches.value_of("INPUT").unwrap();
 
     let mut input_reader = if input_filename == "-" {
-        Box::new(io::stdin()) as Box<io::Read>
+        Box::new(io::stdin())
     } else {
         let path = Path::new(&input_filename);
         let file = File::open(path)?;
         if input_filename.ends_with(".gz") {
-            Box::new(GzDecoder::new(file)) as Box<io::Read>
+            Box::new(GzDecoder::new(file))
         } else if input_filename.ends_with(".xz") {
-            Box::new(XzDecoder::new(file)) as Box<io::Read>
+            Box::new(XzDecoder::new(file))
         } else if input_filename.ends_with(".lz4") {
-            Box::new(lz4::Decoder::new(file)?) as Box<io::Read>
+            Box::new(lz4::Decoder::new(file)?)
         } else {
-            Box::new(file)
+            Box::new(file) as Box<dyn io::Read>
         }
     };
 

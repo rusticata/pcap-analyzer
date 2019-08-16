@@ -10,9 +10,9 @@ use rusticata::*;
 
 #[derive(Default)]
 pub struct Rusticata {
-    builder_map: HashMap<&'static str, Box<RBuilder>>,
+    builder_map: HashMap<&'static str, Box<dyn RBuilder>>,
 
-    flow_parsers: HashMap<FlowID, Box<RParser>>,
+    flow_parsers: HashMap<FlowID, Box<dyn RParser>>,
 }
 
 default_plugin_builder!(Rusticata, RusticataBuilder);
@@ -22,7 +22,7 @@ impl Plugin for Rusticata {
     fn plugin_type(&self) -> u16 { PLUGIN_L4 }
 
     fn pre_process(&mut self) {
-        let mut m : HashMap<&'static str, Box<RBuilder>> = HashMap::new();
+        let mut m : HashMap<&'static str, Box<dyn RBuilder>> = HashMap::new();
         m.insert("dns_udp", Box::new(DnsUDPBuilder{}) as Box<_>);
         m.insert("dns_tcp", Box::new(DnsTCPBuilder{}) as Box<_>);
         m.insert("ikev2", Box::new(IPsecBuilder{}) as Box<_>);
