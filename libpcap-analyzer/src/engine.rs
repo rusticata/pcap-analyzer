@@ -127,7 +127,6 @@ impl ThreadedPcapEngine {
             })
             .collect();
         loop {
-            ctx.pcap_index += 1;
             match reader.next() {
                 Ok((offset, block)) => {
                     let packet = match block {
@@ -144,6 +143,7 @@ impl ThreadedPcapEngine {
                             continue;
                         },
                         PcapBlockOwned::NG(Block::EnhancedPacket(ref epb)) => {
+                            ctx.pcap_index += 1;
                             assert!((epb.if_id as usize) < ctx.interfaces.len());
                             let if_info = &ctx.interfaces[epb.if_id as usize];
                             let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(epb.ts_high, epb.ts_low, 
@@ -164,6 +164,7 @@ impl ThreadedPcapEngine {
                             }
                         },
                         PcapBlockOwned::NG(Block::SimplePacket(ref spb)) => {
+                            ctx.pcap_index += 1;
                             assert!(ctx.interfaces.len() > 0);
                             let if_info = &ctx.interfaces[0];
                             let blen = (spb.block_len1 - 16) as usize;
@@ -191,6 +192,7 @@ impl ThreadedPcapEngine {
                             continue;
                         },
                         PcapBlockOwned::Legacy(ref b) => {
+                            ctx.pcap_index += 1;
                             assert!(ctx.interfaces.len() > 0);
                             let if_info = &ctx.interfaces[0];
                             let blen = b.caplen as usize;
