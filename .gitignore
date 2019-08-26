@@ -1,2 +1,5 @@
+/Cargo.lock
 /target
 **/*.rs.bk
+*.dot
+*.grc

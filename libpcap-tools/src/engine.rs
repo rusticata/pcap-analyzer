@@ -11,20 +11,17 @@ use crate::error::Error;
 /// pcap/pcap-ng analyzer engine
 pub struct PcapEngine {
     a: Box<dyn PcapAnalyzer>,
-    buffer_max_size: usize,
     buffer_initial_capacity: usize,
 }
 
 impl PcapEngine {
     /// Build a new PcapEngine, taking ownership of the input PcapAnalyzer
     pub fn new(a: Box<dyn PcapAnalyzer>, config: &Config) -> Self {
-        let buffer_max_size = config.get_usize("buffer_max_size").unwrap_or(65536 * 8);
         let buffer_initial_capacity = config
             .get_usize("buffer_initial_capacity")
-            .unwrap_or(16384 * 8);
+            .unwrap_or(128 * 1024);
         PcapEngine {
             a,
-            buffer_max_size,
             buffer_initial_capacity,
         }
     }
@@ -79,7 +76,7 @@ impl PcapEngine {
                             ctx.pcap_index += 1;
                             assert!((epb.if_id as usize) < ctx.interfaces.len());
                             let if_info = &ctx.interfaces[epb.if_id as usize];
-                            let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(epb.ts_high, epb.ts_low, 
+                            let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(epb.ts_high, epb.ts_low,
                                                                                 if_info.if_tsoffset, if_info.if_tsresol);
                             let unit = unit as u32; // XXX lossy cast
                             let ts_usec = if unit != MICROS_PER_SEC {

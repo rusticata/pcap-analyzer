@@ -33,7 +33,6 @@ pub struct Worker {
 pub struct ThreadedPcapEngine {
     a: Box<Analyzer>,
     registry: Arc<PluginRegistry>,
-    buffer_max_size: usize,
     buffer_initial_capacity: usize,
     n_workers: usize,
 }
@@ -41,15 +40,13 @@ pub struct ThreadedPcapEngine {
 impl ThreadedPcapEngine {
     /// Build a new ThreadedPcapEngine, taking ownership of the input PcapAnalyzer
     pub fn new(a: Box<Analyzer>, registry: PluginRegistry, config: &Config) -> Self {
-        let buffer_max_size = config.get_usize("buffer_max_size").unwrap_or(65536 * 8);
         let buffer_initial_capacity = config
             .get_usize("buffer_initial_capacity")
-            .unwrap_or(16384 * 8);
+            .unwrap_or(128 * 1024);
         let n_workers = config.get_usize("num_threads").unwrap_or(num_cpus::get());
         ThreadedPcapEngine {
             a,
             registry: Arc::new(registry),
-            buffer_max_size,
             buffer_initial_capacity,
             n_workers,
         }
@@ -146,7 +143,7 @@ impl ThreadedPcapEngine {
                             ctx.pcap_index += 1;
                             assert!((epb.if_id as usize) < ctx.interfaces.len());
                             let if_info = &ctx.interfaces[epb.if_id as usize];
-                            let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(epb.ts_high, epb.ts_low, 
+                            let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(epb.ts_high, epb.ts_low,
                                                                                 if_info.if_tsoffset, if_info.if_tsresol);
                             let unit = unit as u32; // XXX lossy cast
                             let ts_usec = if unit != MICROS_PER_SEC {
@@ -309,8 +306,14 @@ impl ThreadedPcapEngine {
                     EtherType(ethertype),
                 )
             },
-            PacketData::L4(_,_) => unimplemented!(), // XXX
-            PacketData::Unsupported(_) => unimplemented!( ), // XXX
+            PacketData::L4(_,_) => {
+                warn!("Unsupported packet data layer 4");
+                unimplemented!() // XXX
+            },
+            PacketData::Unsupported(_) => {
+                warn!("Unsupported linktype {}", link_type);
+                unimplemented!( ) // XXX
+            },
         }
     }
 
