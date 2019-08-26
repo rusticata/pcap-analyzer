@@ -8,26 +8,33 @@ use crate::context::*;
 use crate::duration::{Duration, MICROS_PER_SEC};
 use crate::error::Error;
 
+/// Interface for all Pcap engines
+pub trait PcapEngine {
+    /// Main function: given a reader, read all pcap data and call analyzer for each Packet
+    fn run(&mut self, f: &mut dyn Read) -> Result<(), Error>;
+}
+
 /// pcap/pcap-ng analyzer engine
-pub struct PcapEngine {
+pub struct SingleThreadedEngine {
     a: Box<dyn PcapAnalyzer>,
     buffer_initial_capacity: usize,
 }
 
-impl PcapEngine {
-    /// Build a new PcapEngine, taking ownership of the input PcapAnalyzer
+impl SingleThreadedEngine {
+    /// Build a new SingleThreadedEngine, taking ownership of the input PcapAnalyzer
     pub fn new(a: Box<dyn PcapAnalyzer>, config: &Config) -> Self {
         let buffer_initial_capacity = config
             .get_usize("buffer_initial_capacity")
             .unwrap_or(128 * 1024);
-        PcapEngine {
+        SingleThreadedEngine {
             a,
             buffer_initial_capacity,
         }
     }
+}
 
-    /// Main function: given a reader, read all pcap data and call analyzer for each Packet
-    pub fn run<R: Read>(&mut self, f: &mut R) -> Result<(), Error> {
+impl PcapEngine for SingleThreadedEngine {
+    fn run(&mut self, f: &mut dyn Read) -> Result<(), Error> {
         let capacity = self.buffer_initial_capacity;
         let mut reader = pcap_parser::create_reader(capacity, f)?;
 
