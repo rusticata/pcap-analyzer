@@ -1,8 +1,9 @@
+use crate::pcap::*;
+use crate::traits::Writer;
 use libpcap_tools::{Error, Packet, ParseContext, PcapAnalyzer};
 
 use pcap_parser::data::*;
-use pcap_parser::{LegacyPcapBlock, Linktype};
-use std::io;
+use pcap_parser::Linktype;
 use std::io::Write;
 
 #[derive(Debug, Default)]
@@ -11,31 +12,56 @@ struct Stats {
     num_bytes: u64,
 }
 
-pub struct Rewriter<W: Write> {
+pub struct Rewriter {
     snaplen: usize,
-    w: Box<W>,
+    output_linktype: Linktype,
+    output_layer: usize,
+    writer: Box<dyn Writer>,
     stats: Stats,
 }
 
-impl<W> Rewriter<W>
-where
-    W: std::io::Write,
-{
-    pub fn new(w: Box<W>) -> Self {
+impl Rewriter {
+    pub fn new(w: Box<dyn Write>) -> Self {
+        let output_linktype = Linktype::RAW;
+        let output_layer = get_linktype_layer(output_linktype);
+        let writer = Box::new(PcapWriter::new(w));
         Rewriter {
             snaplen: 65535, // XXX
-            w,
+            output_linktype,
+            output_layer,
+            writer,
             stats: Stats::default(),
         }
     }
 }
 
-impl<W> PcapAnalyzer for Rewriter<W>
-where
-    W: std::io::Write,
-{
+fn convert_layer<'p>(input: &'p PacketData, output_layer: usize) -> Result<&'p [u8], &'static str> {
+    match (input, output_layer) {
+        (PacketData::L2(data), 2) => Ok(data),
+        (PacketData::L2(data), 3) => {
+            if data.len() < 14 {
+                return Err("L2 data too small for ethernet");
+            }
+            Ok(&data[14..])
+        }
+        (PacketData::L3(_, _), 2) => Err("Can't convert L3 data to L2"),
+        (PacketData::L3(_, data), 3) => Ok(data),
+        (PacketData::L4(_, _), _) => Err("Input is L4 - don't know what to do"),
+        (PacketData::Unsupported(_), _) => Err("Input link type not supported"),
+        (_, _) => Err("Invalid layer conversion"),
+    }
+}
+
+fn get_linktype_layer(l: Linktype) -> usize {
+    match l {
+        Linktype::RAW => 3,
+        _ => panic!("Unsupported output link type"),
+    }
+}
+
+impl PcapAnalyzer for Rewriter {
     fn init(&mut self) -> Result<(), Error> {
-        pcap_write_header(&mut self.w, self.snaplen)?;
+        self.writer.init_file(self.snaplen, self.output_linktype)?;
         Ok(())
     }
 
@@ -50,26 +76,18 @@ where
                 return Err(Error::Generic("Missing interface info"));
             }
         };
-        let l3_data = match packet.data {
-            PacketData::L2(data) => {
-                if data.len() < 14 {
-                    return Err(Error::Generic("L2 data too small for ethernet"));
-                }
-                &data[14..]
-            }
-            PacketData::L3(_, data) => data,
-            PacketData::L4(_, _) => unimplemented!(),
-            PacketData::Unsupported(_) => unimplemented!(),
-        };
+        // convert data
+        let data = convert_layer(&packet.data, self.output_layer).map_err(|e| Error::Generic(e))?;
+        // truncate it to new snaplen
         let data = {
-            if l3_data.len() > self.snaplen {
-                eprintln!(
+            if data.len() > self.snaplen {
+                info!(
                     "truncating index {} to {} bytes",
                     ctx.pcap_index, self.snaplen
                 );
-                &l3_data[..self.snaplen as usize]
+                &data[..self.snaplen as usize]
             } else {
-                l3_data
+                data
             }
         };
         debug!(
@@ -78,7 +96,7 @@ where
             link_type,
             data.len()
         );
-        let written = pcap_write_packet(&mut self.w, &packet, data)?;
+        let written = self.writer.write_packet(&packet, data)?;
         self.stats.num_packets += 1;
         self.stats.num_bytes += written as u64;
 
@@ -89,33 +107,4 @@ where
         info!("Done.");
         info!("Stats: {:?}", self.stats);
     }
-}
-
-fn pcap_write_header<W: Write>(to: &mut W, snaplen: usize) -> Result<usize, io::Error> {
-    let mut hdr = pcap_parser::PcapHeader::new();
-    hdr.snaplen = snaplen as u32;
-    hdr.network = Linktype::IPV4;
-    let s = hdr.to_vec();
-    to.write(&s)?;
-    Ok(s.len())
-}
-
-fn pcap_write_packet<W: Write>(
-    to: &mut W,
-    packet: &Packet,
-    data: &[u8],
-) -> Result<usize, io::Error> {
-    let record = LegacyPcapBlock {
-        ts_sec: packet.ts.secs as u32,
-        ts_usec: packet.ts.micros as u32,
-        caplen: data.len() as u32,  // packet.header.caplen,
-        origlen: data.len() as u32, // packet.header.len,
-        data,
-    };
-    // debug!("rec_hdr: {:?}", rec_hdr);
-    // debug!("data (len={}): {}", data.len(), data.to_hex(16));
-    let s = record.to_vec();
-    let sz = to.write(&s)?;
-
-    Ok(sz)
 }

@@ -19,7 +19,9 @@ use xz2::read::XzDecoder;
 
 use libpcap_tools::{Config, PcapEngine, SingleThreadedEngine};
 
+mod pcap;
 mod rewriter;
+mod traits;
 use crate::rewriter::*;
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
