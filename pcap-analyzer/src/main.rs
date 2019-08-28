@@ -5,7 +5,6 @@ extern crate clap;
 use clap::{crate_version, App, Arg};
 
 extern crate env_logger;
-extern crate explugin_example;
 extern crate flate2;
 extern crate lz4;
 extern crate xz2;
@@ -18,7 +17,6 @@ use std::path::Path;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
-use explugin_example::ExEmptyPluginBuilder;
 use libpcap_analyzer::*;
 use libpcap_tools::{Config, PcapAnalyzer, PcapEngine, SingleThreadedEngine};
 
@@ -85,9 +83,7 @@ fn main() -> io::Result<()> {
     debug!("Pcap analyser {}", crate_version!());
 
     // create plugin factory with all available plugins
-    let mut factory = plugins::PluginsFactory::default();
-    // add external plugins
-    factory.add_builder(Box::new(ExEmptyPluginBuilder));
+    let factory = plugins::PluginsFactory::default();
     // check if asked to list plugin builders
     if matches.is_present("list-builders") {
         println!("pcap-analyzer available plugin builders:");
