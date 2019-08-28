@@ -8,8 +8,10 @@ use libpcap_tools::Config;
 mod basic_stats;
 #[cfg(feature = "plugin_community_id")]
 mod community_id;
+#[cfg(feature = "plugin_examples")]
 mod examples;
-#[cfg(debug_assertions)] mod hexdump;
+#[cfg(feature = "plugins_debug")]
+mod hexdump;
 #[cfg(feature = "plugin_rusticata")]
 mod rusticata;
 mod tcp_states;
@@ -86,14 +88,18 @@ impl Default for PluginsFactory {
         v.push(Box::new(basic_stats::BasicStatsBuilder));
         #[cfg(feature = "plugin_community_id")]
         v.push(Box::new(community_id::CommunityIDBuilder));
-        #[cfg(debug_assertions)] v.push(Box::new(hexdump::HexDumpBuilder));
+        #[cfg(feature = "plugins_debug")]
+        v.push(Box::new(hexdump::HexDumpBuilder));
         v.push(Box::new(tcp_states::TcpStatesBuilder));
         #[cfg(feature = "plugin_tls_stats")]
         v.push(Box::new(tls_stats::TlsStatsBuilder));
         #[cfg(feature = "plugin_rusticata")]
         v.push(Box::new(rusticata::RusticataBuilder));
-        v.push(Box::new(examples::EmptyBuilder));
-        v.push(Box::new(examples::EmptyWithConfigBuilder));
+        #[cfg(feature = "plugin_examples")]
+        {
+            v.push(Box::new(examples::EmptyBuilder));
+            v.push(Box::new(examples::EmptyWithConfigBuilder));
+        }
 
         PluginsFactory { list: v }
     }
