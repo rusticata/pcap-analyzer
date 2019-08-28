@@ -1,7 +1,8 @@
 use crate::traits::Writer;
 use libpcap_tools::Packet;
 use pcap_parser::{LegacyPcapBlock, Linktype};
-use std::io::{self, Write};
+use pcap_parser::ToVec;
+use std::io::{self, Error, ErrorKind, Write};
 
 /// Writer for the legacy pcap format
 pub struct PcapWriter<W>
@@ -22,7 +23,7 @@ impl<W: Write> Writer for PcapWriter<W> {
         let mut hdr = pcap_parser::PcapHeader::new();
         hdr.snaplen = snaplen as u32;
         hdr.network = linktype;
-        let s = hdr.to_vec();
+        let s = hdr.to_vec().or(Err(Error::new(ErrorKind::Other, "Pcap header serialization failed")))?;
         self.w.write(&s)
     }
 
@@ -36,7 +37,7 @@ impl<W: Write> Writer for PcapWriter<W> {
         };
         // debug!("rec_hdr: {:?}", rec_hdr);
         // debug!("data (len={}): {}", data.len(), data.to_hex(16));
-        let s = record.to_vec();
+        let s = record.to_vec_raw().or(Err(Error::new(ErrorKind::Other, "Pcap block serialization failed")))?;
         self.w.write(&s)
     }
 }

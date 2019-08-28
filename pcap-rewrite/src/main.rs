@@ -20,6 +20,7 @@ use xz2::read::XzDecoder;
 use libpcap_tools::{Config, PcapEngine, SingleThreadedEngine};
 
 mod pcap;
+mod pcapng;
 mod rewriter;
 mod traits;
 use crate::rewriter::*;
@@ -51,6 +52,13 @@ fn main() -> io::Result<()> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("output-format")
+                .help("Output format (default: pcap)")
+                .short("of")
+                .long("output-format")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("INPUT")
                 .help("Input file name")
                 .required(true)
@@ -76,6 +84,15 @@ fn main() -> io::Result<()> {
 
     let input_filename = matches.value_of("INPUT").unwrap();
     let output_filename = matches.value_of("OUTPUT").unwrap();
+    let output_format = match matches.value_of("output-format") {
+        Some("pcap") => FileFormat::Pcap,
+        Some("pcapng") => FileFormat::PcapNG,
+        Some(_) => {
+            error!("Invalid output file format");
+            ::std::process::exit(1);
+        }
+        None => FileFormat::Pcap,
+    };
 
     let mut input_reader = if input_filename == "-" {
         Box::new(io::stdin())
@@ -93,8 +110,10 @@ fn main() -> io::Result<()> {
     let path = Path::new(&output_filename);
     let outfile = File::create(path)?;
 
-    let rewriter = Rewriter::new(Box::new(outfile));
+    let rewriter = Rewriter::new(Box::new(outfile), output_format);
     let mut engine = SingleThreadedEngine::new(Box::new(rewriter), &config);
+
+    info!("Rewriting file (output format: {:?})", output_format);
 
     let _ = engine.run(&mut input_reader).expect("run analyzer");
 

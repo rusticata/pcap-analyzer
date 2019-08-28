@@ -1,10 +1,17 @@
 use crate::pcap::*;
+use crate::pcapng::*;
 use crate::traits::Writer;
 use libpcap_tools::{Error, Packet, ParseContext, PcapAnalyzer};
 
 use pcap_parser::data::*;
 use pcap_parser::Linktype;
 use std::io::Write;
+
+#[derive(Copy, Clone, Debug)]
+pub enum FileFormat {
+    Pcap,
+    PcapNG,
+}
 
 #[derive(Debug, Default)]
 struct Stats {
@@ -21,10 +28,13 @@ pub struct Rewriter {
 }
 
 impl Rewriter {
-    pub fn new(w: Box<dyn Write>) -> Self {
+    pub fn new(w: Box<dyn Write>, output_format: FileFormat) -> Self {
         let output_linktype = Linktype::RAW;
         let output_layer = get_linktype_layer(output_linktype);
-        let writer = Box::new(PcapWriter::new(w));
+        let writer : Box<dyn Writer> = match output_format {
+            FileFormat::Pcap => Box::new(PcapWriter::new(w)),
+            FileFormat::PcapNG => Box::new(PcapNGWriter::new(w)),
+        };
         Rewriter {
             snaplen: 65535, // XXX
             output_linktype,
