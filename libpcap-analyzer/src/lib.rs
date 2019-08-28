@@ -15,8 +15,9 @@ pub use plugin_registry::*;
 pub mod plugins;
 
 mod analyzer;
+mod threaded_analyzer;
 pub use analyzer::*;
-pub mod engine;
+pub use threaded_analyzer::*;
 
 mod ip6_defrag;
 mod ip_defrag;

@@ -19,9 +19,8 @@ use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
 use explugin_example::ExEmptyPluginBuilder;
-use libpcap_analyzer::engine::ThreadedPcapEngine;
 use libpcap_analyzer::*;
-use libpcap_tools::{Config, PcapEngine, SingleThreadedEngine};
+use libpcap_tools::{Config, PcapAnalyzer, PcapEngine, SingleThreadedEngine};
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
@@ -154,18 +153,6 @@ fn main() -> io::Result<()> {
             debug!("  {}", p.name());
         },
     );
-    let n_workers = config.get_usize("num_threads");
-    let analyzer = Analyzer::new(registry.clone(), &config);
-    let mut engine: Box<dyn PcapEngine> = if n_workers == Some(1) {
-        Box::new(SingleThreadedEngine::new(Box::new(analyzer), &config))
-    } else {
-        Box::new(ThreadedPcapEngine::new(
-            Box::new(analyzer),
-            registry,
-            &config,
-        ))
-    };
-
     let input_filename = matches.value_of("INPUT").unwrap();
 
     let mut input_reader = if input_filename == "-" {
@@ -183,6 +170,12 @@ fn main() -> io::Result<()> {
             Box::new(file) as Box<dyn io::Read>
         }
     };
+
+    let analyzer: Box<dyn PcapAnalyzer> = match config.get_usize("num_threads") {
+        Some(1) => Box::new(Analyzer::new(registry, &config)),
+        _ => Box::new(ThreadedAnalyzer::new(registry, &config)),
+    };
+    let mut engine = SingleThreadedEngine::new(analyzer, &config);
 
     let _ = engine.run(&mut input_reader).expect("run analyzer");
 

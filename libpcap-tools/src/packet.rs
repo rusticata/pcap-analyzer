@@ -1,6 +1,7 @@
 use crate::duration::Duration;
 use pcap_parser::data::PacketData;
 
+#[derive(Clone)]
 pub struct Packet<'a> {
     pub interface: u32,
     pub ts: Duration,

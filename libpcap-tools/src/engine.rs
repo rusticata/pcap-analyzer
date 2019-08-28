@@ -70,13 +70,13 @@ impl PcapEngine for SingleThreadedEngine {
                         PcapBlockOwned::NG(Block::SectionHeader(ref _shb)) => {
                             debug!("pcap-ng: new section");
                             ctx.interfaces = Vec::new();
-                            reader.consume(offset);
+                            reader.consume_noshift(offset);
                             continue;
                         },
                         PcapBlockOwned::NG(Block::InterfaceDescription(ref idb)) => {
                             let if_info = pcapng_build_interface(idb);
                             ctx.interfaces.push(if_info);
-                            reader.consume(offset);
+                            reader.consume_noshift(offset);
                             continue;
                         },
                         PcapBlockOwned::NG(Block::EnhancedPacket(ref epb)) => {
@@ -125,7 +125,7 @@ impl PcapEngine for SingleThreadedEngine {
                             };
                             ctx.interfaces.push(if_info);
                             debug!("Legacy pcap,  link type: {}", hdr.network);
-                            reader.consume(offset);
+                            reader.consume_noshift(offset);
                             continue;
                         },
                         PcapBlockOwned::Legacy(ref b) => {
@@ -147,12 +147,12 @@ impl PcapEngine for SingleThreadedEngine {
                         PcapBlockOwned::NG(Block::InterfaceStatistics(_)) |
                         PcapBlockOwned::NG(Block::NameResolution(_)) => {
                             // XXX just ignore block
-                            reader.consume(offset);
+                            reader.consume_noshift(offset);
                             continue;
                         },
                         _ => {
                             warn!("unsupported block");
-                            reader.consume(offset);
+                            reader.consume_noshift(offset);
                             continue;
                         }
                     };
@@ -168,7 +168,7 @@ impl PcapEngine for SingleThreadedEngine {
                     self.a
                         .handle_packet(&packet, &ctx)
                         .or(Err("Analyzer error"))?;
-                    reader.consume(offset);
+                    reader.consume_noshift(offset);
                     continue;
                 },
                 Err(PcapError::Eof) => break,
@@ -180,7 +180,8 @@ impl PcapEngine for SingleThreadedEngine {
                     }
                     last_incomplete_index = ctx.pcap_index;
                     // refill the buffer
-                    debug!("refill");
+                    debug!("need refill");
+                    self.a.before_refill();
                     reader.refill()?;
                     continue;
                 },

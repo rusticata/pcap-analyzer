@@ -18,6 +18,8 @@ pub trait PcapAnalyzer {
 
     /// Teardown function, called after reading pcap data (optional)
     fn teardown(&mut self) {}
+
+    fn before_refill(&mut self) {}
 }
 
 /// Common trait for pcap/pcap-ng analyzers (thread-safe version)
