@@ -25,6 +25,7 @@ impl crate::plugin::PluginBuilder for CommunityIDBuilder {
         let seed = config.get_usize("plugin.community_id.seed").unwrap_or(0) as u16;
         let plugin = CommunityID{ seed };
         let safe_p = build_safeplugin!(plugin);
+        registry.add_plugin(safe_p.clone());
         registry.register_transport_layer_all(safe_p.clone());
     }
 }
