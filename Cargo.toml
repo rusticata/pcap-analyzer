@@ -5,6 +5,7 @@ members = [
   "explugin-example",
   "pcap-analyzer",
   "pcap-rewrite",
+  "test-analyzer",
 ]
 
 [profile.release]
