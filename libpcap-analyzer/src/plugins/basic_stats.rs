@@ -54,8 +54,17 @@ impl Plugin for BasicStats {
         for (t3,stats) in self.l3_conversations.iter() {
             info!("  {}: {} bytes, {} packets", t3, stats.num_bytes, stats.num_packets);
         }
-        info!("Conversions (L4):");
-        for (t5,stats) in self.l4_conversations.iter() {
+        info!("Conversions (L4/TCP):");
+        for (t5,stats) in self.l4_conversations.iter().filter(|(t5,_)| t5.proto == 6) {
             info!("  {}: {} bytes, {} packets", t5, stats.num_bytes, stats.num_packets);
-        }    }
+        }
+        info!("Conversions (L4/UDP):");
+        for (t5,stats) in self.l4_conversations.iter().filter(|(t5,_)| t5.proto == 17) {
+            info!("  {}: {} bytes, {} packets", t5, stats.num_bytes, stats.num_packets);
+        }
+        info!("Conversions (L4/other):");
+        for (t5,stats) in self.l4_conversations.iter().filter(|(t5,_)| t5.proto != 6 && t5.proto != 17) {
+            info!("  {}: {} bytes, {} packets", t5, stats.num_bytes, stats.num_packets);
+        }
+    }
 }
