@@ -20,7 +20,7 @@ base64 = { version="0.10", optional=true }
 crossbeam-queue = "0.1.2"
 env_logger = "0.6"
 lazy_static = "1.2"
-libpcap-tools = { path="../libpcap-tools" }
+libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 nom = "5.0"
 num_cpus = "1.10"

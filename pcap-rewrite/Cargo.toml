@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 # env_logger = "0.6"
-libpcap-tools = { path="../libpcap-tools" }
+libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
 log = "0.4"
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 std-logger = "0.3"
