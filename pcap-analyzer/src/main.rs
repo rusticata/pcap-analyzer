@@ -71,6 +71,13 @@ fn main() -> io::Result<()> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("outdir")
+                .help("Plugins output directory")
+                .short("o")
+                .long("outdir")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("INPUT")
                 .help("Input file name")
                 .required(true)
@@ -103,6 +110,10 @@ fn main() -> io::Result<()> {
             "Invalid value for 'jobs' argument",
         )))?;
         config.set("num_threads", j);
+    }
+    if let Some(dir) = matches.value_of("outdir") {
+        debug!("Setting output directory: {}", dir);
+        config.set("output_dir", dir);
     }
     // instanciate all plugins
     let registry = if let Some(plugin_names) = matches.value_of("plugins") {

@@ -13,6 +13,7 @@ pub use plugin::*;
 pub use plugin_registry::*;
 
 pub mod plugins;
+pub mod output;
 
 mod analyzer;
 mod threaded_analyzer;
