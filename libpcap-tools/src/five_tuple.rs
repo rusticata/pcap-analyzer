@@ -1,9 +1,11 @@
 use crate::three_tuple::ThreeTuple;
+use serde::Serialize;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr};
 
 /// Network 5-tuple: layer 4 protocol (e.g TCP or UDP), source and destination IP/ports
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Serialize)]
 pub struct FiveTuple {
     /// Layer 4 protocol (e.g TCP, UDP, ICMP)
     pub proto: u8,
