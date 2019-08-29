@@ -79,18 +79,26 @@ pub trait Plugin: Sync + Send {
     fn flow_destroyed(&mut self, _flow: &Flow) {}
 }
 
-/// Derives a plugin builder relying on the Plugin::default() function
+/// Derives a plugin builder
+///
+/// A closure can be passed as third argument. This closure receives a `Config`
+/// object and must return an instance of plugin.
+///
+/// By default (if no closure was provided), the plugin is created
+/// using the `Plugin::default()` function.
+///
+/// Note: the plugin builder may create plugins of different types
 #[macro_export]
-macro_rules! default_plugin_builder {
-    ($name:ident,$builder:ident) => {
-        pub struct $builder;
+macro_rules! plugin_builder {
+    ($name:ident, $builder_name:ident, $build_fn:expr) => {
+        pub struct $builder_name;
 
-        impl $crate::PluginBuilder for $builder {
+        impl $crate::PluginBuilder for $builder_name {
             fn name(&self) -> &'static str {
                 stringify!($builder)
             }
-            fn build(&self, registry: &mut $crate::PluginRegistry, _config: &libpcap_tools::Config) {
-                let plugin = $name::default();
+            fn build(&self, registry: &mut $crate::PluginRegistry, config: &libpcap_tools::Config) {
+                let plugin = $build_fn(config);
                 let protos = plugin.plugin_type();
                 let safe_p = $crate::build_safeplugin!(plugin);
                 registry.add_plugin(safe_p.clone());
@@ -105,5 +113,15 @@ macro_rules! default_plugin_builder {
                 }
             }
         }
+    };
+    ($name:ident, $builder_name:ident) => (
+        $crate::plugin_builder!($name, $builder_name, |_| $name::default());
+    );
+}
+/// Derives a plugin builder relying on the Plugin::default() function
+#[macro_export]
+macro_rules! default_plugin_builder {
+    ($name:ident, $builder:ident) => {
+        $crate::plugin_builder!($name, $builder, |_| $name::default());
     };
 }
