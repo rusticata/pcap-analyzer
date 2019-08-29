@@ -62,7 +62,7 @@ impl PluginsFactory {
 
         self.list.iter().for_each(|b| {
             if predicate(b.name()) {
-                let _ = b.build(&mut registry, &config);
+                b.build(&mut registry, &config);
             }
         });
 

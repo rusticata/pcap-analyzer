@@ -77,7 +77,7 @@ impl DefragEngine for IPDefragEngine {
         frag: &'a [u8],
     ) -> Fragment<'a> {
         // check if data is not fragmented
-        if more_fragments == false && frag_offset == 0 {
+        if !more_fragments && frag_offset == 0 {
             return Fragment::NoFrag(frag);
         }
         // check if we already have a fragment

@@ -68,7 +68,7 @@ impl PluginRegistry {
             let l = &mut self
                 .plugins_ethertype
                 .entry(ethertype)
-                .or_insert_with(|| Vec::new());
+                .or_insert_with(Vec::new);
             l.push(plugin);
         }
     }
@@ -88,7 +88,7 @@ impl PluginRegistry {
 
     pub fn run_plugins_l2(&self, packet: &Packet, data: &[u8]) {
         for p in &self.plugins_l2 {
-            let _ = p.lock().unwrap().handle_l2(&packet, &data);
+            p.lock().unwrap().handle_l2(&packet, &data);
         }
     }
 
@@ -101,31 +101,25 @@ impl PluginRegistry {
     ) {
         if ethertype == ETHERTYPE_IPV4 {
             for p in &self.plugins_ethertype_ipv4 {
-                let _ = p
-                    .lock()
+                p.lock()
                     .unwrap()
                     .handle_l3(packet, data, ethertype, three_tuple);
             }
         } else if ethertype == ETHERTYPE_IPV6 {
             for p in &self.plugins_ethertype_ipv6 {
-                let _ = p
-                    .lock()
+                p.lock()
                     .unwrap()
                     .handle_l3(packet, data, ethertype, three_tuple);
             }
-        } else {
-            self.plugins_ethertype.get(&ethertype).map(|l| {
-                for p in &*l {
-                    let _ = p
-                        .lock()
-                        .unwrap()
-                        .handle_l3(packet, data, ethertype, three_tuple);
-                }
-            });
+        } else if let Some(l) = self.plugins_ethertype.get(&ethertype) {
+            for p in &*l {
+                p.lock()
+                    .unwrap()
+                    .handle_l3(packet, data, ethertype, three_tuple);
+            }
         }
         for p in &self.plugins_ethertype_all {
-            let _ = p
-                .lock()
+            p.lock()
                 .unwrap()
                 .handle_l3(packet, data, ethertype, three_tuple);
         }
@@ -134,17 +128,17 @@ impl PluginRegistry {
     pub fn run_plugins_transport(&self, proto: u8, packet: &Packet, pinfo: &PacketInfo) {
         let l = &self.plugins_transport[proto as usize];
         for p in &*l {
-            let _ = p.lock().unwrap().handle_l4(&packet, &pinfo);
+            p.lock().unwrap().handle_l4(&packet, &pinfo);
         }
         for p in &self.plugins_transport_all {
-            let _ = p.lock().unwrap().handle_l4(&packet, &pinfo);
+            p.lock().unwrap().handle_l4(&packet, &pinfo);
         }
     }
 
     pub fn run_plugins<F, P>(&self, mut predicate: P, mut f: F)
     where
         F: FnMut(&mut dyn Plugin) -> (),
-        P: FnMut(& dyn Plugin) -> bool,
+        P: FnMut(&dyn Plugin) -> bool,
     {
         self.plugins_all.iter().for_each(|p| {
             let mut p = p.lock().unwrap();

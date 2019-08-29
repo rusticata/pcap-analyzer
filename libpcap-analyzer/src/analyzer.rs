@@ -451,7 +451,7 @@ fn handle_l4_ipv6frag(
         let frag_offset = (ip6frag.get_fragment_offset() * 8) as usize;
         let more_fragments = ip6frag.more_fragments();
         f.ipv6_defrag.update(
-            ip6frag.get_identification().into(),
+            ip6frag.get_identification(),
             frag_offset,
             more_fragments,
             ip6frag.payload(),
@@ -522,7 +522,7 @@ fn handle_l4_common(
 ) -> Result<(), Error> {
     let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
     debug!("5t: {}", five_tuple);
-    let now = packet.ts.clone();
+    let now = packet.ts;
 
     // lookup flow
     // let flow_id = match a.lookup_flow(&five_tuple) {
@@ -648,7 +648,7 @@ impl PcapAnalyzer for Analyzer {
                 |p| p.plugin_type() & PLUGIN_FLOW_DEL != 0,
                 |p| {
                     flows.values().for_each(|flow| {
-                        let _ = p.flow_destroyed(flow);
+                        p.flow_destroyed(flow);
                     });
                 },
                 );
@@ -676,20 +676,17 @@ impl ThreadAnalyzerData {
     }
 
     pub fn lookup_flow(&mut self, five_t: &FiveTuple) -> Option<FlowID> {
-        self.flows_id.get(&five_t).map(|&id| id)
+        self.flows_id.get(&five_t).copied()
     }
     /// Insert a flow in the hash tables.
     /// Takes ownership of five_t and flow
     pub fn insert_flow(&mut self, five_t: FiveTuple, flow: Flow) -> FlowID {
-        let rev_id = self.flows_id.get(&five_t.get_reverse()).map(|&id| id);
-        match rev_id {
-            Some(id) => {
-                // insert reverse flow ID
-                debug!("inserting reverse flow ID {}", id);
-                self.flows_id.insert(five_t, id);
-                return id;
-            }
-            _ => (),
+        let rev_id = self.flows_id.get(&five_t.get_reverse()).copied();
+        if let Some(id) = rev_id {
+            // insert reverse flow ID
+            debug!("inserting reverse flow ID {}", id);
+            self.flows_id.insert(five_t, id);
+            return id;
         }
         // get a new flow index (XXX currently: random number)
         let id = self.trng.gen();

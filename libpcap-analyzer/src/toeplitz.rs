@@ -66,10 +66,10 @@ mod tests {
     fn toeplitz_hash_test() {
         const DATA1 : &[u8] = &[66, 9, 149, 187, 161, 142, 100, 80, 10, 234, 6, 230];
         let res = toeplitz_hash(KEY_OLD, DATA1);
-        assert_eq!(res, 0x51ccc178);
+        assert_eq!(res, 0x51cc_c178);
         const DATA2 : &[u8] = &[199, 92, 111, 2, 65, 69, 140, 83, 55, 150, 18, 131];
         let res = toeplitz_hash(KEY_OLD, DATA2);
-        assert_eq!(res, 0xc626b0ea);
+        assert_eq!(res, 0xc626_b0ea);
     }
 }
 

@@ -30,7 +30,7 @@ pub struct ThreadedAnalyzer<'a> {
 
 impl<'a> ThreadedAnalyzer<'a> {
     pub fn new(registry: PluginRegistry, config: &Config) -> Self {
-        let n_workers = config.get_usize("num_threads").unwrap_or(num_cpus::get());
+        let n_workers = config.get_usize("num_threads").unwrap_or_else(num_cpus::get);
         ThreadedAnalyzer {
             registry,
             n_workers,
@@ -164,7 +164,6 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                                     if res.is_err() {
                                         warn!("thread {}: handle_l3 failed", i);
                                     }
-                                    ()
                                 }
                             }
                         }
@@ -214,7 +213,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
 }
 
 pub(crate) fn extern_dispatch_l3<'a>(
-    jobs: &Vec<Arc<SegQueue<Job<'a>>>>,
+    jobs: &[Arc<SegQueue<Job<'a>>>],
     packet: Packet<'a>,
     ctx: &ParseContext,
     data: &'a [u8],
