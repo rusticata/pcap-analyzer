@@ -19,7 +19,7 @@ impl Duration {
     }
     /// Test if Duration object is null
     #[inline]
-    pub fn is_null(&self) -> bool {
+    pub fn is_null(self) -> bool {
         self.secs == 0 && self.micros == 0
     }
 }
@@ -27,6 +27,7 @@ impl Duration {
 impl Add for Duration {
     type Output = Duration;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn add(self, other: Duration) -> Self::Output {
         let secs = self.secs.wrapping_add(other.secs);
         let micros = self.micros.wrapping_add(other.micros);
@@ -43,6 +44,7 @@ impl Add for Duration {
 impl Sub for Duration {
     type Output = Duration;
 
+    #[allow(clippy::suspicious_arithmetic_impl)]
     fn sub(self, other: Duration) -> Self::Output {
         let secs = self.secs.wrapping_sub(other.secs);
         let (secs,micros) = if self.micros >= other.micros {

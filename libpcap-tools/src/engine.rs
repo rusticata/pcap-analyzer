@@ -102,7 +102,7 @@ impl PcapEngine for SingleThreadedEngine {
                         },
                         PcapBlockOwned::NG(Block::SimplePacket(ref spb)) => {
                             ctx.pcap_index += 1;
-                            assert!(ctx.interfaces.len() > 0);
+                            assert!(!ctx.interfaces.is_empty());
                             let if_info = &ctx.interfaces[0];
                             let blen = (spb.block_len1 - 16) as usize;
                             let data = pcap_parser::data::get_packetdata(spb.data, if_info.link_type, blen)
@@ -130,7 +130,7 @@ impl PcapEngine for SingleThreadedEngine {
                         },
                         PcapBlockOwned::Legacy(ref b) => {
                             ctx.pcap_index += 1;
-                            assert!(ctx.interfaces.len() > 0);
+                            assert!(!ctx.interfaces.is_empty());
                             let if_info = &ctx.interfaces[0];
                             let blen = b.caplen as usize;
                             let data = pcap_parser::data::get_packetdata(b.data, if_info.link_type, blen)

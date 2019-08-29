@@ -18,7 +18,7 @@ impl Config {
     /// into keys, each key being requested recursively.
     pub fn get<T: AsRef<str>>(&self, k: T) -> Option<&str> {
         let mut item = &self.value;
-        for key in k.as_ref().split(".") {
+        for key in k.as_ref().split('.') {
             item = item.get(key)?;
         }
         item.as_str()
@@ -26,7 +26,7 @@ impl Config {
     /// Get an entry of type integer by path
     pub fn get_usize<T: AsRef<str>>(&self, k: T) -> Option<usize> {
         let mut item = &self.value;
-        for key in k.as_ref().split(".") {
+        for key in k.as_ref().split('.') {
             item = item.get(key)?;
         }
         item.as_integer()
@@ -40,8 +40,8 @@ impl Config {
         table_name: V,
     ) -> Option<()> {
         let mut item = &mut self.value;
-        if parent.as_ref().len() > 0 {
-            for key in parent.as_ref().split(".") {
+        if !parent.as_ref().is_empty() {
+            for key in parent.as_ref().split('.') {
                 item = item.get_mut(key)?;
             }
         }
@@ -64,7 +64,7 @@ impl Config {
         toml::value::Value: std::convert::From<V>,
     {
         let mut item = &mut self.value;
-        let path: Vec<_> = k.as_ref().split(".").collect();
+        let path: Vec<_> = k.as_ref().split('.').collect();
         if path.len() > 1 {
             for key in path.iter().take(path.len() - 1) {
                 item = item.get_mut(key)?;

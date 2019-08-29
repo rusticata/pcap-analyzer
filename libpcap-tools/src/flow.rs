@@ -31,6 +31,7 @@ impl Flow {
     }
 }
 
+#[allow(clippy::derive_hash_xor_eq)]
 impl Hash for Flow {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // skip flow_id
