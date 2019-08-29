@@ -43,6 +43,7 @@ pnet_macros_support = "0.22.0"
 pnet_packet = "0.22.0"
 rand="0.7"
 rand_chacha = "0.2"
+serde_json = "1.0"
 sha1 = { version="0.6", features=["std"], optional=true }
 tls-parser = { version="0.9", optional=true }
 

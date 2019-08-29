@@ -1,8 +1,9 @@
 use crate::packet_info::PacketInfo;
 use crate::plugin::PLUGIN_L4;
-use crate::{default_plugin_builder, Plugin};
+use crate::{output, plugin_builder, Plugin};
 use libpcap_tools::{FiveTuple, Packet};
 use rusticata::*;
+use serde_json::{self, json};
 use std::collections::HashMap;
 use tls_parser::TlsVersion;
 
@@ -17,10 +18,18 @@ struct Stats<'a> {
 /// incomplete (alert during handshake) or that the handshake was not seen.
 #[derive(Default)]
 pub struct TlsStats<'a> {
+    output_dir: String,
     tls_conversations: HashMap<FiveTuple, Stats<'a>>,
 }
 
-default_plugin_builder!(TlsStats, TlsStatsBuilder);
+// plugin_builder!(TlsStats, TlsStatsBuilder);
+plugin_builder!(TlsStats, TlsStatsBuilder, |config| {
+    let output_dir = output::get_output_dir(config).to_owned();
+    TlsStats {
+        output_dir,
+        tls_conversations: HashMap::default(),
+    }
+});
 
 impl<'a> Plugin for TlsStats<'a> {
     fn name(&self) -> &'static str {
@@ -54,65 +63,75 @@ impl<'a> Plugin for TlsStats<'a> {
         }
     }
     fn post_process(&mut self) {
-        info!("");
-        info!("TLS conversations:");
-        for (t5, stats) in self.tls_conversations.iter() {
-            info!(
-                "  {}: client_version: {:?} cipher {:?} alert {:?}",
-                t5, stats.parser.client_version, stats.parser.cipher, stats.parser.fatal_alert
-            );
-        }
+        self.to_json();
+    }
+}
+
+impl<'a> TlsStats<'a> {
+    fn to_json(&self) {
         //
-        info!("");
-        info!("| SSL/TLS ports | Count   |");
-        info!("---------------------------");
+        // SSL/TLS conversations
+        let conversations: Vec<_> = self
+            .tls_conversations
+            .iter()
+            .map(|(t5, stats)| {
+                let mut js = json!({
+                    "five-tuple": t5,
+                    "client_version": format!("{:?}", stats.parser.client_version),
+                    "cipher": stats.parser.cipher.map(|c| c.name).unwrap_or(""),
+                });
+                js.as_object_mut().map(|o| {
+                    if let Some(ja3) = &stats.parser.ja3 {
+                        o.insert("ja3".to_owned(), json!(ja3));
+                    }
+                    if let Some(alert) = &stats.parser.fatal_alert {
+                        o.insert("alert".to_owned(), json!(alert.to_string()));
+                    }
+                });
+                js
+            })
+            .collect();
+        let json_ar = json!(conversations);
+        let file = output::create_file(&self.output_dir, "tls-stats-conversations.json").expect("Cannot create output file");
+        serde_json::to_writer(file, &json_ar).unwrap();
+        //
+        // SSL/TLS ports
         let mut m = HashMap::new();
         for t5 in self.tls_conversations.keys() {
             let count_ref = m.entry(t5.dst_port).or_insert(0);
             *count_ref += 1;
         }
-        for (version, count) in m.iter() {
-            info!("| {0: <13} | {1: <7} |", version, count);
-        }
-        info!("---------------------------");
+        let js = json!(m);
+        let file = output::create_file(&self.output_dir, "tls-stats-tls-ports.json").expect("Cannot create output file");
+        serde_json::to_writer(file, &js).unwrap();
         //
-        info!("");
-        info!("| SSL record version   | Count   |");
-        info!("----------------------------------");
+        // SSL record version
         let mut m = HashMap::new();
         for stats in self.tls_conversations.values() {
             let count_ref = m.entry(stats.parser.ssl_record_version.0).or_insert(0);
             *count_ref += 1;
         }
-        for (version, count) in m.iter() {
-            info!(
-                "| {0: <20} | {1: <7} |",
-                format!("{}", TlsVersion(*version)),
-                count
-            );
-        }
-        info!("----------------------------------");
+        let m2 : HashMap<_, _> = m.iter().map(|(k,v)| {
+            (TlsVersion(*k).to_string(), v)
+        }).collect();
+        let js = json!(m2);
+        let file = output::create_file(&self.output_dir, "tls-stats-ssl-record-version.json").expect("Cannot create output file");
+        serde_json::to_writer(file, &js).unwrap();
         //
-        info!("");
-        info!("| Client-Hello version | Count   |");
-        info!("----------------------------------");
+        // Client-Hello version
         let mut m = HashMap::new();
         for stats in self.tls_conversations.values() {
             let count_ref = m.entry(stats.parser.client_version.0).or_insert(0);
             *count_ref += 1;
         }
-        for (version, count) in m.iter() {
-            info!(
-                "| {0: <20} | {1: <7} |",
-                format!("{}", TlsVersion(*version)),
-                count
-            );
-        }
-        info!("----------------------------------");
+        let m2 : HashMap<_, _> = m.iter().map(|(k,v)| {
+            (TlsVersion(*k).to_string(), v)
+        }).collect();
+        let js = json!(m2);
+        let file = output::create_file(&self.output_dir, "tls-stats-client-hello-version.json").expect("Cannot create output file");
+        serde_json::to_writer(file, &js).unwrap();
         //
-        info!("");
-        info!("| Ciphers                        | Count   |");
-        info!("--------------------------------------------");
+        // Ciphers
         let mut m = HashMap::new();
         for stats in self.tls_conversations.values() {
             let cipher = match stats.parser.cipher {
@@ -122,10 +141,9 @@ impl<'a> Plugin for TlsStats<'a> {
             let count_ref = m.entry(cipher).or_insert(0);
             *count_ref += 1;
         }
-        for (name, count) in m.iter() {
-            info!("| {0: <30} | {1: <7} |", format!("{}", name), count);
-        }
-        info!("--------------------------------------------");
+        let js = json!(m);
+        let file = output::create_file(&self.output_dir, "tls-stats-ciphers.json").expect("Cannot create output file");
+        serde_json::to_writer(file, &js).unwrap();
     }
 }
 
