@@ -4,6 +4,21 @@ version = "0.1.0"
 authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 edition = "2018"
 
+description = "Pcap file conversion/rewrite tool"
+categories = ["network-programming"]
+
+keywords    = ["pcap", "network", "tools"]
+readme      = "../README.md"
+license     = "MIT/Apache-2.0"
+
+repository    = "https://github.com/rusticata/pcap-analyzer.git"
+homepage      = "https://github.com/rusticata/pcap-analyzer"
+
+[badges]
+travis-ci                         = { repository = "rusticata/pcap-analyzer" }
+is-it-maintained-open-issues      = { repository = "rusticata/pcap-analyzer" }
+maintenance                       = { status     = "actively-developed" }
+
 [dependencies]
 # env_logger = "0.6"
 libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
