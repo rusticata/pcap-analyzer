@@ -80,14 +80,14 @@ impl<'a> TlsStats<'a> {
                     "client_version": format!("{:?}", stats.parser.client_version),
                     "cipher": stats.parser.cipher.map(|c| c.name).unwrap_or(""),
                 });
-                js.as_object_mut().map(|o| {
+                if let Some(o) = js.as_object_mut() {
                     if let Some(ja3) = &stats.parser.ja3 {
                         o.insert("ja3".to_owned(), json!(ja3));
                     }
                     if let Some(alert) = &stats.parser.fatal_alert {
                         o.insert("alert".to_owned(), json!(alert.to_string()));
                     }
-                });
+                }
                 js
             })
             .collect();

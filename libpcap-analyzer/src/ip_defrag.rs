@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 /// Defragmentation engine
-pub trait DefragEngine : Send + Sync {
+pub trait DefragEngine: Send + Sync {
     /// This function updates the engine with a new Fragment
     /// Returns a Fragment describing the defragmentation operation result
     fn update<'a>(
@@ -154,17 +154,15 @@ impl DefragEngine for IPDefragEngine {
                 }
             }
             // re-check for completion
-            if !more_fragments || f.next_is_complete {
-                if f.next_offset.is_none() {
-                    match self.ip_fragments.remove(&id) {
-                        Some(f) => {
-                            warn!("defrag: done for id {}", id);
-                            return Fragment::Complete(f.buffer);
-                        }
-                        None => {
-                            error!("defrag: could not remove entry (while we know it exists!)");
-                            return Fragment::Error;
-                        }
+            if (!more_fragments || f.next_is_complete) && f.next_offset.is_none() {
+                match self.ip_fragments.remove(&id) {
+                    Some(f) => {
+                        warn!("defrag: done for id {}", id);
+                        return Fragment::Complete(f.buffer);
+                    }
+                    None => {
+                        error!("defrag: could not remove entry (while we know it exists!)");
+                        return Fragment::Error;
                     }
                 }
             }

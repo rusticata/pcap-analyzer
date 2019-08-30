@@ -375,8 +375,8 @@ fn handle_l4_icmp(
     );
 
     let l4_payload = Some(icmp.payload());
-    let src_port = icmp.get_icmp_type().0 as u16;
-    let dst_port = icmp.get_icmp_code().0 as u16;
+    let src_port = u16::from(icmp.get_icmp_type().0);
+    let dst_port = u16::from(icmp.get_icmp_code().0);
 
     handle_l4_common(
         packet, ctx, data, l3_info, src_port, dst_port, l4_payload, registry,
@@ -510,6 +510,7 @@ fn handle_l4_generic(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_l4_common(
     packet: &Packet,
     ctx: &ParseContext,

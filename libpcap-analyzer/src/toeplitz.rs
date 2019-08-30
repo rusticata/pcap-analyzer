@@ -1,6 +1,6 @@
 /// Maximum key size used throughout.  It's OK for hardware to use only the
 /// first 16 bytes, which is all that's required for IPv4.
-pub const RSS_KEYSIZE : usize = 40;
+pub const RSS_KEYSIZE: usize = 40;
 
 // // original Microsoft's key
 // pub const KEY_OLD : &[u8] = &[
@@ -20,6 +20,7 @@ pub const RSS_KEYSIZE : usize = 40;
 // [1.1.1.1][2.2.2.2][22][55] and for the opposite direction: [2.2.2.2][1.1.1.1][55][22]. To
 // support the same hash value for these two inputs, the first 32bit of the key need to be
 // identical to the second 32bit, and the 16bit afterwards should be identical to the next 16bit.
+#[rustfmt::skip]
 pub const KEY : &[u8] = &[
         0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 
         0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 0x6d, 0x5a, 
@@ -31,17 +32,19 @@ pub const KEY : &[u8] = &[
 ];
 
 /// Toeplitz (RSS) hash algorithm
-pub fn toeplitz_hash(key:&[u8], data:&[u8]) -> u32 {
-    let mut hash : u32 = 0;
-    let mut v = ((key[0] as u32) <<24) | ((key[1] as u32) <<16) | ((key[2] as u32) <<8) | key[3] as u32 ;
+pub fn toeplitz_hash(key: &[u8], data: &[u8]) -> u32 {
+    let mut hash: u32 = 0;
+    let mut v = (u32::from(key[0]) << 24)
+        | (u32::from(key[1]) << 16)
+        | (u32::from(key[2]) << 8)
+        | u32::from(key[3]);
     for i in 0..data.len() {
         for b in 0..8 {
-            if data[i] & (1<<(7-b)) != 0 {
+            if data[i] & (1 << (7 - b)) != 0 {
                 hash ^= v;
             }
             v <<= 1;
-            if (i + 4) < RSS_KEYSIZE &&
-                (key[i+4] & (1<<(7-b))) != 0 {
+            if (i + 4) < RSS_KEYSIZE && (key[i + 4] & (1 << (7 - b))) != 0 {
                 v |= 1;
             }
         }
@@ -53,6 +56,7 @@ pub fn toeplitz_hash(key:&[u8], data:&[u8]) -> u32 {
 mod tests {
     use super::toeplitz_hash;
     // original Microsoft's key
+    #[rustfmt::skip]
     pub const KEY_OLD : &[u8] = &[
         0x6d, 0x5a, 0x56, 0xda, 0x25, 0x5b, 0x0e, 0xc2,
         0x41, 0x67, 0x25, 0x3d, 0x43, 0xa3, 0x8f, 0xb0,
@@ -64,12 +68,11 @@ mod tests {
     ];
     #[test]
     fn toeplitz_hash_test() {
-        const DATA1 : &[u8] = &[66, 9, 149, 187, 161, 142, 100, 80, 10, 234, 6, 230];
+        const DATA1: &[u8] = &[66, 9, 149, 187, 161, 142, 100, 80, 10, 234, 6, 230];
         let res = toeplitz_hash(KEY_OLD, DATA1);
         assert_eq!(res, 0x51cc_c178);
-        const DATA2 : &[u8] = &[199, 92, 111, 2, 65, 69, 140, 83, 55, 150, 18, 131];
+        const DATA2: &[u8] = &[199, 92, 111, 2, 65, 69, 140, 83, 55, 150, 18, 131];
         let res = toeplitz_hash(KEY_OLD, DATA2);
         assert_eq!(res, 0xc626_b0ea);
     }
 }
-

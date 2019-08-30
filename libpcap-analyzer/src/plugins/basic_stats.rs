@@ -37,7 +37,7 @@ impl Plugin for BasicStats {
     }
 
     fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketInfo) {
-        let entry = self.l4_conversations.entry(pdata.five_tuple.clone()).or_insert_with(|| Count::default());
+        let entry = self.l4_conversations.entry(pdata.five_tuple.clone()).or_insert_with(Count::default);
         entry.num_bytes += pdata.l4_payload.map(|l4| l4.len()).unwrap_or(0);
         entry.num_packets += 1;
     }

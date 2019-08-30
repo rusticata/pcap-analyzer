@@ -49,7 +49,7 @@ impl Plugin for Rusticata {
                     return;
                 }
         };
-        pdata.l4_payload.map(|d| {
+        if let Some(d) = pdata.l4_payload {
             if d.is_empty() { return; }
             let parser = {
                 // check if we already have a parser
@@ -81,7 +81,7 @@ impl Plugin for Rusticata {
                 // remove or disable parser for flow?
                 let _ = self.flow_parsers.remove(&flow_id);
             }
-        });
+        }
     }
 }
 

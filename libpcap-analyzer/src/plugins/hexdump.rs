@@ -45,8 +45,8 @@ impl Plugin for HexDump {
                    five_tuple.dst_port,
                    five_tuple.proto);
         }
-        pdata.l4_payload.map(|d| {
+        if let Some(d) = pdata.l4_payload {
             debug!("    l4_payload:\n{}", d.to_hex(16));
-        });
+        }
     }
 }

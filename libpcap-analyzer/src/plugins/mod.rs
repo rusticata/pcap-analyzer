@@ -47,7 +47,7 @@ impl PluginsFactory {
         let mut registry = PluginRegistry::new();
 
         self.list.iter().for_each(|b| {
-            let _ = b.build(&mut registry, &config);
+            b.build(&mut registry, &config);
         });
 
         registry

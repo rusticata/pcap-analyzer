@@ -48,10 +48,10 @@ impl<'a> IPv6FragmentPacket<'a> {
     pub fn get_identification(&self) -> u32be {
         let _self = self;
         let co = 4;
-        let b0 = ((_self.packet[co] as u32be) << 24) as u32be;
-        let b1 = ((_self.packet[co + 1] as u32be) << 16) as u32be;
-        let b2 = ((_self.packet[co + 2] as u32be) << 8) as u32be;
-        let b3 = (_self.packet[co + 3] as u32be) as u32be;
+        let b0 = u32be::from(_self.packet[co]) << 24;
+        let b1 = u32be::from(_self.packet[co + 1]) << 16;
+        let b2 = u32be::from(_self.packet[co + 2]) << 8;
+        let b3 = u32be::from(_self.packet[co + 3]);
         b0 | b1 | b2 | b3
     }
     /// Get the fragment_offset field. This field is always stored big-endian
@@ -62,8 +62,8 @@ impl<'a> IPv6FragmentPacket<'a> {
     pub fn get_fragment_offset(&self) -> u13be {
         let _self = self;
         let co = 2;
-        let b0 = ((_self.packet[co] as u16be) << 8) as u16be;
-        let b1 = _self.packet[co + 1] as u16be;
+        let b0 = u16be::from(_self.packet[co]) << 8;
+        let b1 = u16::from(_self.packet[co + 1]);
         ((b0 | b1) >> 3) as u13be
     }
     #[inline]
