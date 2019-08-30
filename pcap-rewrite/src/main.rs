@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 #[macro_use]
 extern crate log;
 
@@ -115,7 +117,7 @@ fn main() -> io::Result<()> {
 
     info!("Rewriting file (output format: {:?})", output_format);
 
-    let _ = engine.run(&mut input_reader).expect("run analyzer");
+    engine.run(&mut input_reader).expect("run analyzer");
 
     Ok(())
 }

@@ -23,6 +23,7 @@ impl<W: Write> Writer for PcapWriter<W> {
         let mut hdr = pcap_parser::PcapHeader::new();
         hdr.snaplen = snaplen as u32;
         hdr.network = linktype;
+        #[allow(clippy::or_fun_call)]
         let s = hdr.to_vec().or(Err(Error::new(ErrorKind::Other, "Pcap header serialization failed")))?;
         self.w.write(&s)
     }
@@ -37,6 +38,7 @@ impl<W: Write> Writer for PcapWriter<W> {
         };
         // debug!("rec_hdr: {:?}", rec_hdr);
         // debug!("data (len={}): {}", data.len(), data.to_hex(16));
+        #[allow(clippy::or_fun_call)]
         let s = record.to_vec_raw().or(Err(Error::new(ErrorKind::Other, "Pcap block serialization failed")))?;
         self.w.write(&s)
     }

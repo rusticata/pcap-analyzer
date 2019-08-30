@@ -34,12 +34,13 @@ impl<W: Write> Writer for PcapNGWriter<W> {
             options: Vec::new(),
             block_len2: 28,
         };
+        #[allow(clippy::or_fun_call)]
         let v = shb.to_vec_raw().or(Err(Error::new(ErrorKind::Other, "SHB serialization failed")))?;
         let sz1 = self.w.write(&v)?;
         let mut idb = InterfaceDescriptionBlock {
             block_type: IDB_MAGIC,
             block_len1: 20,
-            linktype: linktype,
+            linktype,
             reserved: 0,
             snaplen: snaplen as u32,
             options: vec![],
@@ -48,6 +49,7 @@ impl<W: Write> Writer for PcapNGWriter<W> {
             if_tsoffset: 0,
         };
         // to_vec will add options automatically
+        #[allow(clippy::or_fun_call)]
         let v = idb.to_vec().or(Err(Error::new(ErrorKind::Other, "IDB serialization failed")))?;
         let sz2 = self.w.write(&v)?;
         Ok(sz1 + sz2)
@@ -55,7 +57,7 @@ impl<W: Write> Writer for PcapNGWriter<W> {
 
     fn write_packet(&mut self, packet: &Packet, data: &[u8]) -> Result<usize, io::Error> {
         let unit : u64 = 1_000_000;
-        let ts = ((packet.ts.secs as u64) * unit) + (packet.ts.micros as u64);
+        let ts = (u64::from(packet.ts.secs) * unit) + u64::from(packet.ts.micros);
         let mut epb = EnhancedPacketBlock {
             block_type: EPB_MAGIC,
             block_len1: 32,
@@ -69,6 +71,7 @@ impl<W: Write> Writer for PcapNGWriter<W> {
             block_len2: 32,
         };
         // to_vec will adjust length
+        #[allow(clippy::or_fun_call)]
         let v = epb.to_vec().or(Err(Error::new(ErrorKind::Other, "EPB serialization failed")))?;
         self.w.write(&v)
     }

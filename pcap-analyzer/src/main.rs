@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 #[macro_use]
 extern crate log;
 
@@ -105,6 +107,7 @@ fn main() -> io::Result<()> {
     }
     // override config options from command-line arguments
     if let Some(jobs) = matches.value_of("jobs") {
+        #[allow(clippy::or_fun_call)]
         let j = jobs.parse::<u32>().or(Err(Error::new(
             ErrorKind::Other,
             "Invalid value for 'jobs' argument",
@@ -118,7 +121,7 @@ fn main() -> io::Result<()> {
     // instanciate all plugins
     let registry = if let Some(plugin_names) = matches.value_of("plugins") {
         debug!("Restricting plugins to: {}", plugin_names);
-        let names: Vec<_> = plugin_names.split(",").collect();
+        let names: Vec<_> = plugin_names.split(',').collect();
         factory.build_filter_plugins(
             |n| {
                 debug!("n: {}", n);
@@ -141,11 +144,11 @@ fn main() -> io::Result<()> {
                 if t & PLUGIN_L2 != 0 { print!("  L2"); }
                 if t & PLUGIN_L3 != 0 { print!("  L3"); }
                 if t & PLUGIN_L4 != 0 { print!("  L4"); }
-                println!("");
+                println!();
                 print!("    events: ");
                 if t & PLUGIN_FLOW_NEW != 0 { print!("  FLOW_NEW"); }
                 if t & PLUGIN_FLOW_DEL != 0 { print!("  FLOW_DEL"); }
-                println!("");
+                println!();
             },
             );
         ::std::process::exit(0);
@@ -184,7 +187,7 @@ fn main() -> io::Result<()> {
     };
     let mut engine = SingleThreadedEngine::new(analyzer, &config);
 
-    let _ = engine.run(&mut input_reader).expect("run analyzer");
+    engine.run(&mut input_reader).expect("run analyzer");
 
     Ok(())
 }
