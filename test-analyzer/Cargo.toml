@@ -11,7 +11,7 @@ env_logger = "0.6"
 explugin-example = { path="../explugin-example" }
 libpcap-analyzer = { path="../libpcap-analyzer" }
 libpcap-tools = { path="../libpcap-tools" }
-log = "0.4"
+log = { version = "0.4", features = ["max_level_trace", "release_max_level_warn"] }
 
 [dependencies.clap]
 version = "2"
