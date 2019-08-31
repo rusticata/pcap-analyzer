@@ -124,7 +124,7 @@ impl PcapEngine for SingleThreadedEngine {
                                 snaplen: hdr.snaplen,
                             };
                             ctx.interfaces.push(if_info);
-                            debug!("Legacy pcap,  link type: {}", hdr.network);
+                            trace!("Legacy pcap,  link type: {}", hdr.network);
                             reader.consume_noshift(offset);
                             continue;
                         },
@@ -156,14 +156,14 @@ impl PcapEngine for SingleThreadedEngine {
                             continue;
                         }
                     };
-                    debug!("**************************************************************");
+                    trace!("**************************************************************");
                     // build ts
                     if ctx.first_packet_ts.is_null() {
                         ctx.first_packet_ts = packet.ts;
                     }
-                    debug!("    time  : {} / {:06}", packet.ts.secs, packet.ts.micros);
+                    trace!("    time  : {} / {:06}", packet.ts.secs, packet.ts.micros);
                     ctx.rel_ts = packet.ts - ctx.first_packet_ts; // an underflow is weird but not critical
-                    debug!("    reltime  : {}.{:06}", ctx.rel_ts.secs, ctx.rel_ts.micros);
+                    trace!("    reltime  : {}.{:06}", ctx.rel_ts.secs, ctx.rel_ts.micros);
                     // call engine
                     self.a
                         .handle_packet(&packet, &ctx)
@@ -190,6 +190,7 @@ impl PcapEngine for SingleThreadedEngine {
         }
 
         self.a.teardown();
+        info!("Done, {} packets processed", ctx.pcap_index);
         Ok(())
     }
 }

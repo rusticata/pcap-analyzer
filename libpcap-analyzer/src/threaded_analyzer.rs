@@ -42,7 +42,7 @@ impl<'a> ThreadedAnalyzer<'a> {
     fn wait_for_empty_jobs(&self) {
         debug!("waiting for threads to finish processing");
         for (i, j) in self.local_jobs.iter().enumerate() {
-            debug!("waiting for job {}", i);
+            trace!("waiting for job {}", i);
             while !j.is_empty() {
                 // eprintln!("jobs[{}]: {} jobs remaining", i, j.len());
                 ::std::thread::sleep(::std::time::Duration::from_millis(1));
@@ -62,7 +62,7 @@ impl<'a> ThreadedAnalyzer<'a> {
                 return Err(Error::Generic("Missing interface info"));
             }
         };
-        debug!("linktype: {}", link_type);
+        trace!("linktype: {}", link_type);
         match packet.data {
             PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
             PacketData::L3(ethertype, data) => {
@@ -85,7 +85,7 @@ impl<'a> ThreadedAnalyzer<'a> {
         ctx: &ParseContext,
         data: &'static [u8],
     ) -> Result<(), Error> {
-        debug!("handle_l2 (idx={})", ctx.pcap_index);
+        trace!("handle_l2 (idx={})", ctx.pcap_index);
         // resize slice to remove padding
         let datalen = min(packet.caplen as usize, data.len());
         let data = &data[..datalen];
@@ -112,7 +112,7 @@ impl<'a> ThreadedAnalyzer<'a> {
                         info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
                     }
                 }
-                debug!("    ethertype: 0x{:x}", eth.get_ethertype().0);
+                trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
                 // self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype())
                 let payload = &data[14..];
                 extern_dispatch_l3(&self.local_jobs, packet, &ctx, payload, eth.get_ethertype())
@@ -157,7 +157,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                                     });
                                 }
                                 Job::New(packet, ctx, data, ethertype) => {
-                                    debug!("thread {}: got a job", i);
+                                    trace!("thread {}: got a job", i);
                                     // extern_l2(&s, &registry);
                                     let res =
                                         handle_l3(&packet, &ctx, data, ethertype, &arc_registry);

@@ -67,7 +67,7 @@ impl Analyzer {
     }
 
     fn handle_l2(&mut self, packet: &Packet, ctx: &ParseContext, data: &[u8]) -> Result<(), Error> {
-        debug!("handle_l2 (idx={})", ctx.pcap_index);
+        trace!("handle_l2 (idx={})", ctx.pcap_index);
 
         // resize slice to remove padding
         let datalen = min(packet.caplen as usize, data.len());
@@ -95,7 +95,7 @@ impl Analyzer {
                         info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
                     }
                 }
-                debug!("    ethertype: 0x{:x}", eth.get_ethertype().0);
+                trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
                 handle_l3(
                     &packet,
                     &ctx,
@@ -143,7 +143,7 @@ fn handle_l3_ipv4(
     ethertype: EtherType,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
+    trace!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
     let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
     // eprintln!("ABORT pkt {:?}", ipv4);
     let orig_len = data.len();
@@ -233,7 +233,7 @@ fn handle_l3_ipv6(
     ethertype: EtherType,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
+    trace!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
     let ipv6 = Ipv6Packet::new(data).ok_or("Could not build IPv6 packet from data")?;
     let l4_proto = ipv6.get_next_header();
 
@@ -263,10 +263,10 @@ fn handle_l3_vlan_801q(
     _ethertype: EtherType,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l3_vlan_801q (idx={})", ctx.pcap_index);
+    trace!("handle_l3_vlan_801q (idx={})", ctx.pcap_index);
     let vlan = VlanPacket::new(data).ok_or("Could not build 802.1Q Vlan packet from data")?;
     let next_ethertype = vlan.get_ethertype();
-    debug!("    802.1q: VLAN id={}", vlan.get_vlan_identifier());
+    trace!("    802.1q: VLAN id={}", vlan.get_vlan_identifier());
 
     handle_l3(&packet, &ctx, vlan.payload(), next_ethertype, registry)
 }
@@ -279,7 +279,7 @@ fn handle_l3_generic(
     ethertype: EtherType,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l3_generic (idx={})", ctx.pcap_index);
+    trace!("handle_l3_generic (idx={})", ctx.pcap_index);
     // we don't know if there is padding to remove
     //run Layer 3 plugins
     // self.run_l3_plugins(packet, data, ethertype.0, &ThreeTuple::default());
@@ -325,8 +325,8 @@ fn handle_l4_tcp(
     l3_info: &L3Info,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l4_tcp (idx={})", ctx.pcap_index);
-    debug!("    l4_data len: {}", data.len());
+    trace!("handle_l4_tcp (idx={})", ctx.pcap_index);
+    trace!("    l4_data len: {}", data.len());
     let tcp = TcpPacket::new(data).ok_or("Could not build TCP packet from data")?;
 
     // XXX handle TCP defrag
@@ -346,8 +346,8 @@ fn handle_l4_udp(
     l3_info: &L3Info,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l4_udp (idx={})", ctx.pcap_index);
-    debug!("    l4_data len: {}", data.len());
+    trace!("handle_l4_udp (idx={})", ctx.pcap_index);
+    trace!("    l4_data len: {}", data.len());
     let udp = UdpPacket::new(data).ok_or("Could not build UDP packet from data")?;
 
     let l4_payload = Some(udp.payload());
@@ -366,9 +366,9 @@ fn handle_l4_icmp(
     l3_info: &L3Info,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l4_icmp (idx={})", ctx.pcap_index);
+    trace!("handle_l4_icmp (idx={})", ctx.pcap_index);
     let icmp = IcmpPacket::new(data).ok_or("Could not build ICMP packet from data")?;
-    debug!(
+    trace!(
         "ICMP type={:?} code={:?}",
         icmp.get_icmp_type(),
         icmp.get_icmp_code()
@@ -390,9 +390,9 @@ fn handle_l4_icmpv6(
     l3_info: &L3Info,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l4_icmpv6 (idx={})", ctx.pcap_index);
+    trace!("handle_l4_icmpv6 (idx={})", ctx.pcap_index);
     let icmpv6 = Icmpv6Packet::new(data).ok_or("Could not build ICMPv6 packet from data")?;
-    debug!(
+    trace!(
         "ICMPv6 type={:?} code={:?}",
         icmpv6.get_icmpv6_type(),
         icmpv6.get_icmpv6_code()
@@ -414,7 +414,7 @@ fn handle_l4_gre(
     _l3_info: &L3Info,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l4_gre (idx={})", ctx.pcap_index);
+    trace!("handle_l4_gre (idx={})", ctx.pcap_index);
     let l3_data = data;
 
     let gre = GrePacket::new(l3_data).ok_or("Could not build GRE packet from data")?;
@@ -433,12 +433,12 @@ fn handle_l4_ipv6frag(
     l3_info: &L3Info,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!("handle_l4_ipv6frag (idx={})", ctx.pcap_index);
+    trace!("handle_l4_ipv6frag (idx={})", ctx.pcap_index);
     let l3_data = data;
 
     let ip6frag = IPv6FragmentPacket::new(l3_data)
         .ok_or("Could not build IPv6FragmentPacket packet from data")?;
-    debug!(
+    trace!(
         "IPv6FragmentPacket more_fragments={} next_header={} id=0x{:x}",
         ip6frag.more_fragments(),
         ip6frag.get_next_header(),
@@ -467,7 +467,7 @@ fn handle_l4_ipv6frag(
             &v
         }
         Fragment::Incomplete => {
-            debug!("IPv6Fragment defragmentation incomplete");
+            trace!("IPv6Fragment defragmentation incomplete");
             return Ok(());
         }
         Fragment::Error => {
@@ -496,7 +496,7 @@ fn handle_l4_generic(
     l3_info: &L3Info,
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
-    debug!(
+    trace!(
         "handle_l4_generic (idx={}, l4_proto={})",
         ctx.pcap_index, l3_info.three_tuple.proto
     );
@@ -522,7 +522,7 @@ fn handle_l4_common(
     registry: &PluginRegistry,
 ) -> Result<(), Error> {
     let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
-    debug!("5t: {}", five_tuple);
+    trace!("5t: {}", five_tuple);
     let now = packet.ts;
 
     // lookup flow
@@ -643,7 +643,7 @@ impl PcapAnalyzer for Analyzer {
             let mut f = f.borrow_mut();
             let flows = &f.flows;
             // expire remaining flows
-            debug!("{} flows remaining in table", flows.len());
+            trace!("{} flows remaining in table", flows.len());
             // let start = ::std::time::Instant::now();
             self.registry.run_plugins(
                 |p| p.plugin_type() & PLUGIN_FLOW_DEL != 0,
@@ -685,14 +685,14 @@ impl ThreadAnalyzerData {
         let rev_id = self.flows_id.get(&five_t.get_reverse()).copied();
         if let Some(id) = rev_id {
             // insert reverse flow ID
-            debug!("inserting reverse flow ID {}", id);
+            trace!("inserting reverse flow ID {}", id);
             self.flows_id.insert(five_t, id);
             return id;
         }
         // get a new flow index (XXX currently: random number)
         let id = self.trng.gen();
-        debug!("Inserting new flow (id={})", id);
-        debug!("    flow: {:?}", flow);
+        trace!("Inserting new flow (id={})", id);
+        trace!("    flow: {:?}", flow);
         self.flows.insert(id, flow);
         self.flows_id.insert(five_t, id);
         id
