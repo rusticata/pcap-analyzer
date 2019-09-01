@@ -6,13 +6,14 @@ use pcap_parser::data::PacketData;
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use std::cmp::min;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 use std::thread::JoinHandle;
 
 pub enum Job<'a> {
     Exit,
     PrintDebug,
     New(Packet<'a>, ParseContext, &'a [u8], EtherType),
+    Wait,
 }
 
 pub struct Worker {
@@ -26,28 +27,28 @@ pub struct ThreadedAnalyzer<'a> {
 
     local_jobs: Vec<Arc<SegQueue<Job<'a>>>>,
     workers: Vec<Worker>,
+    barrier: Arc<Barrier>,
 }
 
 impl<'a> ThreadedAnalyzer<'a> {
     pub fn new(registry: PluginRegistry, config: &Config) -> Self {
         let n_workers = config.get_usize("num_threads").unwrap_or_else(num_cpus::get);
+        let barrier = Arc::new(Barrier::new(n_workers + 1));
         ThreadedAnalyzer {
             registry,
             n_workers,
             local_jobs: Vec::new(),
             workers: Vec::new(),
+            barrier,
         }
     }
 
     fn wait_for_empty_jobs(&self) {
-        debug!("waiting for threads to finish processing");
-        for (i, j) in self.local_jobs.iter().enumerate() {
-            trace!("waiting for job {}", i);
-            while !j.is_empty() {
-                // eprintln!("jobs[{}]: {} jobs remaining", i, j.len());
-                ::std::thread::sleep(::std::time::Duration::from_millis(1));
-            }
+        trace!("waiting for threads to finish processing");
+        for job in self.local_jobs.iter() {
+            job.push(Job::Wait);
         }
+        self.barrier.wait();
     }
 
     fn dispatch(&self, packet: Packet<'static>, ctx: &ParseContext) -> Result<(), Error> {
@@ -141,6 +142,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                 let local_q: Arc<SegQueue<Job<'static>>> =
                     unsafe { ::std::mem::transmute(local_q) };
                 let arc_registry = self.registry.clone();
+                let barrier = self.barrier.clone();
                 let handler = ::std::thread::spawn(move || {
                     debug!("worker thread {} starting", i);
                     loop {
@@ -164,6 +166,10 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                                     if res.is_err() {
                                         warn!("thread {}: handle_l3 failed", i);
                                     }
+                                }
+                                Job::Wait => {
+                                    trace!("Thread {}: waiting at barrier", i);
+                                    barrier.wait();
                                 }
                             }
                         }
