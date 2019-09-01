@@ -7,7 +7,7 @@ use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use std::cmp::min;
 use std::sync::{Arc, Barrier};
-use std::thread::JoinHandle;
+use std::thread;
 
 pub enum Job<'a> {
     Exit,
@@ -18,7 +18,7 @@ pub enum Job<'a> {
 
 pub struct Worker {
     pub(crate) _id: usize,
-    pub(crate) handler: JoinHandle<()>,
+    pub(crate) handler: thread::JoinHandle<()>,
 }
 
 pub struct ThreadedAnalyzer<'a> {
@@ -32,7 +32,9 @@ pub struct ThreadedAnalyzer<'a> {
 
 impl<'a> ThreadedAnalyzer<'a> {
     pub fn new(registry: PluginRegistry, config: &Config) -> Self {
-        let n_workers = config.get_usize("num_threads").unwrap_or_else(num_cpus::get);
+        let n_workers = config
+            .get_usize("num_threads")
+            .unwrap_or_else(num_cpus::get);
         let barrier = Arc::new(Barrier::new(n_workers + 1));
         ThreadedAnalyzer {
             registry,
@@ -143,39 +145,66 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                     unsafe { ::std::mem::transmute(local_q) };
                 let arc_registry = self.registry.clone();
                 let barrier = self.barrier.clone();
-                let handler = ::std::thread::spawn(move || {
-                    debug!("worker thread {} starting", i);
-                    loop {
-                        if let Ok(msg) = local_q.pop() {
-                            match msg {
-                                Job::Exit => break,
-                                Job::PrintDebug => {
-                                    TAD.with(|f| {
-                                        debug!(
-                                            "thread {}: hash table size: {}",
-                                            i,
-                                            f.borrow().flows.len()
-                                        );
-                                    });
-                                }
-                                Job::New(packet, ctx, data, ethertype) => {
-                                    trace!("thread {}: got a job", i);
-                                    // extern_l2(&s, &registry);
-                                    let res =
-                                        handle_l3(&packet, &ctx, data, ethertype, &arc_registry);
-                                    if res.is_err() {
-                                        warn!("thread {}: handle_l3 failed", i);
+                let n = format!("worker {}", i);
+                let builder = thread::Builder::new();
+                let handler = builder
+                    .name(n)
+                    .spawn(move || {
+                        debug!("worker thread {} starting", i);
+                        loop {
+                            if let Ok(msg) = local_q.pop() {
+                                match msg {
+                                    Job::Exit => break,
+                                    Job::PrintDebug => {
+                                        TAD.with(|f| {
+                                            debug!(
+                                                "thread {}: hash table size: {}",
+                                                i,
+                                                f.borrow().flows.len()
+                                            );
+                                        });
                                     }
-                                }
-                                Job::Wait => {
-                                    trace!("Thread {}: waiting at barrier", i);
-                                    barrier.wait();
+                                    Job::New(packet, ctx, data, ethertype) => {
+                                        trace!("thread {}: got a job", i);
+                                        // extern_l2(&s, &registry);
+                                        let res = ::std::panic::catch_unwind(|| {
+                                            let h3_res = handle_l3(
+                                                &packet,
+                                                &ctx,
+                                                data,
+                                                ethertype,
+                                                &arc_registry,
+                                            );
+                                            if h3_res.is_err() {
+                                                warn!("thread {}: handle_l3 failed", i);
+                                            }
+                                        });
+                                        if let Err(panic) = res {
+                                            warn!(
+                                                "thread {} panicked (idx={})\n{:?}",
+                                                i, ctx.pcap_index, panic
+                                            );
+                                            // match panic.downcast::<String>() {
+                                            //     Ok(panic_msg) => {
+                                            //         println!("panic happened: {}", panic_msg);
+                                            //     }
+                                            //     Err(_) => {
+                                            //         println!("panic happened: unknown type.");
+                                            //     }
+                                            // }
+                                            // ::std::panic::resume_unwind(err);
+                                            ::std::process::exit(1);
+                                        }
+                                    }
+                                    Job::Wait => {
+                                        trace!("Thread {}: waiting at barrier", i);
+                                        barrier.wait();
+                                    }
                                 }
                             }
                         }
-                        // ::std::thread::sleep(::std::time::Duration::from_millis(10));
-                    }
-                });
+                    })
+                    .unwrap();
                 Worker { _id: i, handler }
                 // (q, exit.clone(), handler)
             })
@@ -215,6 +244,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
 
     fn before_refill(&mut self) {
         self.wait_for_empty_jobs();
+        trace!("threads synchronized, refill");
     }
 }
 
