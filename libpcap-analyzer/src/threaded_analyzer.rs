@@ -12,7 +12,7 @@ use std::thread;
 pub enum Job<'a> {
     Exit,
     PrintDebug,
-    New(Packet<'a>, ParseContext, &'a [u8], EtherType),
+    New(&'a Packet<'a>, &'a ParseContext, &'a [u8], EtherType),
     Wait,
 }
 
@@ -53,7 +53,7 @@ impl<'a> ThreadedAnalyzer<'a> {
         self.barrier.wait();
     }
 
-    fn dispatch(&self, packet: Packet<'static>, ctx: &ParseContext) -> Result<(), Error> {
+    fn dispatch(&self, packet: &'static Packet, ctx: &'a ParseContext) -> Result<(), Error> {
         // get layer type and data
         let link_type = match ctx.interfaces.get(packet.interface as usize) {
             Some(if_info) => if_info.link_type,
@@ -84,8 +84,8 @@ impl<'a> ThreadedAnalyzer<'a> {
 
     fn handle_l2(
         &self,
-        packet: Packet<'static>,
-        ctx: &ParseContext,
+        packet: &'static Packet,
+        ctx: &'a ParseContext,
         data: &'static [u8],
     ) -> Result<(), Error> {
         trace!("handle_l2 (idx={})", ctx.pcap_index);
@@ -220,8 +220,9 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
         // to be sent to threads
         // "by doing this, I solely declare that I am responsible of the lifetime
         // and safety of packet"
-        let packet: Packet<'static> = unsafe { ::std::mem::transmute(packet.clone()) };
-        self.dispatch(packet, &ctx)?;
+        let packet: &'static Packet = unsafe { ::std::mem::transmute(packet) };
+        let ctx: &'static ParseContext = unsafe { ::std::mem::transmute(ctx) };
+        self.dispatch(packet, ctx)?;
         Ok(())
     }
 
@@ -250,15 +251,15 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
 
 pub(crate) fn extern_dispatch_l3<'a>(
     jobs: &[Arc<SegQueue<Job<'a>>>],
-    packet: Packet<'a>,
-    ctx: &ParseContext,
+    packet: &'a Packet,
+    ctx: &'a ParseContext,
     data: &'a [u8],
     ethertype: EtherType,
 ) -> Result<(), Error> {
     let n_workers = jobs.len();
     let i = fan_out(data, ethertype, n_workers);
     debug_assert!(i < n_workers);
-    jobs[i].push(Job::New(packet, ctx.clone(), data, ethertype));
+    jobs[i].push(Job::New(packet, ctx, data, ethertype));
     Ok(())
 }
 
@@ -329,5 +330,18 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
             }
         }
         _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use libpcap_tools::{Packet, ParseContext};
+    use std::mem;
+    use super::Job;
+    #[test]
+    fn size_of_structs() {
+        println!("sizeof ParseContext: {}", mem::size_of::<ParseContext>());
+        println!("sizeof Packet: {}", mem::size_of::<Packet>());
+        println!("sizeof Job: {}", mem::size_of::<Job>());
     }
 }
