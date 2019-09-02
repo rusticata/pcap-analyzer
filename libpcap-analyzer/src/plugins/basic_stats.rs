@@ -1,9 +1,8 @@
-use std::collections::HashMap;
-
 use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_info::PacketInfo;
 use crate::plugin::{PLUGIN_L3, PLUGIN_L4};
+use indexmap::IndexMap;
 use libpcap_tools::{FiveTuple, Packet, ThreeTuple};
 
 #[derive(Default)]
@@ -17,8 +16,8 @@ pub struct BasicStats {
     pub total_bytes_l3 : usize,
     pub total_packets : usize,
 
-    pub l3_conversations: HashMap<ThreeTuple,Count>,
-    pub l4_conversations: HashMap<FiveTuple,Count>,
+    pub l3_conversations: IndexMap<ThreeTuple,Count>,
+    pub l4_conversations: IndexMap<FiveTuple,Count>,
 }
 
 default_plugin_builder!(BasicStats, BasicStatsBuilder);
@@ -43,6 +42,8 @@ impl Plugin for BasicStats {
     }
 
     fn post_process(&mut self) {
+        self.l3_conversations.sort_keys();
+        self.l4_conversations.sort_keys();
         info!("BasicStats: total packets {} bytes", self.total_packets);
         info!("BasicStats: total bytes (L3) {}", self.total_bytes_l3);
         let total_l4 = self.l4_conversations
