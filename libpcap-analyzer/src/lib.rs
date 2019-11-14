@@ -26,7 +26,7 @@ mod ip6_defrag;
 mod ip_defrag;
 pub use ip6_defrag::*;
 
-mod toeplitz;
+pub mod toeplitz;
 
 #[derive(Debug, PartialEq)]
 pub struct Error;

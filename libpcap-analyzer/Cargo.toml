@@ -33,6 +33,7 @@ plugin_tls_stats = ["rusticata","tls-parser"]
 base64 = { version="0.11", optional=true }
 crossbeam-channel = "0.4"
 env_logger = "0.7"
+fasthash = "0.4"
 indexmap = "1.1"
 lazy_static = "1.2"
 libpcap-tools = { version="0.1.0", path="../libpcap-tools" }

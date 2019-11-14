@@ -270,17 +270,11 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
                 // let proto = data[9];
                 // (src[0] ^ dst[0] ^ proto) as usize % n_workers
                 let mut buf: [u8; 20] = [0; 20];
-                let sz = 8;
-                // source IP, in network-order
-                buf[0] = data[12];
-                buf[1] = data[13];
-                buf[2] = data[14];
-                buf[3] = data[15];
-                // destination IP, in network-order
-                buf[4] = data[16];
-                buf[5] = data[17];
-                buf[6] = data[18];
-                buf[7] = data[19];
+                let sz = 4;
+                buf[0] = data[12] ^ data[16];
+                buf[1] = data[13] ^ data[17];
+                buf[2] = data[14] ^ data[18];
+                buf[3] = data[15] ^ data[19];
                 // we may append source and destination ports
                 // XXX breaks fragmentation
                 // if data[9] == crate::plugin::TRANSPORT_TCP || data[9] == crate::plugin::TRANSPORT_UDP {
@@ -294,9 +288,11 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
                 //         sz = 12;
                 //     }
                 // }
-                let hash = crate::toeplitz::toeplitz_hash(crate::toeplitz::KEY, &buf[..sz]);
+                // let hash = crate::toeplitz::toeplitz_hash(crate::toeplitz::KEY, &buf[..sz]);
+                let hash = fasthash::metro::hash64(&buf[..sz]);
                 // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
-                ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
+                // ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
+                hash as usize % n_workers
             } else {
                 n_workers - 1
             }
@@ -304,9 +300,13 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
         EtherTypes::Ipv6 => {
             if data.len() >= 40 {
                 let mut buf: [u8; 40] = [0; 40];
-                let sz = 32;
+                // let sz = 32;
                 // source IP + destination IP, in network-order
-                buf[0..32].copy_from_slice(&data[8..40]);
+                // buf[0..32].copy_from_slice(&data[8..40]);
+                let sz = 16;
+                for i in 0..16 {
+                    buf[i] = data[8+i] ^ data[24+i];
+                }
                 // we may append source and destination ports
                 // XXX breaks fragmentation
                 // if data[6] == crate::plugin::TRANSPORT_TCP || data[6] == crate::plugin::TRANSPORT_UDP {
@@ -320,9 +320,11 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
                 //         sz += 4;
                 //     }
                 // }
-                let hash = crate::toeplitz::toeplitz_hash(crate::toeplitz::KEY, &buf[..sz]);
+                // let hash = crate::toeplitz::toeplitz_hash(crate::toeplitz::KEY, &buf[..sz]);
+                let hash = fasthash::metro::hash64(&buf[..sz]);
                 // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
-                ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
+                // ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
+                hash as usize % n_workers
             } else {
                 n_workers - 1
             }
