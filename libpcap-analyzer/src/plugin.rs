@@ -95,7 +95,7 @@ macro_rules! plugin_builder {
 
         impl $crate::PluginBuilder for $builder_name {
             fn name(&self) -> &'static str {
-                stringify!($builder)
+                stringify!($builder_name)
             }
             fn build(&self, registry: &mut $crate::PluginRegistry, config: &libpcap_tools::Config) {
                 let plugin = $build_fn(config);
