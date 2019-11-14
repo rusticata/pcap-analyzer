@@ -1,6 +1,6 @@
 use crate::analyzer::{handle_l3, TAD};
 use crate::plugin_registry::PluginRegistry;
-use crossbeam_queue::SegQueue;
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use libpcap_tools::*;
 use pcap_parser::data::PacketData;
 use pnet_base::MacAddr;
@@ -25,7 +25,7 @@ pub struct ThreadedAnalyzer<'a> {
     registry: PluginRegistry,
     n_workers: usize,
 
-    local_jobs: Vec<Arc<SegQueue<Job<'a>>>>,
+    local_jobs: Vec<Sender<Job<'a>>>,
     workers: Vec<Worker>,
     barrier: Arc<Barrier>,
 }
@@ -48,7 +48,7 @@ impl<'a> ThreadedAnalyzer<'a> {
     fn wait_for_empty_jobs(&self) {
         trace!("waiting for threads to finish processing");
         for job in self.local_jobs.iter() {
-            job.push(Job::Wait);
+            job.send(Job::Wait);
         }
         self.barrier.wait();
     }
@@ -132,17 +132,16 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
     fn init(&mut self) -> Result<(), Error> {
         self.registry.run_plugins(|_| true, |p| p.pre_process());
 
-        let local_jobs: Vec<_> = (0..self.n_workers)
-            .map(|_| Arc::new(SegQueue::new()))
-            .collect();
+        self.local_jobs.reserve(self.n_workers);
 
         let workers: Vec<_> = (0..self.n_workers)
             .map(|i| {
-                let local_q = local_jobs[i].clone();
+                let (sender, receiver) = unbounded();
+                self.local_jobs.push(sender);
                 // NOTE: remove job queue from lifetime management, it must be made 'static
                 // to be sent to threads
-                let local_q: Arc<SegQueue<Job<'static>>> =
-                    unsafe { ::std::mem::transmute(local_q) };
+                let r : Receiver<Job<'static>> =
+                    unsafe { ::std::mem::transmute(receiver) };
                 let arc_registry = self.registry.clone();
                 let barrier = self.barrier.clone();
                 let n = format!("worker {}", i);
@@ -152,7 +151,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                     .spawn(move || {
                         debug!("worker thread {} starting", i);
                         loop {
-                            if let Ok(msg) = local_q.pop() {
+                            if let Ok(msg) = r.recv() {
                                 match msg {
                                     Job::Exit => break,
                                     Job::PrintDebug => {
@@ -210,7 +209,6 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
             })
             .collect();
 
-        self.local_jobs = local_jobs;
         self.workers = workers;
         Ok(())
     }
@@ -231,8 +229,8 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
         self.wait_for_empty_jobs();
         for job in self.local_jobs.iter() {
             // XXX expire flows?
-            job.push(Job::PrintDebug);
-            job.push(Job::Exit);
+            job.send(Job::PrintDebug);
+            job.send(Job::Exit);
         }
         while let Some(w) = self.workers.pop() {
             w.handler.join().expect("panic occurred in a thread");
@@ -250,7 +248,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
 }
 
 pub(crate) fn extern_dispatch_l3<'a>(
-    jobs: &[Arc<SegQueue<Job<'a>>>],
+    jobs: &[Sender<Job<'a>>],
     packet: &'a Packet,
     ctx: &'a ParseContext,
     data: &'a [u8],
@@ -259,7 +257,7 @@ pub(crate) fn extern_dispatch_l3<'a>(
     let n_workers = jobs.len();
     let i = fan_out(data, ethertype, n_workers);
     debug_assert!(i < n_workers);
-    jobs[i].push(Job::New(packet, ctx, data, ethertype));
+    jobs[i].send(Job::New(packet, ctx, data, ethertype));
     Ok(())
 }
 
@@ -335,9 +333,9 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+    use super::Job;
     use libpcap_tools::{Packet, ParseContext};
     use std::mem;
-    use super::Job;
     #[test]
     fn size_of_structs() {
         println!("sizeof ParseContext: {}", mem::size_of::<ParseContext>());
