@@ -54,18 +54,6 @@ impl<'a> ThreadedAnalyzer<'a> {
     }
 
     fn dispatch(&self, packet: &'static Packet, ctx: &'a ParseContext) -> Result<(), Error> {
-        // get layer type and data
-        let link_type = match ctx.interfaces.get(packet.interface as usize) {
-            Some(if_info) => if_info.link_type,
-            None => {
-                warn!(
-                    "Could not get link_type (missing interface info) for packet idx={}",
-                    ctx.pcap_index
-                );
-                return Err(Error::Generic("Missing interface info"));
-            }
-        };
-        trace!("linktype: {}", link_type);
         match packet.data {
             PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
             PacketData::L3(ethertype, data) => {
@@ -76,7 +64,7 @@ impl<'a> ThreadedAnalyzer<'a> {
                 unimplemented!() // XXX
             }
             PacketData::Unsupported(_) => {
-                warn!("Unsupported linktype {}", link_type);
+                warn!("Unsupported linktype");
                 unimplemented!() // XXX
             }
         }
