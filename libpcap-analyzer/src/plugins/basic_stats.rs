@@ -44,13 +44,13 @@ impl Plugin for BasicStats {
     fn post_process(&mut self) {
         self.l3_conversations.sort_keys();
         self.l4_conversations.sort_keys();
-        info!("BasicStats: total packets {} bytes", self.total_packets);
+        info!("BasicStats: total packets {}", self.total_packets);
         info!("BasicStats: total bytes (L3) {}", self.total_bytes_l3);
         let total_l4 = self.l4_conversations
             .iter()
             .map(|(_,stats)| stats.num_bytes)
             .sum::<usize>();
-        info!("BasicStats: total bytes (L4) {} bytes", total_l4);
+        info!("BasicStats: total bytes (L4) {}", total_l4);
         info!("Conversions (L3):");
         for (t3,stats) in self.l3_conversations.iter() {
             info!("  {}: {} bytes, {} packets", t3, stats.num_bytes, stats.num_packets);

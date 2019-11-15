@@ -175,7 +175,7 @@ impl PcapEngine for SingleThreadedEngine {
                 Err(PcapError::Incomplete) => {
                     if last_incomplete_index == ctx.pcap_index {
                         warn!("Could not read complete data block.");
-                        warn!("Hint: the reader buffer size may be too small, or the input file nay be truncated.");
+                        warn!("Hint: the reader buffer size may be too small, or the input file may be truncated.");
                         break;
                     }
                     last_incomplete_index = ctx.pcap_index;
