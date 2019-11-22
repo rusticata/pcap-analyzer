@@ -1,8 +1,9 @@
-use crate::plugin_registry::PluginRegistry;
+use crate::erspan::ErspanPacket;
 use crate::ip6_defrag::IPv6FragmentPacket;
 use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
 use crate::packet_info::PacketInfo;
 use crate::plugin::*;
+use crate::plugin_registry::PluginRegistry;
 use libpcap_tools::*;
 
 use pcap_parser::data::PacketData;
@@ -61,9 +62,7 @@ pub struct Analyzer {
 
 impl Analyzer {
     pub fn new(registry: PluginRegistry, _config: &Config) -> Analyzer {
-        Analyzer {
-            registry,
-        }
+        Analyzer { registry }
     }
 
     fn handle_l2(&mut self, packet: &Packet, ctx: &ParseContext, data: &[u8]) -> Result<(), Error> {
@@ -129,8 +128,13 @@ pub(crate) fn handle_l3(
         EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, data, ethertype, registry),
         // ignore ARP packets
         EtherTypes::Arp => Ok(()),
+        EtherType(0x88be) => handle_l3_erspan(packet, ctx, data, ethertype, registry),
+
         e => {
-            warn!("Unsupported ethertype {} (0x{:x})", e, e.0);
+            warn!(
+                "Unsupported ethertype {} (0x{:x}) (idx={})",
+                e, e.0, ctx.pcap_index
+            );
             handle_l3_generic(packet, ctx, data, e, registry)
         }
     }
@@ -203,7 +207,7 @@ fn handle_l3_ipv4(
         Fragment::NoFrag(d) => {
             debug_assert!(d.len() < orig_len);
             d
-        },
+        }
         Fragment::Complete(ref v) => {
             warn!("IPv4 defrag done, using defrag buffer len={}", v.len());
             &v
@@ -269,6 +273,23 @@ fn handle_l3_vlan_801q(
     trace!("    802.1q: VLAN id={}", vlan.get_vlan_identifier());
 
     handle_l3(&packet, &ctx, vlan.payload(), next_ethertype, registry)
+}
+
+fn handle_l3_erspan(
+    packet: &Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    _ethertype: EtherType,
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    trace!("handle_l3_erspan (idx={})", ctx.pcap_index);
+    let erspan = ErspanPacket::new(data).ok_or("Could not build Erspan packet from data")?;
+    trace!("    erspan: VLAN id={} span ID={}", erspan.get_vlan(), erspan.get_span_id());
+    let eth_data = erspan.payload();
+    let eth =
+        EthernetPacket::new(eth_data).ok_or("Could not build EthernetPacket packet from data")?;
+    let next_ethertype = eth.get_ethertype();
+    handle_l3(&packet, &ctx, eth.payload(), next_ethertype, registry)
 }
 
 // Called when L3 layer is unknown
@@ -420,8 +441,13 @@ fn handle_l4_gre(
     let gre = GrePacket::new(l3_data).ok_or("Could not build GRE packet from data")?;
 
     let next_proto = gre.get_protocol_type();
-    // XXX can panic: 'Source routed GRE packets not supported'
+    // XXX can panic: 'Source routed GRE packets not supported' in gre_routing_length()
+    // if gre.get_routing_present() != 1 {
+    //     warn!("Source routed GRE packets not supported");
+    //     return Ok(());
+    // }
     let data = gre.payload();
+    trace!("GRE: type=0x{:x}", next_proto);
 
     handle_l3(packet, ctx, data, EtherType(next_proto), registry)
 }
@@ -498,7 +524,8 @@ fn handle_l4_generic(
 ) -> Result<(), Error> {
     trace!(
         "handle_l4_generic (idx={}, l4_proto={})",
-        ctx.pcap_index, l3_info.three_tuple.proto
+        ctx.pcap_index,
+        l3_info.three_tuple.proto
     );
     // in generic function, we don't know how to get l4_payload
     let l4_payload = None;
@@ -616,24 +643,14 @@ impl PcapAnalyzer for Analyzer {
 
     /// Dispatch function: given a packet, use link type to get the real data, and
     /// call the matching handling function (some pcap blocks encode ethernet, or IPv4 etc.)
-    fn handle_packet(
-        &mut self,
-        packet: &Packet,
-        ctx: &ParseContext,
-    ) -> Result<(), Error> {
+    fn handle_packet(&mut self, packet: &Packet, ctx: &ParseContext) -> Result<(), Error> {
         match packet.data {
             PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
             PacketData::L3(ethertype, data) => {
-                handle_l3(
-                    packet,
-                    &ctx,
-                    data,
-                    EtherType(ethertype),
-                    &self.registry,
-                )
+                handle_l3(packet, &ctx, data, EtherType(ethertype), &self.registry)
             }
-            PacketData::L4(_,_) => unimplemented!(), // XXX
-            PacketData::Unsupported(_) => unimplemented!( ), // XXX
+            PacketData::L4(_, _) => unimplemented!(), // XXX
+            PacketData::Unsupported(_) => unimplemented!(), // XXX
         }
     }
 
@@ -652,7 +669,7 @@ impl PcapAnalyzer for Analyzer {
                         p.flow_destroyed(flow);
                     });
                 },
-                );
+            );
             // let elapsed = start.elapsed();
             // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
             f.flows.clear();

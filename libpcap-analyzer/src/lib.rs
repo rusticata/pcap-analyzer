@@ -22,8 +22,10 @@ mod threaded_analyzer;
 pub use analyzer::*;
 pub use threaded_analyzer::*;
 
+mod erspan;
 mod ip6_defrag;
 mod ip_defrag;
+pub use erspan::*;
 pub use ip6_defrag::*;
 
 pub mod toeplitz;
