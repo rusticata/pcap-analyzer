@@ -4,6 +4,7 @@ use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
 use crate::packet_info::PacketInfo;
 use crate::plugin::*;
 use crate::plugin_registry::PluginRegistry;
+use crate::vxlan::*;
 use libpcap_tools::*;
 
 use pcap_parser::data::PacketData;
@@ -65,48 +66,52 @@ impl Analyzer {
         Analyzer { registry }
     }
 
+    #[inline]
     fn handle_l2(&mut self, packet: &Packet, ctx: &ParseContext, data: &[u8]) -> Result<(), Error> {
-        trace!("handle_l2 (idx={})", ctx.pcap_index);
+        handle_l2(packet, ctx, data, &self.registry)
+    }
+}
 
-        // resize slice to remove padding
-        let datalen = min(packet.caplen as usize, data.len());
-        let data = &data[..datalen];
+pub(crate) fn handle_l2(
+    packet: &Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    trace!("handle_l2 (idx={})", ctx.pcap_index);
 
-        // let start = ::std::time::Instant::now();
-        self.registry.run_plugins_l2(&packet, &data);
-        // let elapsed = start.elapsed();
-        // debug!("Time to run l2 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
+    // resize slice to remove padding
+    let datalen = min(packet.caplen as usize, data.len());
+    let data = &data[..datalen];
 
-        match EthernetPacket::new(data) {
-            Some(eth) => {
-                // debug!("    source: {}", eth.get_source());
-                // debug!("    dest  : {}", eth.get_destination());
-                let dest = eth.get_destination();
-                if dest.0 == 1 {
-                    // Multicast
-                    if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) {
-                        info!("Cisco CDP/VTP/UDLD");
-                        return Ok(());
-                    } else if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) {
-                        info!("Cisco Multicast address");
-                        return Ok(());
-                    } else {
-                        info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
-                    }
+    // let start = ::std::time::Instant::now();
+    registry.run_plugins_l2(&packet, &data);
+    // let elapsed = start.elapsed();
+    // debug!("Time to run l2 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
+
+    match EthernetPacket::new(data) {
+        Some(eth) => {
+            // debug!("    source: {}", eth.get_source());
+            // debug!("    dest  : {}", eth.get_destination());
+            let dest = eth.get_destination();
+            if dest.0 == 1 {
+                // Multicast
+                if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) {
+                    info!("Cisco CDP/VTP/UDLD");
+                    return Ok(());
+                } else if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) {
+                    info!("Cisco Multicast address");
+                    return Ok(());
+                } else {
+                    info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
                 }
-                trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
-                handle_l3(
-                    &packet,
-                    &ctx,
-                    eth.payload(),
-                    eth.get_ethertype(),
-                    &self.registry,
-                )
             }
-            None => {
-                // packet too small to be ethernet
-                Ok(())
-            }
+            trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
+            handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype(), registry)
+        }
+        None => {
+            // packet too small to be ethernet
+            Ok(())
         }
     }
 }
@@ -375,6 +380,12 @@ fn handle_l4_udp(
     let src_port = udp.get_source();
     let dst_port = udp.get_destination();
 
+    // if sport/dport == 4789, this could be VXLAN
+    // XXX l4 plugins will not be called
+    if src_port == 4789 || dst_port == 4789 {
+        return handle_l4_vxlan(packet, ctx, data, l3_info, udp.payload(), registry);
+    }
+
     handle_l4_common(
         packet, ctx, data, l3_info, src_port, dst_port, l4_payload, &registry,
     )
@@ -450,6 +461,23 @@ fn handle_l4_gre(
     trace!("GRE: type=0x{:x}", next_proto);
 
     handle_l3(packet, ctx, data, EtherType(next_proto), registry)
+}
+
+fn handle_l4_vxlan(
+    packet: &Packet,
+    ctx: &ParseContext,
+    _data: &[u8],
+    _l3_info: &L3Info,
+    l4_data: &[u8],
+    registry: &PluginRegistry,
+) -> Result<(), Error> {
+    trace!("handle_l4_vxlan (idx={})", ctx.pcap_index);
+    let vxlan = VxlanPacket::new(l4_data).ok_or("Could not build Vxlan packet from data")?;
+    let payload = vxlan.payload();
+
+    trace!("    Vxlan: VLAN id={}", vxlan.get_vlan_identifier());
+
+    handle_l2(packet, ctx, payload, registry)
 }
 
 fn handle_l4_ipv6frag(
