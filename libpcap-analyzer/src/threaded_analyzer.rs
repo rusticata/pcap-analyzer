@@ -12,7 +12,7 @@ use std::thread;
 pub enum Job<'a> {
     Exit,
     PrintDebug,
-    New(&'a Packet<'a>, &'a ParseContext, &'a [u8], EtherType),
+    New(Packet<'a>, ParseContext, &'a [u8], EtherType),
     Wait,
 }
 
@@ -53,7 +53,7 @@ impl<'a> ThreadedAnalyzer<'a> {
         self.barrier.wait();
     }
 
-    fn dispatch(&self, packet: &'static Packet, ctx: &'a ParseContext) -> Result<(), Error> {
+    fn dispatch(&self, packet: Packet<'static>, ctx: &ParseContext) -> Result<(), Error> {
         match packet.data {
             PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
             PacketData::L3(ethertype, data) => {
@@ -72,8 +72,8 @@ impl<'a> ThreadedAnalyzer<'a> {
 
     fn handle_l2(
         &self,
-        packet: &'static Packet,
-        ctx: &'a ParseContext,
+        packet: Packet<'static>,
+        ctx: &ParseContext,
         data: &'static [u8],
     ) -> Result<(), Error> {
         trace!("handle_l2 (idx={})", ctx.pcap_index);
@@ -204,11 +204,8 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
     fn handle_packet(&mut self, packet: &Packet, ctx: &ParseContext) -> Result<(), Error> {
         // NOTE: remove packet from lifetime management, it must be made 'static
         // to be sent to threads
-        // "by doing this, I solely declare that I am responsible of the lifetime
-        // and safety of packet"
-        let packet: &'static Packet = unsafe { ::std::mem::transmute(packet) };
-        let ctx: &'static ParseContext = unsafe { ::std::mem::transmute(ctx) };
-        self.dispatch(packet, ctx)?;
+        let packet: Packet<'static> = unsafe { ::std::mem::transmute(packet.clone()) };
+        self.dispatch(packet, &ctx)?;
         Ok(())
     }
 
@@ -237,15 +234,15 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
 
 pub(crate) fn extern_dispatch_l3<'a>(
     jobs: &[Sender<Job<'a>>],
-    packet: &'a Packet,
-    ctx: &'a ParseContext,
+    packet: Packet<'a>,
+    ctx: &ParseContext,
     data: &'a [u8],
     ethertype: EtherType,
 ) -> Result<(), Error> {
     let n_workers = jobs.len();
     let i = fan_out(data, ethertype, n_workers);
     debug_assert!(i < n_workers);
-    jobs[i].send(Job::New(packet, ctx, data, ethertype));
+    jobs[i].send(Job::New(packet, ctx.clone(), data, ethertype));
     Ok(())
 }
 
