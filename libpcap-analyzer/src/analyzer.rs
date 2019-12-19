@@ -177,6 +177,11 @@ fn handle_l3_ipv4(
         dst: IpAddr::V4(ipv4.get_destination()),
     };
 
+    let cksum = ::pnet_packet::ipv4::checksum(&ipv4);
+    if cksum != ipv4.get_checksum() {
+        warn!("IPv4: invalid checksum");
+    }
+
     run_l3_plugins(packet, data, ethertype.0, &t3, &registry);
 
     // if get_total_length is 0, assume TSO offloading and no padding
@@ -410,6 +415,11 @@ fn handle_l4_icmp(
     let src_port = u16::from(icmp.get_icmp_type().0);
     let dst_port = u16::from(icmp.get_icmp_code().0);
 
+    let cksum = ::pnet_packet::icmp::checksum(&icmp);
+    if cksum != icmp.get_checksum() {
+        warn!("ICMP: invalid checksum");
+    }
+
     handle_l4_common(
         packet, ctx, data, l3_info, src_port, dst_port, l4_payload, registry,
     )
@@ -433,6 +443,13 @@ fn handle_l4_icmpv6(
     let l4_payload = Some(icmpv6.payload());
     let src_port = 0;
     let dst_port = 0;
+
+    if let (IpAddr::V6(src), IpAddr::V6(dst)) = (l3_info.three_tuple.src, l3_info.three_tuple.dst) {
+        let cksum = ::pnet_packet::icmpv6::checksum(&icmpv6, &src, &dst);
+        if cksum != icmpv6.get_checksum() {
+            warn!("ICMPv6: invalid checksum");
+        }
+    }
 
     handle_l4_common(
         packet, ctx, data, l3_info, src_port, dst_port, l4_payload, registry,
