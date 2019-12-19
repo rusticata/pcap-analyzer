@@ -6,6 +6,7 @@ use pcap_parser::data::PacketData;
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use std::cmp::min;
+use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Barrier};
 use std::thread;
 
@@ -138,7 +139,8 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                     .name(n)
                     .spawn(move || {
                         debug!("worker thread {} starting", i);
-                        loop {
+                        let mut pcap_index = 0;
+                        let res = ::std::panic::catch_unwind(AssertUnwindSafe(|| loop {
                             if let Ok(msg) = r.recv() {
                                 match msg {
                                     Job::Exit => break,
@@ -152,35 +154,17 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                                         });
                                     }
                                     Job::New(packet, ctx, data, ethertype) => {
+                                        pcap_index = ctx.pcap_index;
                                         trace!("thread {}: got a job", i);
-                                        // extern_l2(&s, &registry);
-                                        let res = ::std::panic::catch_unwind(|| {
-                                            let h3_res = handle_l3(
-                                                &packet,
-                                                &ctx,
-                                                data,
-                                                ethertype,
-                                                &arc_registry,
-                                            );
-                                            if h3_res.is_err() {
-                                                warn!("thread {}: handle_l3 failed", i);
-                                            }
-                                        });
-                                        if let Err(panic) = res {
-                                            warn!(
-                                                "thread {} panicked (idx={})\n{:?}",
-                                                i, ctx.pcap_index, panic
-                                            );
-                                            // match panic.downcast::<String>() {
-                                            //     Ok(panic_msg) => {
-                                            //         println!("panic happened: {}", panic_msg);
-                                            //     }
-                                            //     Err(_) => {
-                                            //         println!("panic happened: unknown type.");
-                                            //     }
-                                            // }
-                                            // ::std::panic::resume_unwind(err);
-                                            ::std::process::exit(1);
+                                        let h3_res = handle_l3(
+                                            &packet,
+                                            &ctx,
+                                            data,
+                                            ethertype,
+                                            &arc_registry,
+                                        );
+                                        if h3_res.is_err() {
+                                            warn!("thread {}: handle_l3 failed", i);
                                         }
                                     }
                                     Job::Wait => {
@@ -189,6 +173,19 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
                                     }
                                 }
                             }
+                        }));
+                        if let Err(panic) = res {
+                            warn!("thread {} panicked (idx={})\n{:?}", i, pcap_index, panic);
+                            // match panic.downcast::<String>() {
+                            //     Ok(panic_msg) => {
+                            //         println!("panic happened: {}", panic_msg);
+                            //     }
+                            //     Err(_) => {
+                            //         println!("panic happened: unknown type.");
+                            //     }
+                            // }
+                            // ::std::panic::resume_unwind(err);
+                            ::std::process::exit(1);
                         }
                     })
                     .unwrap();
