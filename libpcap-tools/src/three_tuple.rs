@@ -1,8 +1,10 @@
+use serde::Serialize;
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr};
 
 /// Network 3-tuple: layer 4 protocol (e.g TCP or UDP), source and destination IP addresses
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Serialize)]
 pub struct ThreeTuple {
     /// Layer 4 protocol (e.g TCP, UDP, ICMP)
     pub proto: u8,

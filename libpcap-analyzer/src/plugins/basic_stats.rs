@@ -1,11 +1,14 @@
 use super::Plugin;
-use crate::default_plugin_builder;
+use crate::plugin_builder;
+use crate::output;
 use crate::packet_info::PacketInfo;
 use crate::plugin::{PLUGIN_L3, PLUGIN_L4};
 use indexmap::IndexMap;
 use libpcap_tools::{FiveTuple, Packet, ThreeTuple};
+use serde::Serialize;
+use serde_json::{json, Value};
 
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct Count {
     pub num_bytes : usize,
     pub num_packets : usize,
@@ -18,9 +21,17 @@ pub struct BasicStats {
 
     pub l3_conversations: IndexMap<ThreeTuple,Count>,
     pub l4_conversations: IndexMap<FiveTuple,Count>,
+
+    output_dir: String,
 }
 
-default_plugin_builder!(BasicStats, BasicStatsBuilder);
+plugin_builder!(BasicStats, BasicStatsBuilder, |config| {
+    let output_dir = output::get_output_dir(config).to_owned();
+    BasicStats {
+        output_dir,
+        ..Default::default()
+    }
+});
 
 impl Plugin for BasicStats {
     fn name(&self) -> &'static str { "BasicStats" }
@@ -67,5 +78,36 @@ impl Plugin for BasicStats {
         for (t5,stats) in self.l4_conversations.iter().filter(|(t5,_)| t5.proto != 6 && t5.proto != 17) {
             info!("  {}: {} bytes, {} packets", t5, stats.num_bytes, stats.num_packets);
         }
+        let l3 : Vec<_> = self.l3_conversations.iter()
+            .map(|(t3,s)| {
+                if let Value::Object(mut m) = json!(t3) {
+                    m.insert("num_bytes".into(), s.num_bytes.into());
+                    m.insert("num_packets".into(), s.num_packets.into());
+                    Value::Object(m)
+                } else {
+                    panic!("json! macro returned unexpected type");
+                }
+            })
+            .collect();
+        let l4 : Vec<_> = self.l4_conversations.iter()
+            .map(|(t5,s)| {
+                if let Value::Object(mut m) = json!(t5) {
+                    m.insert("num_bytes".into(), s.num_bytes.into());
+                    m.insert("num_packets".into(), s.num_packets.into());
+                    Value::Object(m)
+                } else {
+                    panic!("json! macro returned unexpected type");
+                }
+            })
+            .collect();
+        let js = json!({
+            "total_l3": self.total_bytes_l3,
+            "total_l3_packets": self.total_packets,
+            "l3": l3,
+            "total_l4": total_l4,
+            "l4": l4,
+        });
+        let file = output::create_file(&self.output_dir, "basic-stats.json").expect("Cannot create output file");
+        serde_json::to_writer(file, &js).unwrap();
     }
 }
