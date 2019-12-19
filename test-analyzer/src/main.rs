@@ -6,6 +6,7 @@ use explugin_example::ExEmptyPluginBuilder;
 use libpcap_analyzer::*;
 use libpcap_analyzer::plugins::PluginsFactory;
 use libpcap_tools::{Config, PcapAnalyzer, PcapEngine, SingleThreadedEngine};
+use simplelog::{LevelFilter, SimpleLogger};
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -15,6 +16,24 @@ fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     let path = Path::new(&filename);
     let file = File::open(path)?;
     config.load_config(file)
+}
+
+const ENV_LOG : &str = "PCAP_ANALYZER_LOG";
+fn env_get_log_level() -> LevelFilter {
+    match std::env::var(ENV_LOG) {
+        Ok(key) => {
+            match key.as_ref() {
+                "off" => LevelFilter::Off,
+                "error" => LevelFilter::Error,
+                "warn" => LevelFilter::Warn,
+                "info" => LevelFilter::Info,
+                "debug" => LevelFilter::Debug,
+                "trace" => LevelFilter::Trace,
+                _ => panic!("Invalid log level '{}'", key),
+            }
+        },
+        _ => LevelFilter::Debug
+    }
 }
 
 fn main() -> Result<(), io::Error> {
@@ -44,7 +63,8 @@ fn main() -> Result<(), io::Error> {
         )
         .get_matches();
 
-    env_logger::init();
+    let log_level = env_get_log_level();
+    let _ = SimpleLogger::init(log_level, simplelog::Config::default());
     info!("test-analyzer tool starting");
 
     // create plugin factory with all available plugins

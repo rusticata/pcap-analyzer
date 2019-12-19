@@ -9,7 +9,6 @@ use clap::{crate_version, App, Arg};
 // extern crate env_logger;
 extern crate flate2;
 extern crate pcap_parser;
-extern crate std_logger;
 extern crate xz2;
 
 use std::fs::File;
@@ -74,9 +73,7 @@ fn main() -> io::Result<()> {
         )
         .get_matches();
 
-    // env_logger::init();
-    std_logger::init();
-
+    let _ = simplelog::SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default());
     debug!("Pcap rewrite tool {}", crate_version!());
 
     let mut config = Config::default();

@@ -6,15 +6,14 @@ extern crate log;
 extern crate clap;
 use clap::{crate_version, App, Arg};
 
-extern crate env_logger;
 extern crate flate2;
 extern crate lz4;
 extern crate xz2;
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{Error, ErrorKind};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
@@ -87,17 +86,12 @@ fn main() -> io::Result<()> {
         )
         .get_matches();
 
-    env_logger::init();
-
-    debug!("Pcap analyser {}", crate_version!());
-
     // create plugin factory with all available plugins
     let factory = plugins::PluginsFactory::default();
     // check if asked to list plugin builders
     if matches.is_present("list-builders") {
         println!("pcap-analyzer available plugin builders:");
-        factory.iter_builders(|name|
-                              println!("    {}", name));
+        factory.iter_builders(|name| println!("    {}", name));
         ::std::process::exit(0);
     }
     // load config
@@ -115,9 +109,28 @@ fn main() -> io::Result<()> {
         config.set("num_threads", j);
     }
     if let Some(dir) = matches.value_of("outdir") {
-        debug!("Setting output directory: {}", dir);
         config.set("output_dir", dir);
     }
+
+    // Open log file
+    let log_file = config.get("log_file").unwrap_or("pcap-analyzer.log");
+    let mut path_log = PathBuf::new();
+    if let Some(dir) = config.get("output_dir") {
+        path_log.push(dir);
+    }
+    path_log.push(log_file);
+    let f = OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(&path_log)
+        .unwrap();
+
+    // let _ = simplelog::SimpleLogger::init(simplelog::LevelFilter::Info, simplelog::Config::default());
+    let _ = simplelog::WriteLogger::init(simplelog::LevelFilter::Info, simplelog::Config::default(), f);
+
+    // Now, really start
+    info!("Pcap analyser {}", crate_version!());
+
     // instanciate all plugins
     let registry = if let Some(plugin_names) = matches.value_of("plugins") {
         debug!("Restricting plugins to: {}", plugin_names);
@@ -150,7 +163,7 @@ fn main() -> io::Result<()> {
                 if t & PLUGIN_FLOW_DEL != 0 { print!("  FLOW_DEL"); }
                 println!();
             },
-            );
+        );
         ::std::process::exit(0);
     }
     if registry.num_plugins() == 0 {
