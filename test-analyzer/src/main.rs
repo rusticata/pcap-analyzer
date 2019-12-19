@@ -3,7 +3,8 @@ extern crate log;
 
 use clap::{crate_version, App, Arg};
 use explugin_example::ExEmptyPluginBuilder;
-use libpcap_analyzer::{plugins::PluginsFactory, Analyzer, ThreadedAnalyzer};
+use libpcap_analyzer::*;
+use libpcap_analyzer::plugins::PluginsFactory;
 use libpcap_tools::{Config, PcapAnalyzer, PcapEngine, SingleThreadedEngine};
 use std::fs::File;
 use std::io;
@@ -66,6 +67,23 @@ fn main() -> Result<(), io::Error> {
     }
 
     let registry = factory.build_plugins(&config);
+    debug!("test-analyzer instanciated plugins:");
+    registry.run_plugins(
+        |_| true,
+        |p| {
+            debug!("  {}", p.name());
+            let t = p.plugin_type();
+            let mut s = "    layers: ".to_owned();
+            if t & PLUGIN_L2 != 0 { s += "  L2"; }
+            if t & PLUGIN_L3 != 0 { s += "  L3"; }
+            if t & PLUGIN_L4 != 0 { s += "  L4"; }
+            debug!("{}", s);
+            let mut s = "    events: ".to_owned();
+            if t & PLUGIN_FLOW_NEW != 0 { s += "  FLOW_NEW"; }
+            if t & PLUGIN_FLOW_DEL != 0 { s += "  FLOW_DEL"; }
+            debug!("{}", s);
+        },
+        );
 
     let analyzer: Box<dyn PcapAnalyzer> = match config.get_usize("num_threads") {
         Some(1) => Box::new(Analyzer::new(registry, &config)),
