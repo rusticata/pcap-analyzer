@@ -56,6 +56,13 @@ fn main() -> Result<(), io::Error> {
                 .takes_value(true),
         )
         .arg(
+            Arg::with_name("plugins")
+                .help("Plugins to load (default: all)")
+                .short("p")
+                .long("plugins")
+                .takes_value(true),
+        )
+        .arg(
             Arg::with_name("INPUT")
                 .help("Input file name")
                 .required(true)
@@ -86,8 +93,19 @@ fn main() -> Result<(), io::Error> {
         config.set("num_threads", j);
     }
 
-    let registry = factory.build_plugins(&config);
-    debug!("test-analyzer instanciated plugins:");
+    let registry = if let Some(plugin_names) = matches.value_of("plugins") {
+        debug!("Restricting plugins to: {}", plugin_names);
+        let names: Vec<_> = plugin_names.split(',').collect();
+        factory.build_filter_plugins(
+            |n| {
+                debug!("n: {}", n);
+                names.iter().any(|&x| n.contains(x))
+            },
+            &config,
+        )
+    } else {
+        factory.build_plugins(&config)
+    };    debug!("test-analyzer instanciated plugins:");
     registry.run_plugins(
         |_| true,
         |p| {
