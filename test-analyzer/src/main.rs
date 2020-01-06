@@ -11,6 +11,9 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
+use flate2::read::GzDecoder;
+use xz2::read::XzDecoder;
+
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
     let path = Path::new(&filename);
@@ -133,7 +136,15 @@ fn main() -> Result<(), io::Error> {
     } else {
         let path = Path::new(&input_filename);
         let file = File::open(path)?;
-        Box::new(file)
+        if input_filename.ends_with(".gz") {
+            Box::new(GzDecoder::new(file))
+        } else if input_filename.ends_with(".xz") {
+            Box::new(XzDecoder::new(file))
+        } else if input_filename.ends_with(".lz4") {
+            Box::new(lz4::Decoder::new(file)?)
+        } else {
+            Box::new(file) as Box<dyn io::Read>
+        }
     };
 
     let mut engine = SingleThreadedEngine::new(analyzer, &config);
