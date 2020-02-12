@@ -35,7 +35,7 @@ crossbeam-channel = "0.4"
 fasthash = "0.4"
 indexmap = { version="1.1", features=["serde-1"] }
 lazy_static = "1.2"
-libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
+libpcap-tools = { path="../libpcap-tools" }
 log = "0.4"
 nom = "5.0"
 num_cpus = "1.10"
