@@ -92,18 +92,21 @@ impl<'a> ThreadedAnalyzer<'a> {
                 // debug!("    source: {}", eth.get_source());
                 // debug!("    dest  : {}", eth.get_destination());
                 let dest = eth.get_destination();
-                if dest.0 == 1 {
-                    // Multicast
-                    if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) {
-                        info!("Cisco CDP/VTP/UDLD");
-                        return Ok(());
-                    } else if eth.get_destination() == MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) {
-                        info!("Cisco Multicast address");
-                        return Ok(());
-                    } else {
-                        info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
-                    }
-                }
+                // if dest.is_multicast() {
+                //     match dest {
+                //     MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) => {
+                //         info!("Cisco CDP/VTP/UDLD");
+                //         return Ok(());
+                //     },
+                //     MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) => {
+                //         info!("Cisco Multicast address");
+                //         return Ok(());
+                //     },
+                //     _ => {
+                //         info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
+                //     }
+                //     }
+                // }
                 trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
                 // self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype())
                 let payload = &data[14..];
