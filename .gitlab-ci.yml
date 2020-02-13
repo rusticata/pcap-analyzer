@@ -1,5 +1,3 @@
-image: 'rust:latest'
-
 stages:
   - build
   - test
@@ -11,11 +9,21 @@ variables:
 
 before_script:
   - apt-get update -yq
-  - rustup component add clippy
 # - apt-get install -o dir::cache::archives="$APT_CACHE_DIR" -y {{ DEPENDENCIES }}
 
 test:
   stage: test
+  image: 'rust:latest'
+  script:
+    - rustc --version
+    - cargo --version
+    - cargo test --verbose
+
+test-nightly:
+  stage: test
+  image: 'rust:latest'
+  before_script:
+    - rustup default nightly
   script:
     - rustc --version
     - cargo --version
@@ -23,12 +31,25 @@ test:
 
 clippy: 
   stage: test
+  image: 'rust:latest'
+  before_script:
+    - rustup component add clippy
   script:
     - cargo clippy -- -D clippy::all
   allow_failure: true
 
+fmt: 
+  stage: test
+  image: 'rust:latest'
+  before_script:
+    - rustup component add rustfmt
+  script:
+    - cargo fmt --all -- --check
+  allow_failure: true
+
 pages:
   stage: deploy
+  image: 'rust:latest'
   script:
     - cargo doc --no-deps
     - mv target/doc public
