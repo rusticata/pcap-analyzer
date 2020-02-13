@@ -294,7 +294,7 @@ fn worker(a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
                         &ctx,
                         data,
                         ethertype,
-                        &a.registry,
+                        &a,
                     );
                     if h3_res.is_err() {
                         warn!("thread {}: handle_l3 failed", idx);
