@@ -59,11 +59,17 @@ pub(crate) struct ThreadAnalyzerData {
 /// calling the next level callbacks.
 pub struct Analyzer {
     pub(crate) registry: PluginRegistry,
+
+    do_checksums: bool,
 }
 
 impl Analyzer {
-    pub fn new(registry: PluginRegistry, _config: &Config) -> Analyzer {
-        Analyzer { registry }
+    pub fn new(registry: PluginRegistry, config: &Config) -> Analyzer {
+        let do_checksums = config.get_bool("do_checksums").unwrap_or(true);
+        Analyzer {
+            registry,
+            do_checksums,
+        }
     }
 
     #[inline]
@@ -180,9 +186,11 @@ fn handle_l3_ipv4(
         dst: IpAddr::V4(ipv4.get_destination()),
     };
 
-    let cksum = ::pnet_packet::ipv4::checksum(&ipv4);
-    if cksum != ipv4.get_checksum() {
-        warn!("IPv4: invalid checksum");
+    if analyzer.do_checksums {
+        let cksum = ::pnet_packet::ipv4::checksum(&ipv4);
+        if cksum != ipv4.get_checksum() {
+            warn!("IPv4: invalid checksum");
+        }
     }
 
     run_l3_plugins(packet, data, ethertype.0, &t3, &analyzer.registry);
@@ -418,9 +426,11 @@ fn handle_l4_icmp(
     let src_port = u16::from(icmp.get_icmp_type().0);
     let dst_port = u16::from(icmp.get_icmp_code().0);
 
-    let cksum = ::pnet_packet::icmp::checksum(&icmp);
-    if cksum != icmp.get_checksum() {
-        warn!("ICMP: invalid checksum");
+    if analyzer.do_checksums {
+        let cksum = ::pnet_packet::icmp::checksum(&icmp);
+        if cksum != icmp.get_checksum() {
+            warn!("ICMP: invalid checksum");
+        }
     }
 
     handle_l4_common(
