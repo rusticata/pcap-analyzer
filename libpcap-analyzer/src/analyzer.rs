@@ -58,7 +58,7 @@ pub(crate) struct ThreadAnalyzerData {
 /// All callbacks for a single ISO layer will be called concurrently before
 /// calling the next level callbacks.
 pub struct Analyzer {
-    registry: PluginRegistry,
+    pub(crate) registry: PluginRegistry,
 }
 
 impl Analyzer {

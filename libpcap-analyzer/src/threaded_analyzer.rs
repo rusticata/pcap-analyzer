@@ -1,4 +1,4 @@
-use crate::analyzer::{handle_l3, TAD};
+use crate::analyzer::{handle_l3, Analyzer, TAD};
 use crate::plugin_registry::PluginRegistry;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use libpcap_tools::*;
@@ -22,6 +22,8 @@ pub struct Worker {
     pub(crate) handler: thread::JoinHandle<()>,
 }
 
+/// Pcap/Pcap-ng Multi-threaded analyzer
+///
 pub struct ThreadedAnalyzer<'a> {
     registry: PluginRegistry,
     n_workers: usize,
@@ -37,11 +39,35 @@ impl<'a> ThreadedAnalyzer<'a> {
             .get_usize("num_threads")
             .unwrap_or_else(num_cpus::get);
         let barrier = Arc::new(Barrier::new(n_workers + 1));
+
+        let mut workers = Vec::new();
+        let mut local_jobs = Vec::new();
+        for idx in 0..n_workers {
+            let n = format!("worker {}", idx);
+            let a = Analyzer::new(registry.clone(), &config);
+            let (sender, receiver) = unbounded();
+            // NOTE: remove job queue from lifetime management, it must be made 'static
+            // to be sent to threads
+            let r : Receiver<Job<'static>> =
+                unsafe { ::std::mem::transmute(receiver) };
+            let barrier = barrier.clone();
+            let builder = thread::Builder::new();
+            let handler = builder
+                .name(n)
+                .spawn(move || {
+                    worker(a, idx, r, barrier);
+                })
+                .unwrap();
+            let worker = Worker { _id: idx, handler };
+            workers.push(worker);
+            local_jobs.push(sender);
+        }
+
         ThreadedAnalyzer {
             registry,
             n_workers,
-            local_jobs: Vec::new(),
-            workers: Vec::new(),
+            local_jobs,
+            workers,
             barrier,
         }
     }
@@ -124,80 +150,6 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
     fn init(&mut self) -> Result<(), Error> {
         self.registry.run_plugins(|_| true, |p| p.pre_process());
 
-        self.local_jobs.reserve(self.n_workers);
-
-        let workers: Vec<_> = (0..self.n_workers)
-            .map(|i| {
-                let (sender, receiver) = unbounded();
-                self.local_jobs.push(sender);
-                // NOTE: remove job queue from lifetime management, it must be made 'static
-                // to be sent to threads
-                let r : Receiver<Job<'static>> =
-                    unsafe { ::std::mem::transmute(receiver) };
-                let arc_registry = self.registry.clone();
-                let barrier = self.barrier.clone();
-                let n = format!("worker {}", i);
-                let builder = thread::Builder::new();
-                let handler = builder
-                    .name(n)
-                    .spawn(move || {
-                        debug!("worker thread {} starting", i);
-                        let mut pcap_index = 0;
-                        let res = ::std::panic::catch_unwind(AssertUnwindSafe(|| loop {
-                            if let Ok(msg) = r.recv() {
-                                match msg {
-                                    Job::Exit => break,
-                                    Job::PrintDebug => {
-                                        TAD.with(|f| {
-                                            debug!(
-                                                "thread {}: hash table size: {}",
-                                                i,
-                                                f.borrow().flows.len()
-                                            );
-                                        });
-                                    }
-                                    Job::New(packet, ctx, data, ethertype) => {
-                                        pcap_index = ctx.pcap_index;
-                                        trace!("thread {}: got a job", i);
-                                        let h3_res = handle_l3(
-                                            &packet,
-                                            &ctx,
-                                            data,
-                                            ethertype,
-                                            &arc_registry,
-                                        );
-                                        if h3_res.is_err() {
-                                            warn!("thread {}: handle_l3 failed", i);
-                                        }
-                                    }
-                                    Job::Wait => {
-                                        trace!("Thread {}: waiting at barrier", i);
-                                        barrier.wait();
-                                    }
-                                }
-                            }
-                        }));
-                        if let Err(panic) = res {
-                            warn!("thread {} panicked (idx={})\n{:?}", i, pcap_index, panic);
-                            // match panic.downcast::<String>() {
-                            //     Ok(panic_msg) => {
-                            //         println!("panic happened: {}", panic_msg);
-                            //     }
-                            //     Err(_) => {
-                            //         println!("panic happened: unknown type.");
-                            //     }
-                            // }
-                            // ::std::panic::resume_unwind(err);
-                            ::std::process::exit(1);
-                        }
-                    })
-                    .unwrap();
-                Worker { _id: i, handler }
-                // (q, exit.clone(), handler)
-            })
-            .collect();
-
-        self.workers = workers;
         Ok(())
     }
 
@@ -315,6 +267,58 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
             }
         }
         _ => 0,
+    }
+}
+
+fn worker(a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
+    debug!("worker thread {} starting", idx);
+    let mut pcap_index = 0;
+    let res = ::std::panic::catch_unwind(AssertUnwindSafe(|| loop {
+        if let Ok(msg) = r.recv() {
+            match msg {
+                Job::Exit => break,
+                Job::PrintDebug => {
+                    TAD.with(|f| {
+                        debug!(
+                            "thread {}: hash table size: {}",
+                            idx,
+                            f.borrow().flows.len()
+                        );
+                    });
+                }
+                Job::New(packet, ctx, data, ethertype) => {
+                    pcap_index = ctx.pcap_index;
+                    trace!("thread {}: got a job", idx);
+                    let h3_res = handle_l3(
+                        &packet,
+                        &ctx,
+                        data,
+                        ethertype,
+                        &a.registry,
+                    );
+                    if h3_res.is_err() {
+                        warn!("thread {}: handle_l3 failed", idx);
+                    }
+                }
+                Job::Wait => {
+                    trace!("Thread {}: waiting at barrier", idx);
+                    barrier.wait();
+                }
+            }
+        }
+    }));
+    if let Err(panic) = res {
+        warn!("thread {} panicked (idx={})\n{:?}", idx, pcap_index, panic);
+        // match panic.downcast::<String>() {
+        //     Ok(panic_msg) => {
+        //         println!("panic happened: {}", panic_msg);
+        //     }
+        //     Err(_) => {
+        //         println!("panic happened: unknown type.");
+        //     }
+        // }
+        // ::std::panic::resume_unwind(err);
+        ::std::process::exit(1);
     }
 }
 
