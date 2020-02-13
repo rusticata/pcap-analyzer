@@ -72,7 +72,7 @@ impl Config {
         }
         if let Some(t) = item.as_table_mut() {
             if let Some(p) = path.last() {
-                t.insert(p.to_string(), toml::Value::from(v));
+                t.insert((*p).to_string(), toml::Value::from(v));
                 return Some(());
             }
         }

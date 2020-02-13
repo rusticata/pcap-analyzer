@@ -1,3 +1,5 @@
+#![warn(clippy::all)]
+
 #[macro_use]
 extern crate log;
 
@@ -89,7 +91,7 @@ fn main() -> Result<(), io::Error> {
 
     // override config options from command-line arguments
     if let Some(jobs) = matches.value_of("jobs") {
-        let j = jobs.parse::<u32>().or(Err(io::Error::new(
+        let j = jobs.parse::<u32>().or_else(|_| Err(io::Error::new(
             io::ErrorKind::Other,
             "Invalid value for 'jobs' argument",
         )))?;
@@ -148,7 +150,7 @@ fn main() -> Result<(), io::Error> {
     };
 
     let mut engine = SingleThreadedEngine::new(analyzer, &config);
-    let _ = engine.run(&mut input_reader).expect("run analyzer");
+    engine.run(&mut input_reader).expect("run analyzer");
 
     info!("test-analyzer: done");
     Ok(())
