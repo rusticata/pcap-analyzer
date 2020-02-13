@@ -14,23 +14,29 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Get an entry by path. If the input argument contains dots, the path is split
-    /// into keys, each key being requested recursively.
-    pub fn get<T: AsRef<str>>(&self, k: T) -> Option<&str> {
+    fn get_value<T: AsRef<str>>(&self, k: T) -> Option<&toml::Value> {
         let mut item = &self.value;
         for key in k.as_ref().split('.') {
             item = item.get(key)?;
         }
+        Some(item)
+    }
+    /// Get an entry by path. If the input argument contains dots, the path is split
+    /// into keys, each key being requested recursively.
+    pub fn get<T: AsRef<str>>(&self, k: T) -> Option<&str> {
+        let item = self.get_value(k)?;
         item.as_str()
     }
     /// Get an entry of type integer by path
     pub fn get_usize<T: AsRef<str>>(&self, k: T) -> Option<usize> {
-        let mut item = &self.value;
-        for key in k.as_ref().split('.') {
-            item = item.get(key)?;
-        }
+        let item = self.get_value(k)?;
         item.as_integer()
             .and_then(|i| if i >= 0 { Some(i as usize) } else { None })
+    }
+    /// Get an entry of type boolean by path
+    pub fn get_bool<T: AsRef<str>>(&self, k: T) -> Option<bool> {
+        let item = self.get_value(k)?;
+        item.as_bool()
     }
     /// Add a new section at location path.
     /// To insert at root, use an empty path.
