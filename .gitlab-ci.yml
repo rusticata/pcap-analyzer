@@ -53,7 +53,7 @@ pages:
   script:
     - cargo doc --no-deps
     - mv target/doc public
-    - echo '<meta http-equiv="refresh" content="0; url=/pcap-analyzer/libpcap-analyzer/">' > public/index.html
+    - echo '<meta http-equiv="refresh" content="0; url=/pcap-analyzer/libpcap_analyzer/">' > public/index.html
   artifacts:
     paths:
       - public
