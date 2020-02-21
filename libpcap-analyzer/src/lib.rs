@@ -7,7 +7,9 @@ extern crate nom;
 extern crate pcap_parser;
 extern crate rand;
 
+mod flow_map;
 mod packet_info;
+pub use flow_map::FlowMap;
 
 mod plugin;
 #[macro_use] mod plugin_registry;

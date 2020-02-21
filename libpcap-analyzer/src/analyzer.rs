@@ -1,4 +1,5 @@
 use crate::erspan::ErspanPacket;
+use crate::flow_map::FlowMap;
 use crate::ip6_defrag::IPv6FragmentPacket;
 use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
 use crate::packet_info::PacketInfo;
@@ -8,11 +9,7 @@ use crate::vxlan::*;
 use libpcap_tools::*;
 
 use pcap_parser::data::PacketData;
-use rand::prelude::*;
-use rand_chacha::*;
-use std::cell::RefCell;
 use std::cmp::min;
-use std::collections::HashMap;
 use std::net::IpAddr;
 
 use pnet_base::MacAddr;
@@ -28,20 +25,9 @@ use pnet_packet::udp::UdpPacket;
 use pnet_packet::vlan::VlanPacket;
 use pnet_packet::Packet as PnetPacket;
 
-thread_local!(pub(crate) static TAD : RefCell<ThreadAnalyzerData> = RefCell::new(ThreadAnalyzerData::new()));
-
 struct L3Info {
     l3_proto: u16,
     three_tuple: ThreeTuple,
-}
-
-pub(crate) struct ThreadAnalyzerData {
-    pub(crate) flows: HashMap<FlowID, Flow>,
-    flows_id: HashMap<FiveTuple, FlowID>,
-    trng: ChaChaRng,
-
-    ipv4_defrag: Box<dyn DefragEngine>,
-    ipv6_defrag: Box<dyn DefragEngine>,
 }
 
 /// Pcap/Pcap-ng analyzer
@@ -60,6 +46,11 @@ pub(crate) struct ThreadAnalyzerData {
 pub struct Analyzer {
     pub(crate) registry: PluginRegistry,
 
+    pub(crate) flows: FlowMap,
+
+    ipv4_defrag: Box<dyn DefragEngine>,
+    ipv6_defrag: Box<dyn DefragEngine>,
+
     do_checksums: bool,
 }
 
@@ -68,6 +59,9 @@ impl Analyzer {
         let do_checksums = config.get_bool("do_checksums").unwrap_or(true);
         Analyzer {
             registry,
+            flows: FlowMap::default(),
+            ipv4_defrag: Box::new(IPDefragEngine::new()),
+            ipv6_defrag: Box::new(IPDefragEngine::new()),
             do_checksums,
         }
     }
@@ -82,7 +76,7 @@ pub(crate) fn handle_l2(
     packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l2 (idx={})", ctx.pcap_index);
 
@@ -130,7 +124,7 @@ pub(crate) fn handle_l3(
     ctx: &ParseContext,
     data: &[u8],
     ethertype: EtherType,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     if data.is_empty() {
         return Ok(());
@@ -159,7 +153,7 @@ fn handle_l3_ipv4(
     ctx: &ParseContext,
     data: &[u8],
     ethertype: EtherType,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
     let ipv4 = Ipv4Packet::new(data).ok_or("Could not build IPv4 packet from data")?;
@@ -215,15 +209,12 @@ fn handle_l3_ipv4(
     // check IP fragmentation before calling handle_l4
     let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
     let more_fragments = ipv4.get_flags() & Ipv4Flags::MoreFragments != 0;
-    let defrag = TAD.with(|f| {
-        let mut f = f.borrow_mut();
-        f.ipv4_defrag.update(
-            ipv4.get_identification().into(),
-            frag_offset,
-            more_fragments,
-            payload,
-        )
-    });
+    let defrag = analyzer.ipv4_defrag.update(
+        ipv4.get_identification().into(),
+        frag_offset,
+        more_fragments,
+        payload,
+    );
     let payload = match defrag {
         Fragment::NoFrag(d) => {
             debug_assert!(d.len() < orig_len);
@@ -256,7 +247,7 @@ fn handle_l3_ipv6(
     ctx: &ParseContext,
     data: &[u8],
     ethertype: EtherType,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
     let ipv6 = Ipv6Packet::new(data).ok_or("Could not build IPv6 packet from data")?;
@@ -286,7 +277,7 @@ fn handle_l3_vlan_801q(
     ctx: &ParseContext,
     data: &[u8],
     _ethertype: EtherType,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_vlan_801q (idx={})", ctx.pcap_index);
     let vlan = VlanPacket::new(data).ok_or("Could not build 802.1Q Vlan packet from data")?;
@@ -301,11 +292,15 @@ fn handle_l3_erspan(
     ctx: &ParseContext,
     data: &[u8],
     _ethertype: EtherType,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_erspan (idx={})", ctx.pcap_index);
     let erspan = ErspanPacket::new(data).ok_or("Could not build Erspan packet from data")?;
-    trace!("    erspan: VLAN id={} span ID={}", erspan.get_vlan(), erspan.get_span_id());
+    trace!(
+        "    erspan: VLAN id={} span ID={}",
+        erspan.get_vlan(),
+        erspan.get_span_id()
+    );
     let eth_data = erspan.payload();
     let eth =
         EthernetPacket::new(eth_data).ok_or("Could not build EthernetPacket packet from data")?;
@@ -319,7 +314,7 @@ fn handle_l3_generic(
     ctx: &ParseContext,
     data: &[u8],
     ethertype: EtherType,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_generic (idx={})", ctx.pcap_index);
     // we don't know if there is padding to remove
@@ -327,7 +322,9 @@ fn handle_l3_generic(
     // self.run_l3_plugins(packet, data, ethertype.0, &ThreeTuple::default());
     // run l3 plugins
     // let start = ::std::time::Instant::now();
-    analyzer.registry.run_plugins_ethertype(packet, ethertype.0, &ThreeTuple::default(), data);
+    analyzer
+        .registry
+        .run_plugins_ethertype(packet, ethertype.0, &ThreeTuple::default(), data);
     // let elapsed = start.elapsed();
     // debug!("Time to run l3 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
     // don't try to parse l4, we don't know how to get L4 data
@@ -339,7 +336,7 @@ fn handle_l3_common(
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     match IpNextHeaderProtocol(l3_info.three_tuple.proto) {
         IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, &l3_info, analyzer),
@@ -365,7 +362,7 @@ fn handle_l4_tcp(
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l4_tcp (idx={})", ctx.pcap_index);
     trace!("    l4_data len: {}", data.len());
@@ -386,7 +383,7 @@ fn handle_l4_udp(
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l4_udp (idx={})", ctx.pcap_index);
     trace!("    l4_data len: {}", data.len());
@@ -412,7 +409,7 @@ fn handle_l4_icmp(
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l4_icmp (idx={})", ctx.pcap_index);
     let icmp = IcmpPacket::new(data).ok_or("Could not build ICMP packet from data")?;
@@ -443,7 +440,7 @@ fn handle_l4_icmpv6(
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l4_icmpv6 (idx={})", ctx.pcap_index);
     let icmpv6 = Icmpv6Packet::new(data).ok_or("Could not build ICMPv6 packet from data")?;
@@ -474,7 +471,7 @@ fn handle_l4_gre(
     ctx: &ParseContext,
     data: &[u8],
     _l3_info: &L3Info,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l4_gre (idx={})", ctx.pcap_index);
     let l3_data = data;
@@ -499,7 +496,7 @@ fn handle_l4_vxlan(
     _data: &[u8],
     _l3_info: &L3Info,
     l4_data: &[u8],
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l4_vxlan (idx={})", ctx.pcap_index);
     let vxlan = VxlanPacket::new(l4_data).ok_or("Could not build Vxlan packet from data")?;
@@ -515,7 +512,7 @@ fn handle_l4_ipv6frag(
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l4_ipv6frag (idx={})", ctx.pcap_index);
     let l3_data = data;
@@ -529,18 +526,17 @@ fn handle_l4_ipv6frag(
         ip6frag.get_identification()
     );
 
-    let defrag = TAD.with(|f| {
-        let mut f = f.borrow_mut();
+    let defrag = {
         // check IP fragmentation before calling handle_l4
         let frag_offset = (ip6frag.get_fragment_offset() * 8) as usize;
         let more_fragments = ip6frag.more_fragments();
-        f.ipv6_defrag.update(
+        analyzer.ipv6_defrag.update(
             ip6frag.get_identification(),
             frag_offset,
             more_fragments,
             ip6frag.payload(),
         )
-    });
+    };
     let data = match defrag {
         Fragment::NoFrag(d) => d,
         Fragment::Complete(ref v) => {
@@ -578,7 +574,7 @@ fn handle_l4_generic(
     ctx: &ParseContext,
     data: &[u8],
     l3_info: &L3Info,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!(
         "handle_l4_generic (idx={}, l4_proto={})",
@@ -604,34 +600,38 @@ fn handle_l4_common(
     src_port: u16,
     dst_port: u16,
     l4_payload: Option<&[u8]>,
-    analyzer: &Analyzer,
+    analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
     trace!("5t: {}", five_tuple);
     let now = packet.ts;
 
-    // lookup flow
-    // let flow_id = match a.lookup_flow(&five_tuple) {
-    let flow = TAD.with(|f| {
-        let mut f = f.borrow_mut();
-        let flow_id = match f.lookup_flow(&five_tuple) {
+    let flow_id = {
+        // flows modification section
+        let flows = &mut analyzer.flows;
+        // lookup flow
+        let flow_id = match flows.lookup_flow(&five_tuple) {
             Some(id) => id,
             None => {
                 let flow = Flow::new(&five_tuple, packet.ts.secs, packet.ts.micros);
                 gen_event_new_flow(&flow, &analyzer.registry);
-                f.insert_flow(five_tuple.clone(), flow)
+                flows.insert_flow(five_tuple.clone(), flow)
             }
         };
 
-        // take flow ownership
-        let flow = f
-            .flows
-            .get_mut(&flow_id)
-            .expect("could not get flow from ID");
-        flow.flow_id = flow_id;
-        flow.last_seen = now;
-        flow.clone()
-    });
+        // update flow
+        flows.entry(flow_id).and_modify(|flow| {
+            flow.flow_id = flow_id;
+            flow.last_seen = now;
+        });
+        flow_id
+    };
+
+    // get a read-only reference to flow
+    let flow = analyzer
+        .flows
+        .get_flow(flow_id)
+        .expect("could not get flow from ID");
 
     let to_server = flow.five_tuple == five_tuple;
 
@@ -642,11 +642,13 @@ fn handle_l4_common(
         l4_data,
         l4_type: l3_info.three_tuple.proto,
         l4_payload,
-        flow: Some(&flow),
+        flow: Some(flow),
         pcap_index: ctx.pcap_index,
     };
     // let start = ::std::time::Instant::now();
-    analyzer.registry.run_plugins_transport(pinfo.l4_type, packet, &pinfo);
+    analyzer
+        .registry
+        .run_plugins_transport(pinfo.l4_type, packet, &pinfo);
     // let elapsed = start.elapsed();
     // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
@@ -714,9 +716,8 @@ impl PcapAnalyzer for Analyzer {
 
     /// Finalize analysis and notify plugins
     fn teardown(&mut self) {
-        TAD.with(|f| {
-            let mut f = f.borrow_mut();
-            let flows = &f.flows;
+        {
+            let flows = &self.flows;
             // expire remaining flows
             trace!("{} flows remaining in table", flows.len());
             // let start = ::std::time::Instant::now();
@@ -730,46 +731,11 @@ impl PcapAnalyzer for Analyzer {
             );
             // let elapsed = start.elapsed();
             // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
-            f.flows.clear();
-            f.flows_id.clear();
+            self.flows.clear();
 
             self.registry.run_plugins(|_| true, |p| p.post_process());
-        });
+        };
     }
 }
 
 impl SafePcapAnalyzer for Analyzer {}
-
-impl ThreadAnalyzerData {
-    pub fn new() -> ThreadAnalyzerData {
-        ThreadAnalyzerData {
-            flows: HashMap::new(),
-            flows_id: HashMap::new(),
-            trng: ChaChaRng::from_rng(rand::thread_rng()).unwrap(),
-            ipv4_defrag: Box::new(IPDefragEngine::new()),
-            ipv6_defrag: Box::new(IPDefragEngine::new()),
-        }
-    }
-
-    pub fn lookup_flow(&mut self, five_t: &FiveTuple) -> Option<FlowID> {
-        self.flows_id.get(&five_t).copied()
-    }
-    /// Insert a flow in the hash tables.
-    /// Takes ownership of five_t and flow
-    pub fn insert_flow(&mut self, five_t: FiveTuple, flow: Flow) -> FlowID {
-        let rev_id = self.flows_id.get(&five_t.get_reverse()).copied();
-        if let Some(id) = rev_id {
-            // insert reverse flow ID
-            trace!("inserting reverse flow ID {}", id);
-            self.flows_id.insert(five_t, id);
-            return id;
-        }
-        // get a new flow index (XXX currently: random number)
-        let id = self.trng.gen();
-        trace!("Inserting new flow (id={})", id);
-        trace!("    flow: {:?}", flow);
-        self.flows.insert(id, flow);
-        self.flows_id.insert(five_t, id);
-        id
-    }
-}

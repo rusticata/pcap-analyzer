@@ -1,4 +1,4 @@
-use crate::analyzer::{handle_l3, Analyzer, TAD};
+use crate::analyzer::{handle_l3, Analyzer};
 use crate::plugin_registry::PluginRegistry;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use libpcap_tools::*;
@@ -270,7 +270,7 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
     }
 }
 
-fn worker(a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
+fn worker(mut a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
     debug!("worker thread {} starting", idx);
     let mut pcap_index = 0;
     let res = ::std::panic::catch_unwind(AssertUnwindSafe(|| loop {
@@ -278,13 +278,13 @@ fn worker(a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
             match msg {
                 Job::Exit => break,
                 Job::PrintDebug => {
-                    TAD.with(|f| {
+                    {
                         debug!(
                             "thread {}: hash table size: {}",
                             idx,
-                            f.borrow().flows.len()
+                            a.flows.len()
                         );
-                    });
+                    };
                 }
                 Job::New(packet, ctx, data, ethertype) => {
                     pcap_index = ctx.pcap_index;
@@ -294,7 +294,7 @@ fn worker(a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
                         &ctx,
                         data,
                         ethertype,
-                        &a,
+                        &mut a,
                     );
                     if h3_res.is_err() {
                         warn!("thread {}: handle_l3 failed", idx);
@@ -324,6 +324,7 @@ fn worker(a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
 
 #[cfg(test)]
 mod tests {
+    use libpcap_tools::Flow;
     use super::Job;
     use libpcap_tools::{Packet, ParseContext};
     use std::mem;
@@ -331,6 +332,7 @@ mod tests {
     fn size_of_structs() {
         println!("sizeof ParseContext: {}", mem::size_of::<ParseContext>());
         println!("sizeof Packet: {}", mem::size_of::<Packet>());
+        println!("sizeof Flow: {}", mem::size_of::<Flow>());
         println!("sizeof Job: {}", mem::size_of::<Job>());
     }
 }
