@@ -63,7 +63,7 @@ impl Plugin for Rusticata {
                         debug!("Protocol recognized as {}", parser_name);
                         // warn!("Protocol recognized as {} (5t: {})", parser_name, pdata.five_tuple);
                         if let Some(builder) = self.builder_map.get( (&parser_name) as &str) {
-                            self.flow_parsers.insert(flow_id, builder.new());
+                            self.flow_parsers.insert(flow_id, builder.build());
                             self.flow_parsers.get_mut(&flow_id).unwrap()
                         } else {
                             warn!("Could not build parser for proto {}", parser_name);
