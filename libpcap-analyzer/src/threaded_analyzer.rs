@@ -26,7 +26,6 @@ pub struct Worker {
 ///
 pub struct ThreadedAnalyzer<'a> {
     registry: PluginRegistry,
-    n_workers: usize,
 
     local_jobs: Vec<Sender<Job<'a>>>,
     workers: Vec<Worker>,
@@ -65,7 +64,6 @@ impl<'a> ThreadedAnalyzer<'a> {
 
         ThreadedAnalyzer {
             registry,
-            n_workers,
             local_jobs,
             workers,
             barrier,
