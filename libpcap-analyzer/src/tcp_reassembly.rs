@@ -5,11 +5,12 @@ use pcap_parser::data::PacketData;
 use pnet_macros_support::packet::Packet as PnetPacket;
 use pnet_packet::tcp::{TcpFlags, TcpPacket};
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
 use std::num::Wrapping;
 
 #[derive(Debug, Eq, PartialEq)]
+#[allow(dead_code)]
 pub enum TcpStatus {
     Closed = 0,
     Listen,
@@ -49,13 +50,29 @@ pub struct TcpPeer {
     last_rel_ack: Wrapping<u32>,
     /// Connection state
     status: TcpStatus,
-    /// The current list of segments
-    /// TODO make this a BTreeMap
+    /// The current list of segments (ordered by rel_seq)
     segments: VecDeque<TcpSegment>,
     /// DEBUG: host address
     addr: IpAddr,
     /// DEBUG: port
     port: u16,
+}
+
+impl TcpPeer {
+    fn insert_sorted(&mut self, s: TcpSegment) {
+        // find index
+        let idx = self.segments.iter().enumerate().find_map(|(n, item)| {
+            if s.rel_seq < item.rel_seq {
+                Some(n)
+            } else {
+                None
+            }
+        });
+        match idx {
+            Some(idx) => self.segments.insert(idx, s),
+            None => self.segments.push_back(s),
+        }
+    }
 }
 
 pub struct TcpStream {
@@ -406,8 +423,7 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
         }
     }
     trace!("Pushing segment");
-    // TODO order by seq ?
-    peer.segments.push_back(segment);
+    peer.insert_sorted(segment);
 }
 
 fn send_peer_segments(
@@ -490,7 +506,7 @@ fn send_peer_segments(
                 new_segment.rel_ack,
                 new_segment.data.len()
             );
-            origin.segments.push_front(new_segment);
+            origin.insert_sorted(new_segment);
         }
 
         send_single_segment(origin, destination, segment, pinfo, registry);
