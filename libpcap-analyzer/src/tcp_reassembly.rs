@@ -276,7 +276,7 @@ impl TcpStream {
         to_server: bool,
         pinfo: &PacketInfo,
         registry: &PluginRegistry,
-    ) {
+    ) -> Result<(), TcpStreamError> {
         let (mut origin, destination) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
@@ -308,7 +308,7 @@ impl TcpStream {
                 destination.segments.len()
             );
             origin.status = TcpStatus::Closed; // XXX except if ACK ?
-            return;
+            return Ok(());
         }
 
         // queue segment (even if FIN, to get correct seq numbers)
@@ -359,9 +359,10 @@ impl TcpStream {
         // TODO what now?
 
         if origin.segments.is_empty() {
-            return;
+            return Ok(());
         }
-        // unimplemented!();
+
+        Ok(())
     }
 
     // force expiration (for ex after timeout) of this stream
@@ -614,21 +615,15 @@ impl TcpStreamReassembly {
                 stream.handle_new_connection(&tcp, to_server)
             }
             TcpStatus::Established => {
-                // TODO check for close request
+                // check for close request
                 if tcp.get_flags() & (TcpFlags::FIN | TcpFlags::RST) != 0 {
-                    // XXX
                     trace!("Requesting end of connection");
-                    stream.handle_closing_connection(tcp, to_server, pinfo, registry);
+                    stream.handle_closing_connection(tcp, to_server, pinfo, registry)
                 } else {
-                    stream.handle_established_connection(tcp, to_server, pinfo, registry)?;
+                    stream.handle_established_connection(tcp, to_server, pinfo, registry)
                 }
-                Ok(())
             }
-            _ => {
-                // TODO create & queue segment
-                stream.handle_closing_connection(tcp, to_server, pinfo, registry);
-                Ok(())
-            }
+            _ => stream.handle_closing_connection(tcp, to_server, pinfo, registry),
         }
     }
     pub(crate) fn check_expired_connections(&mut self, now: Duration) {
