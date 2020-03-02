@@ -8,6 +8,7 @@ use crate::plugin::*;
 use crate::plugin_registry::*;
 use crate::ppp::{PppPacket, PppProtocolTypes};
 use crate::pppoe::PppoeSessionPacket;
+use crate::tcp_reassembly::{finalize_tcp_streams, TcpStreamReassembly};
 use crate::vxlan::*;
 use libpcap_tools::*;
 
@@ -56,6 +57,7 @@ pub struct Analyzer {
 
     ipv4_defrag: Box<dyn DefragEngine>,
     ipv6_defrag: Box<dyn DefragEngine>,
+    pub(crate) tcp_defrag: TcpStreamReassembly,
 
     do_checksums: bool,
 }
@@ -68,6 +70,7 @@ impl Analyzer {
             flows: FlowMap::default(),
             ipv4_defrag: Box::new(IPDefragEngine::new()),
             ipv6_defrag: Box::new(IPDefragEngine::new()),
+            tcp_defrag: TcpStreamReassembly::default(),
             do_checksums,
         }
     }
@@ -250,6 +253,9 @@ fn handle_l3_ipv4(
             return Ok(());
         }
     };
+
+    // TODO check if   ip_len - ipv4.get_options_raw().len() - 20 > payload.len()
+    // if yes, capture may be truncated
 
     run_plugins_v2_network(packet, ctx, payload, &t3, l4_proto, analyzer)?;
 
@@ -502,22 +508,79 @@ fn handle_l3_common(
 fn handle_l4_tcp(
     packet: &Packet,
     ctx: &ParseContext,
-    data: &[u8],
+    l4_data: &[u8],
     l3_info: &L3Info,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l4_tcp (idx={})", ctx.pcap_index);
-    trace!("    l4_data len: {}", data.len());
-    let tcp = TcpPacket::new(data).ok_or("Could not build TCP packet from data")?;
+    trace!("    l4_data len: {}", l4_data.len());
+    let tcp = TcpPacket::new(l4_data).ok_or("Could not build TCP packet from data")?;
 
-    // XXX handle TCP defrag
-    let l4_payload = Some(tcp.payload());
     let src_port = tcp.get_source();
     let dst_port = tcp.get_destination();
 
-    handle_l4_common(
-        packet, ctx, data, l3_info, src_port, dst_port, l4_payload, analyzer,
-    )
+    // XXX begin copy/paste of handle_l4_common
+    let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
+    trace!("5t: {}", five_tuple);
+    let now = packet.ts;
+
+    let flow_id = {
+        // flows modification section
+        let flows = &mut analyzer.flows;
+        // lookup flow
+        let flow_id = match flows.lookup_flow(&five_tuple) {
+            Some(id) => id,
+            None => {
+                let flow = Flow::new(&five_tuple, packet.ts.secs, packet.ts.micros);
+                gen_event_new_flow(&flow, &analyzer.registry);
+                flows.insert_flow(five_tuple.clone(), flow)
+            }
+        };
+
+        // update flow
+        flows.entry(flow_id).and_modify(|flow| {
+            flow.flow_id = flow_id;
+            flow.last_seen = now;
+        });
+        flow_id
+    };
+
+    // get a read-only reference to flow
+    let flow = analyzer
+        .flows
+        .get_flow(flow_id)
+        .expect("could not get flow from ID");
+
+    let to_server = flow.five_tuple == five_tuple;
+
+    let pinfo = PacketInfo {
+        five_tuple: &five_tuple,
+        to_server,
+        l3_type: l3_info.l3_proto,
+        l4_data,
+        l4_type: l3_info.three_tuple.proto,
+        l4_payload: None,
+        flow: Some(flow),
+        pcap_index: ctx.pcap_index,
+    };
+    // XXX end copy/paste
+
+    let res = analyzer
+        .tcp_defrag
+        .update(flow, &tcp, to_server, &pinfo, &analyzer.registry);
+    if res.is_err() {
+        warn!("Tcp steam reassembly error: {:?}", res);
+    }
+
+    // check if TCP streams did timeout or expire
+    // TODO do the check only every nth packet/second?
+    //    warn!("now: {:?}", now);
+    analyzer.tcp_defrag.check_expired_connections(now);
+
+    // handle_l4_common(
+    //     packet, ctx, data, l3_info, src_port, dst_port, l4_payload, analyzer,
+    // )
+    Ok(())
 }
 
 fn handle_l4_udp(
@@ -978,8 +1041,10 @@ impl PcapAnalyzer for Analyzer {
     /// Finalize analysis and notify plugins
     fn teardown(&mut self) {
         {
-            let flows = &self.flows;
+            // expire all TCP connections in reassembly engine
+            finalize_tcp_streams(self);
             // expire remaining flows
+            let flows = &self.flows;
             trace!("{} flows remaining in table", flows.len());
             // let start = ::std::time::Instant::now();
             self.registry.run_plugins(

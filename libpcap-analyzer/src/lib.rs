@@ -31,6 +31,7 @@ mod ip_defrag;
 mod mpls;
 mod ppp;
 mod pppoe;
+mod tcp_reassembly;
 mod vxlan;
 pub use erspan::*;
 pub use mpls::*;
