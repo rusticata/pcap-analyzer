@@ -27,6 +27,7 @@ pub use threaded_analyzer::*;
 mod erspan;
 mod ip6_defrag;
 mod ip_defrag;
+mod tcp_reassembly;
 mod vxlan;
 pub use erspan::*;
 pub use ip6_defrag::*;
