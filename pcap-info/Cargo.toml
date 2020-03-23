@@ -20,6 +20,7 @@ is-it-maintained-open-issues      = { repository = "rusticata/pcap-analyzer" }
 maintenance                       = { status     = "actively-developed" }
 
 [dependencies]
+chrono = "0.4"
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 xz2 = "0.1"
 

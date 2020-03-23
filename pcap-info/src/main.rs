@@ -7,6 +7,7 @@ use std::io;
 use std::process;
 
 mod info;
+mod interface;
 
 fn main() -> Result<(), io::Error> {
     let matches = App::new("Pcap information tool")
@@ -14,10 +15,10 @@ fn main() -> Result<(), io::Error> {
         .author("Pierre Chifflier")
         .about("Display information about pcap files")
         .arg(
-            Arg::with_name("check")
-                .help("Check file")
-                .short("c")
-                .long("check"),
+            Arg::with_name("no-check")
+                .help("Do not check file")
+                .short("n")
+                .long("no-check"),
         )
         .arg(
             Arg::with_name("INPUT")
@@ -29,7 +30,7 @@ fn main() -> Result<(), io::Error> {
 
     let input_filename = matches.value_of("INPUT").unwrap();
     let options = info::Options {
-        check_file: matches.is_present("check"),
+        check_file: !matches.is_present("no-check"),
     };
 
     let rc = info::process_file(input_filename, &options)?;
