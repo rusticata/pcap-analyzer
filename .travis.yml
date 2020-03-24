@@ -11,6 +11,6 @@ matrix:
        - BENCH=0
 script:
   - |
-      cargo build --verbose &&
+      cargo build --all-targets --verbose &&
       cargo test --verbose &&
       ([ "$BENCH" != 1 ] || cargo bench --verbose)
