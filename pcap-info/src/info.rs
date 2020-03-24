@@ -11,6 +11,11 @@ use std::time::Duration;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
+use digest::Digest;
+use ripemd160::Ripemd160;
+use sha1::Sha1;
+use sha2::Sha256;
+
 use pcap_parser::pcapng::*;
 use pcap_parser::{create_reader, Block, PcapBlockOwned, PcapError};
 
@@ -34,6 +39,10 @@ struct Context {
     // section-related variables
     interfaces: Vec<InterfaceInfo>,
     section_num_packets: usize,
+    // hashes
+    hasher_ripemd160: Ripemd160,
+    hasher_sha1: Sha1,
+    hasher_sha256: Sha256,
 }
 
 fn open_file(name: &str) -> Result<Box<dyn io::Read>, io::Error> {
@@ -98,6 +107,10 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
         Ok((sz, PcapBlockOwned::NG(Block::SectionHeader(ref shb)))) => {
             println!("Type: Pcap-NG");
             pretty_print_shb(shb);
+            let data = reader.data();
+            ctx.hasher_ripemd160.input(&data[..sz]);
+            ctx.hasher_sha1.input(&data[..sz]);
+            ctx.hasher_sha256.input(&data[..sz]);
             ctx.file_bytes += sz;
             reader.consume(sz);
         }
@@ -122,6 +135,10 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
                 ctx.block_index += 1;
                 ctx.file_bytes += sz;
                 handle_pcapblockowned(&block, &mut ctx);
+                let data = reader.data();
+                ctx.hasher_ripemd160.input(&data[..sz]);
+                ctx.hasher_sha1.input(&data[..sz]);
+                ctx.hasher_sha256.input(&data[..sz]);
                 reader.consume(sz);
             }
             Err(PcapError::Eof) => break,
@@ -139,6 +156,10 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             Err(e) => panic!("Error while reading: {:?}", e),
         }
     }
+
+    println!("{:<20}: {:x}", "SHA256", ctx.hasher_sha256.result_reset());
+    println!("{:<20}: {:x}", "RIPEMD160", ctx.hasher_ripemd160.result_reset());
+    println!("{:<20}: {:x}", "SHA1", ctx.hasher_sha1.result_reset());
 
     let cap_duration = ctx.last_packet_ts - ctx.first_packet_ts;
     println!(
