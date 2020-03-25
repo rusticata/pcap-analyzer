@@ -1,5 +1,6 @@
 use crate::interface::{pcapng_build_interface, InterfaceInfo};
 use chrono::{TimeZone, Utc};
+use std::cmp::min;
 use std::convert::TryInto;
 use std::fs::{self, File};
 use std::io::{self, Error, ErrorKind};
@@ -314,7 +315,12 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
             assert!(data_len <= epb.data.len());
             ctx.data_bytes += data_len;
         }
-        PcapBlockOwned::NG(Block::SimplePacket(_)) => {
+        PcapBlockOwned::NG(Block::SimplePacket(spb)) => {
+            assert!(!ctx.interfaces.is_empty());
+            let if_info = ctx.interfaces.first_mut().unwrap();
+            if_info.num_packets += 1;
+            let data_len = min(if_info.snaplen as usize, spb.data.len());
+            ctx.data_bytes += data_len;
             ctx.packet_index += 1;
         }
         PcapBlockOwned::NG(Block::NameResolution(nrb)) => {
