@@ -256,15 +256,18 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
             ctx.interfaces.push(if_info);
         }
         PcapBlockOwned::Legacy(ref b) => {
-            // let if_info = &ctx.interfaces[0];
+            let if_info = &mut ctx.interfaces[0];
+            if_info.num_packets += 1;
             assert!(b.ts_usec < 1_000_000);
             let ts = Duration::new(b.ts_sec as u64, b.ts_usec * 1000);
             update_time(ts, ctx);
             ctx.packet_index += 1;
+            // TODO update data len
         }
         PcapBlockOwned::NG(Block::EnhancedPacket(epb)) => {
             assert!((epb.if_id as usize) < ctx.interfaces.len());
-            let if_info = &ctx.interfaces[epb.if_id as usize];
+            let if_info = &mut ctx.interfaces[epb.if_id as usize];
+            if_info.num_packets += 1;
             let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(
                 epb.ts_high,
                 epb.ts_low,
@@ -318,6 +321,7 @@ fn pretty_print_interface(if_info: &InterfaceInfo) {
         if_info.link_type, if_info.link_type.0
     );
     println!("    Capture length: {}", if_info.snaplen);
+    println!("    Number of packets: {}", if_info.num_packets);
     for (opt_code, opt_value) in &if_info.options {
         print!("    ");
         pretty_print_idb_option(*opt_code, &opt_value);
