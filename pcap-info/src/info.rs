@@ -36,6 +36,8 @@ struct Context {
     last_packet_ts: Duration,
     previous_packet_ts: Duration,
     strict_time_order: bool,
+    num_ipv4_resolved: usize,
+    num_ipv6_resolved: usize,
     // section-related variables
     interfaces: Vec<InterfaceInfo>,
     section_num_packets: usize,
@@ -158,7 +160,11 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
     }
 
     println!("{:<20}: {:x}", "SHA256", ctx.hasher_sha256.result_reset());
-    println!("{:<20}: {:x}", "RIPEMD160", ctx.hasher_ripemd160.result_reset());
+    println!(
+        "{:<20}: {:x}",
+        "RIPEMD160",
+        ctx.hasher_ripemd160.result_reset()
+    );
     println!("{:<20}: {:x}", "SHA1", ctx.hasher_sha1.result_reset());
 
     let cap_duration = ctx.last_packet_ts - ctx.first_packet_ts;
@@ -196,6 +202,19 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
         "Average packet rate",
         ctx.packet_index as f64 / cap_duration.as_secs_f64()
     );
+    if ctx.num_ipv4_resolved > 0 {
+        println!(
+            "{:<20}: {}",
+            "Number of IPv4 resolved", ctx.num_ipv4_resolved
+        );
+    }
+    if ctx.num_ipv6_resolved > 0 {
+        println!(
+            "{:<20}: {}",
+            "Number of IPv6 resolved", ctx.num_ipv6_resolved
+        );
+    }
+    println!("{:<20}: {}", "Number of interfaces", ctx.interfaces.len());
 
     end_of_section(&mut ctx);
 
@@ -291,8 +310,18 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
         PcapBlockOwned::NG(Block::SimplePacket(_)) => {
             ctx.packet_index += 1;
         }
-        PcapBlockOwned::NG(Block::NameResolution(_)) => {
-            println!("*** block type NRB ***");
+        PcapBlockOwned::NG(Block::NameResolution(nrb)) => {
+            for nr in &nrb.nr {
+                match nr.record_type {
+                    0 => (),
+                    1 => ctx.num_ipv4_resolved += 1,
+                    2 => ctx.num_ipv6_resolved += 1,
+                    n => println!(
+                        "*** invalid NameRecordType {} in NRB (block {})",
+                        n, ctx.block_index
+                    ),
+                }
+            }
         }
         PcapBlockOwned::NG(Block::InterfaceStatistics(isb)) => {
             // println!("*** block type ISB ***");
@@ -302,7 +331,7 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
         }
         _ => {
             println!("*** Unsupported block type ***");
-        },
+        }
     }
 }
 
