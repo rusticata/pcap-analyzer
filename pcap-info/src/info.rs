@@ -38,6 +38,7 @@ struct Context {
     strict_time_order: bool,
     num_ipv4_resolved: usize,
     num_ipv6_resolved: usize,
+    num_custom_blocks: usize,
     // section-related variables
     interfaces: Vec<InterfaceInfo>,
     section_num_packets: usize,
@@ -214,6 +215,12 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             "Number of IPv6 resolved", ctx.num_ipv6_resolved
         );
     }
+    if ctx.num_custom_blocks > 0 {
+        println!(
+            "{:<20}: {}",
+            "Number of custom blocks", ctx.num_custom_blocks
+        );
+    }
     println!("{:<20}: {}", "Number of interfaces", ctx.interfaces.len());
 
     end_of_section(&mut ctx);
@@ -328,6 +335,9 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
             assert!((isb.if_id as usize) < ctx.interfaces.len());
             let if_info = &mut ctx.interfaces[isb.if_id as usize];
             if_info.num_stats += 1;
+        }
+        PcapBlockOwned::NG(Block::Custom(_)) => {
+            ctx.num_custom_blocks += 1;
         }
         _ => {
             println!("*** Unsupported block type ***");
