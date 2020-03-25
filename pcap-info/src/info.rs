@@ -20,8 +20,8 @@ use sha2::Sha256;
 use pcap_parser::pcapng::*;
 use pcap_parser::{create_reader, Block, PcapBlockOwned, PcapError};
 
-pub const MICROS_PER_SEC: u32 = 1_000_000;
-// pub const NANOS_PER_SEC: u32 = 1_000_000_000;
+const MICROS_PER_SEC: u64 = 1_000_000;
+const NANOS_PER_SEC: u64 = 1_000_000_000;
 
 pub struct Options {
     pub check_file: bool,
@@ -307,14 +307,20 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
                 if_info.if_tsoffset,
                 if_info.if_tsresol,
             );
-            let unit = unit as u32; // XXX lossy cast
-            let ts_usec = if unit != MICROS_PER_SEC {
-                ts_frac / ((unit / MICROS_PER_SEC) as u32)
-            } else {
-                ts_frac
+            let ts_frac = ts_frac as u64;
+            if ts_frac > unit {
+                println!(
+                    "Time: fractionnal part is greater than unit in block {}",
+                    ctx.block_index
+                );
+            }
+            let ts_nanosec = match unit {
+                MICROS_PER_SEC => ts_frac * 1000,
+                NANOS_PER_SEC => ts_frac,
+                _ => (ts_frac * NANOS_PER_SEC) / unit,
             };
-            assert!(ts_usec < 1_000_000);
-            let ts = Duration::new(ts_sec as u64, ts_usec * 1000);
+            assert!(ts_nanosec < NANOS_PER_SEC);
+            let ts = Duration::new(ts_sec as u64, ts_nanosec as u32);
             update_time(ts, ctx);
             ctx.packet_index += 1;
             let data_len = epb.caplen as usize;
