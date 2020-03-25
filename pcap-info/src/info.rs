@@ -295,6 +295,12 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
             assert!((epb.if_id as usize) < ctx.interfaces.len());
             let if_info = &mut ctx.interfaces[epb.if_id as usize];
             if_info.num_packets += 1;
+            if if_info.snaplen > 0 && epb.data.len() + 4 > if_info.snaplen as usize {
+                println!(
+                    "*** EPB block data len greater than snaplen in block {} ***",
+                    ctx.block_index
+                );
+            }
             let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(
                 epb.ts_high,
                 epb.ts_low,
