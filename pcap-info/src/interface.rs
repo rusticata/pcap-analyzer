@@ -15,6 +15,8 @@ pub struct InterfaceInfo {
 
     /// Number of packets seen on this interface
     pub num_packets: usize,
+    /// Number of statistics blocks seen on this interface
+    pub num_stats: usize,
 
     /// Misc options, formatted as string
     pub options: Vec<(OptionCode, Vec<u8>)>,
@@ -29,6 +31,7 @@ impl Default for InterfaceInfo {
             if_tsoffset: 0,
             snaplen: 0,
             num_packets: 0,
+            num_stats: 0,
             options: Vec::new(),
         }
     }
@@ -67,6 +70,7 @@ pub fn pcapng_build_interface<'a>(
         if_tsoffset,
         snaplen: idb.snaplen,
         num_packets: 0,
+        num_stats: 0,
         options,
     }
 }

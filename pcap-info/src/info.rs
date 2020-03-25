@@ -291,7 +291,18 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
         PcapBlockOwned::NG(Block::SimplePacket(_)) => {
             ctx.packet_index += 1;
         }
-        _ => (),
+        PcapBlockOwned::NG(Block::NameResolution(_)) => {
+            println!("*** block type NRB ***");
+        }
+        PcapBlockOwned::NG(Block::InterfaceStatistics(isb)) => {
+            // println!("*** block type ISB ***");
+            assert!((isb.if_id as usize) < ctx.interfaces.len());
+            let if_info = &mut ctx.interfaces[isb.if_id as usize];
+            if_info.num_stats += 1;
+        }
+        _ => {
+            println!("*** Unsupported block type ***");
+        },
     }
 }
 
@@ -322,6 +333,7 @@ fn pretty_print_interface(if_info: &InterfaceInfo) {
     );
     println!("    Capture length: {}", if_info.snaplen);
     println!("    Number of packets: {}", if_info.num_packets);
+    println!("    Number of stat entries: {}", if_info.num_stats);
     for (opt_code, opt_value) in &if_info.options {
         print!("    ");
         pretty_print_idb_option(*opt_code, &opt_value);
