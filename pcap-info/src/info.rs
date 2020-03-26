@@ -293,7 +293,9 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
             let ts = Duration::new(b.ts_sec as u64, b.ts_usec * 1000);
             update_time(ts, ctx);
             ctx.packet_index += 1;
-            // TODO update data len
+            let data_len = b.caplen as usize;
+            assert!(data_len <= b.data.len());
+            ctx.data_bytes += data_len;
         }
         PcapBlockOwned::NG(Block::EnhancedPacket(epb)) => {
             assert!((epb.if_id as usize) < ctx.interfaces.len());
