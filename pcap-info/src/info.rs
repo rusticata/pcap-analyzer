@@ -105,6 +105,10 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             };
             ctx.interfaces.push(if_info);
             ctx.section_num_packets = 0;
+            let data = reader.data();
+            ctx.hasher_ripemd160.input(&data[..sz]);
+            ctx.hasher_sha1.input(&data[..sz]);
+            ctx.hasher_sha256.input(&data[..sz]);
             ctx.file_bytes += sz;
             reader.consume(sz);
         }
