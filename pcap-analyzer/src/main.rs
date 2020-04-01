@@ -19,7 +19,7 @@ use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
 use libpcap_analyzer::*;
-use libpcap_tools::{Config, PcapAnalyzer, PcapEngine, SingleThreadedEngine};
+use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
@@ -194,12 +194,13 @@ fn main() -> io::Result<()> {
         }
     };
 
-    let analyzer: Box<dyn PcapAnalyzer> = match config.get_usize("num_threads") {
-        Some(1) => Box::new(Analyzer::new(registry, &config)),
-        _ => Box::new(ThreadedAnalyzer::new(registry, &config)),
+    let mut engine = if config.get_usize("num_threads") == Some(1) {
+        let analyzer = Analyzer::new(registry, &config);
+        Box::new(PcapDataEngine::new(analyzer, &config)) as Box<dyn PcapEngine>
+    } else {
+        let analyzer = ThreadedAnalyzer::new(registry, &config);
+        Box::new(PcapDataEngine::new(analyzer, &config)) as Box<dyn PcapEngine>
     };
-    let mut engine = SingleThreadedEngine::new(analyzer, &config);
-
     engine.run(&mut input_reader).expect("run analyzer");
 
     Ok(())

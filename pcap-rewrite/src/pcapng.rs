@@ -1,8 +1,8 @@
 use crate::traits::*;
 use libpcap_tools::Packet;
-use pcap_parser::Linktype;
 use pcap_parser::pcapng::*;
 use pcap_parser::ToVec;
+use pcap_parser::{Linktype, PcapBlockOwned};
 use std::io::{self, Error, ErrorKind, Write};
 
 /// Writer for the legacy pcap format
@@ -15,9 +15,7 @@ where
 
 impl<W: Write> PcapNGWriter<W> {
     pub fn new(w: W) -> Self {
-        PcapNGWriter {
-            w,
-        }
+        PcapNGWriter { w }
     }
 }
 
@@ -35,7 +33,10 @@ impl<W: Write> Writer for PcapNGWriter<W> {
             block_len2: 28,
         };
         #[allow(clippy::or_fun_call)]
-        let v = shb.to_vec_raw().or(Err(Error::new(ErrorKind::Other, "SHB serialization failed")))?;
+        let v = shb.to_vec_raw().or(Err(Error::new(
+            ErrorKind::Other,
+            "SHB serialization failed",
+        )))?;
         let sz1 = self.w.write(&v)?;
         let mut idb = InterfaceDescriptionBlock {
             block_type: IDB_MAGIC,
@@ -50,13 +51,22 @@ impl<W: Write> Writer for PcapNGWriter<W> {
         };
         // to_vec will add options automatically
         #[allow(clippy::or_fun_call)]
-        let v = idb.to_vec().or(Err(Error::new(ErrorKind::Other, "IDB serialization failed")))?;
+        let v = idb.to_vec().or(Err(Error::new(
+            ErrorKind::Other,
+            "IDB serialization failed",
+        )))?;
         let sz2 = self.w.write(&v)?;
         Ok(sz1 + sz2)
     }
 
+    fn write_block(&mut self, block: &PcapBlockOwned) -> Result<usize, io::Error> {
+        match block {
+            _ => Ok(0),
+        }
+    }
+
     fn write_packet(&mut self, packet: &Packet, data: &[u8]) -> Result<usize, io::Error> {
-        let unit : u64 = 1_000_000;
+        let unit: u64 = 1_000_000;
         let ts = (u64::from(packet.ts.secs) * unit) + u64::from(packet.ts.micros);
         let mut epb = EnhancedPacketBlock {
             block_type: EPB_MAGIC,
@@ -72,7 +82,10 @@ impl<W: Write> Writer for PcapNGWriter<W> {
         };
         // to_vec will adjust length
         #[allow(clippy::or_fun_call)]
-        let v = epb.to_vec().or(Err(Error::new(ErrorKind::Other, "EPB serialization failed")))?;
+        let v = epb.to_vec().or(Err(Error::new(
+            ErrorKind::Other,
+            "EPB serialization failed",
+        )))?;
         self.w.write(&v)
     }
 }

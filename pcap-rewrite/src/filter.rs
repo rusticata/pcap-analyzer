@@ -1,8 +1,12 @@
 use pcap_parser::data::PacketData;
 
+/// Intermediate result for a Filter
 pub enum FResult<O, E> {
+    /// Success, and the new (filtered) data
     Ok(O),
+    /// Packet must be dropped
     Drop,
+    /// A fatal error occured
     Error(E),
 }
 

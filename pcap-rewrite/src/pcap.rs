@@ -1,7 +1,7 @@
 use crate::traits::Writer;
 use libpcap_tools::Packet;
-use pcap_parser::{LegacyPcapBlock, Linktype};
 use pcap_parser::ToVec;
+use pcap_parser::{LegacyPcapBlock, Linktype, PcapBlockOwned};
 use std::io::{self, Error, ErrorKind, Write};
 
 /// Writer for the legacy pcap format
@@ -24,8 +24,32 @@ impl<W: Write> Writer for PcapWriter<W> {
         hdr.snaplen = snaplen as u32;
         hdr.network = linktype;
         #[allow(clippy::or_fun_call)]
-        let s = hdr.to_vec().or(Err(Error::new(ErrorKind::Other, "Pcap header serialization failed")))?;
+        let s = hdr.to_vec().or(Err(Error::new(
+            ErrorKind::Other,
+            "Pcap header serialization failed",
+        )))?;
         self.w.write(&s)
+    }
+
+    fn write_block(&mut self, block: &PcapBlockOwned) -> Result<usize, io::Error> {
+        match block {
+            PcapBlockOwned::LegacyHeader(_) => Err(Error::new(
+                ErrorKind::Other,
+                "PcapWriter::write_block called twice for header",
+            )),
+            PcapBlockOwned::Legacy(b) => {
+                #[allow(clippy::or_fun_call)]
+                let v = b.to_vec_raw().or(Err(Error::new(
+                    ErrorKind::Other,
+                    "Pcap block serialization failed",
+                )))?;
+                self.w.write(&v)
+            },
+            PcapBlockOwned::NG(b) => {
+                debug!("PcapWriter: skipping pcapng block with magic {:08x}", b.magic());
+                Ok(0)
+            },
+        }
     }
 
     fn write_packet(&mut self, packet: &Packet, data: &[u8]) -> Result<usize, io::Error> {
@@ -39,7 +63,10 @@ impl<W: Write> Writer for PcapWriter<W> {
         // debug!("rec_hdr: {:?}", rec_hdr);
         // debug!("data (len={}): {}", data.len(), data.to_hex(16));
         #[allow(clippy::or_fun_call)]
-        let s = record.to_vec_raw().or(Err(Error::new(ErrorKind::Other, "Pcap block serialization failed")))?;
+        let s = record.to_vec_raw().or(Err(Error::new(
+            ErrorKind::Other,
+            "Pcap block serialization failed",
+        )))?;
         self.w.write(&s)
     }
 }

@@ -2,10 +2,10 @@ use crate::filter::*;
 use crate::pcap::*;
 use crate::pcapng::*;
 use crate::traits::Writer;
-use libpcap_tools::{Error, Packet, ParseContext, PcapAnalyzer};
-
+use libpcap_tools::{ParseBlockContext, Error, Packet, ParseContext, PcapAnalyzer};
 use pcap_parser::data::*;
 use pcap_parser::Linktype;
+use pcap_parser::{Block, PcapBlockOwned};
 use std::io::Write;
 
 #[derive(Copy, Clone, Debug)]
@@ -78,17 +78,30 @@ impl PcapAnalyzer for Rewriter {
         Ok(())
     }
 
-    fn handle_packet(&mut self, packet: &Packet, ctx: &ParseContext) -> Result<(), Error> {
-        let link_type = match ctx.interfaces.get(packet.interface as usize) {
-            Some(if_info) => if_info.link_type,
-            None => {
-                warn!(
-                    "Could not get link_type (missing interface info) for packet idx={}",
-                    ctx.pcap_index
-                );
-                return Err(Error::Generic("Missing interface info"));
+    fn handle_block(&mut self, block: &PcapBlockOwned, _block_ctx: &ParseBlockContext)  -> Result<(), Error> {
+        // handle specific pcapng blocks
+        if let PcapBlockOwned::NG(b) = block {
+            match b {
+                Block::SimplePacket(_) | Block::EnhancedPacket(_) => (),
+                _ => {
+                    self.writer
+                        .write_block(block)
+                        .expect("Could not write packet");
+                }
             }
-        };
+        }
+        // legacy packets are processed in `handle_packet`
+        Ok(())
+    }
+
+    fn handle_packet(&mut self, packet: &Packet, ctx: &ParseContext) -> Result<(), Error> {
+        let if_info = ctx
+            .interfaces
+            .get(packet.interface as usize)
+            .ok_or(Error::Generic("Missing interface info"))?;
+        let link_type = if_info.link_type;
+        // let snaplen = if_info.snaplen;
+        // debug!("snaplen: {}", snaplen);
         // apply filters
         let data = match apply_filters(&self.filters, packet.data.clone()) {
             FResult::Ok(d) => d,
@@ -101,7 +114,7 @@ impl PcapAnalyzer for Rewriter {
         let data = convert_layer(&data, self.output_layer).map_err(|e| Error::Generic(e))?;
         // truncate it to new snaplen
         let data = {
-            if data.len() > self.snaplen {
+            if self.snaplen > 0 && data.len() > self.snaplen {
                 info!(
                     "truncating index {} to {} bytes",
                     ctx.pcap_index, self.snaplen

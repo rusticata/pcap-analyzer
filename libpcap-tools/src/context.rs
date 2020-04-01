@@ -2,6 +2,13 @@ use crate::duration::Duration;
 use pcap_parser::*;
 use std::convert::TryFrom;
 
+/// Block parsing context
+#[derive(Clone, Default)]
+pub struct ParseBlockContext {
+    /// Index of current block in the pcap file
+    pub pcap_index: usize,
+}
+
 /// pcap parsing context
 #[derive(Clone, Default)]
 pub struct ParseContext {

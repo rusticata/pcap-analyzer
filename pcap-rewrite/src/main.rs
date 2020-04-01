@@ -18,7 +18,7 @@ use std::path::Path;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
-use libpcap_tools::{Config, PcapEngine, SingleThreadedEngine};
+use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
 
 mod common_filters;
 mod filter;
@@ -112,8 +112,11 @@ fn main() -> io::Result<()> {
     let path = Path::new(&output_filename);
     let outfile = File::create(path)?;
 
+    // let block_analyzer = BlockRewriter::new(outfile);
+    // let mut engine = BlockEngine::new(block_analyzer, &config);
+
     let rewriter = Rewriter::new(Box::new(outfile), output_format);
-    let mut engine = SingleThreadedEngine::new(Box::new(rewriter), &config);
+    let mut engine = PcapDataEngine::new(rewriter, &config);
 
     info!("Rewriting file (output format: {:?})", output_format);
 

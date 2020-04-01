@@ -7,7 +7,7 @@ use clap::{crate_version, App, Arg};
 use explugin_example::ExEmptyPluginBuilder;
 use libpcap_analyzer::*;
 use libpcap_analyzer::plugins::PluginsFactory;
-use libpcap_tools::{Config, PcapAnalyzer, PcapEngine, SingleThreadedEngine};
+use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
 use simplelog::{LevelFilter, SimpleLogger};
 use std::fs::File;
 use std::io;
@@ -128,10 +128,10 @@ fn main() -> Result<(), io::Error> {
         },
         );
 
-    let analyzer: Box<dyn PcapAnalyzer> = match config.get_usize("num_threads") {
-        Some(1) => Box::new(Analyzer::new(registry, &config)),
-        _ => Box::new(ThreadedAnalyzer::new(registry, &config)),
-    };
+    // let analyzer: Box<dyn PcapAnalyzer> = match config.get_usize("num_threads") {
+    //     Some(1) => Box::new(Analyzer::new(registry, &config)),
+    //     _ => Box::new(ThreadedAnalyzer::new(registry, &config)),
+    // };
 
     let mut input_reader: Box<dyn io::Read> = if input_filename == "-" {
         Box::new(io::stdin())
@@ -149,7 +149,13 @@ fn main() -> Result<(), io::Error> {
         }
     };
 
-    let mut engine = SingleThreadedEngine::new(analyzer, &config);
+    let mut engine = if config.get_usize("num_threads") == Some(1) {
+        let analyzer = Analyzer::new(registry, &config);
+        Box::new(PcapDataEngine::new(analyzer, &config)) as Box<dyn PcapEngine>
+    } else {
+        let analyzer = ThreadedAnalyzer::new(registry, &config);
+        Box::new(PcapDataEngine::new(analyzer, &config)) as Box<dyn PcapEngine>
+    };
     engine.run(&mut input_reader).expect("run analyzer");
 
     info!("test-analyzer: done");

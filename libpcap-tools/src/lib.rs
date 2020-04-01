@@ -4,8 +4,10 @@
 extern crate log;
 
 mod analyzer;
+mod block_engine;
 mod config;
 mod context;
+mod data_engine;
 mod duration;
 mod engine;
 mod error;
@@ -15,8 +17,10 @@ mod packet;
 mod three_tuple;
 
 pub use analyzer::*;
+pub use block_engine::*;
 pub use config::Config;
 pub use context::*;
+pub use data_engine::*;
 pub use duration::*;
 pub use engine::*;
 pub use error::*;
