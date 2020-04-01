@@ -20,6 +20,8 @@ use xz2::read::XzDecoder;
 
 use libpcap_tools::{Config, PcapEngine, SingleThreadedEngine};
 
+mod common_filters;
+mod filter;
 mod pcap;
 mod pcapng;
 mod rewriter;
@@ -40,7 +42,7 @@ fn main() -> io::Result<()> {
         .about("Tool for rewriting pcap files")
         .arg(
             Arg::with_name("plugins")
-                .help("Plugins to load (default: all)")
+                .help("Plugins to load (default: none)")
                 .short("p")
                 .long("plugins")
                 .takes_value(true),
@@ -73,7 +75,8 @@ fn main() -> io::Result<()> {
         )
         .get_matches();
 
-    let _ = simplelog::SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default());
+    let _ =
+        simplelog::SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default());
     debug!("Pcap rewrite tool {}", crate_version!());
 
     let mut config = Config::default();

@@ -1,3 +1,4 @@
+use crate::filter::*;
 use crate::pcap::*;
 use crate::pcapng::*;
 use crate::traits::Writer;
@@ -24,6 +25,7 @@ pub struct Rewriter {
     output_linktype: Linktype,
     output_layer: usize,
     writer: Box<dyn Writer>,
+    filters: Vec<Box<dyn Filter>>,
     stats: Stats,
 }
 
@@ -31,7 +33,7 @@ impl Rewriter {
     pub fn new(w: Box<dyn Write>, output_format: FileFormat) -> Self {
         let output_linktype = Linktype::RAW;
         let output_layer = get_linktype_layer(output_linktype);
-        let writer : Box<dyn Writer> = match output_format {
+        let writer: Box<dyn Writer> = match output_format {
             FileFormat::Pcap => Box::new(PcapWriter::new(w)),
             FileFormat::PcapNG => Box::new(PcapNGWriter::new(w)),
         };
@@ -40,6 +42,7 @@ impl Rewriter {
             output_linktype,
             output_layer,
             writer,
+            filters: Vec::new(),
             stats: Stats::default(),
         }
     }
@@ -86,8 +89,16 @@ impl PcapAnalyzer for Rewriter {
                 return Err(Error::Generic("Missing interface info"));
             }
         };
+        // apply filters
+        let data = match apply_filters(&self.filters, packet.data.clone()) {
+            FResult::Ok(d) => d,
+            FResult::Drop => {
+                return Ok(());
+            }
+            FResult::Error(e) => panic!("Filter fatal error: {}", e),
+        };
         // convert data
-        let data = convert_layer(&packet.data, self.output_layer).map_err(|e| Error::Generic(e))?;
+        let data = convert_layer(&data, self.output_layer).map_err(|e| Error::Generic(e))?;
         // truncate it to new snaplen
         let data = {
             if data.len() > self.snaplen {
