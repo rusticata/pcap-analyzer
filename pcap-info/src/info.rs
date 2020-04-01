@@ -39,6 +39,7 @@ struct Context {
     strict_time_order: bool,
     num_ipv4_resolved: usize,
     num_ipv6_resolved: usize,
+    num_secrets_blocks: usize,
     num_custom_blocks: usize,
     // section-related variables
     interfaces: Vec<InterfaceInfo>,
@@ -220,6 +221,12 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             "Number of IPv6 resolved", ctx.num_ipv6_resolved
         );
     }
+    if ctx.num_secrets_blocks > 0 {
+        println!(
+            "{:<20}: {}",
+            "Number of decryption secrets blocks", ctx.num_secrets_blocks
+        );
+    }
     if ctx.num_custom_blocks > 0 {
         println!(
             "{:<20}: {}",
@@ -344,10 +351,10 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
         PcapBlockOwned::NG(Block::NameResolution(nrb)) => {
             for nr in &nrb.nr {
                 match nr.record_type {
-                    0 => (),
-                    1 => ctx.num_ipv4_resolved += 1,
-                    2 => ctx.num_ipv6_resolved += 1,
-                    n => println!(
+                    NameRecordType::End => (),
+                    NameRecordType::Ipv4 => ctx.num_ipv4_resolved += 1,
+                    NameRecordType::Ipv6 => ctx.num_ipv6_resolved += 1,
+                    NameRecordType(n) => println!(
                         "*** invalid NameRecordType {} in NRB (block {})",
                         n, ctx.block_index
                     ),
@@ -360,11 +367,17 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
             let if_info = &mut ctx.interfaces[isb.if_id as usize];
             if_info.num_stats += 1;
         }
+        PcapBlockOwned::NG(Block::DecryptionSecrets(_dsb)) => {
+            // println!("*** DSB ***");
+            // println!("secrets type {:?}", _dsb.secrets_type);
+            // println!("secrets (as str): {:?}", std::str::from_utf8(_dsb.data));
+            ctx.num_secrets_blocks += 1;
+        }
         PcapBlockOwned::NG(Block::Custom(_)) => {
             ctx.num_custom_blocks += 1;
         }
-        _ => {
-            println!("*** Unsupported block type ***");
+        PcapBlockOwned::NG(b) => {
+            println!("*** Unsupported block type (magic={:08x}) ***", b.magic());
         }
     }
 }

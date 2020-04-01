@@ -55,5 +55,5 @@ git = "https://github.com/rusticata/rusticata.git"
 optional = true
 
 [dependencies.pcap-parser]
-version = "0.8"
+version = "0.9"
 features = ["data"]
