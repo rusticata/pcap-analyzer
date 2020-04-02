@@ -26,7 +26,7 @@ struct PcapDataAnalyzer<A: PcapAnalyzer> {
 /// ## example
 /// 
 /// ```
-/// use libpcap_tools::{Config, Error, Packet, ParseContext, PcapAnalyzer, PcapDataEngine};
+/// use libpcap_tools::{Config, Error, Packet, ParseContext, PcapAnalyzer, PcapDataEngine, PcapEngine};
 /// #[derive(Default)]
 /// pub struct ExampleAnalyzer {
 ///     packet_count: usize,
