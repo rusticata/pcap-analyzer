@@ -61,6 +61,21 @@ impl<W: Write> Writer for PcapNGWriter<W> {
 
     fn write_block(&mut self, block: &PcapBlockOwned) -> Result<usize, io::Error> {
         match block {
+            PcapBlockOwned::NG(b) => {
+                match b {
+                    // skip SHB and ISB blocks, processed in `handle_packet`
+                    Block::SectionHeader(_) | Block::InterfaceDescription(_) |
+                    // skip data blocks, processed in `handle_packet`
+                    Block::SimplePacket(_) | Block::EnhancedPacket(_) => Ok(0),
+                    // other blocks are copied
+                    _ => {
+                        let v = b.to_vec_raw().or_else(|_| {
+                            Err(Error::new(ErrorKind::Other, "Block serialization failed"))
+                        })?;
+                        self.w.write(&v)
+                    }
+                }
+            }
             _ => Ok(0),
         }
     }

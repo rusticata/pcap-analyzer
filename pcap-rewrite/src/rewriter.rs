@@ -82,6 +82,7 @@ impl PcapAnalyzer for Rewriter {
         // handle specific pcapng blocks
         if let PcapBlockOwned::NG(b) = block {
             match b {
+                // skip data blocks, processed in `handle_packet`
                 Block::SimplePacket(_) | Block::EnhancedPacket(_) => (),
                 _ => {
                     self.writer
