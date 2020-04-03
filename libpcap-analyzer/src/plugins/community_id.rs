@@ -1,20 +1,26 @@
 //! Plugin to build Community ID Flow Hash
 //! See https://github.com/corelight/community-id-spec
 
+use crate::output;
 use crate::plugin_registry::PluginRegistry;
-use libpcap_tools::Config;
+use libpcap_tools::{Config, FlowID};
 
 use super::Plugin;
 use crate::packet_info::PacketInfo;
 use crate::plugin::PLUGIN_L4;
 use base64;
+use indexmap::IndexMap;
 use libpcap_tools::{FiveTuple, Packet};
+use serde::Serialize;
+use serde_json::{json, Value};
 use sha1::Sha1;
 use std::net::IpAddr;
 
 #[derive(Default)]
 pub struct CommunityID {
     seed: u16,
+    ids: IndexMap<FlowID, String>,
+    output_dir: String,
 }
 
 pub struct CommunityIDBuilder;
@@ -23,7 +29,12 @@ impl crate::plugin::PluginBuilder for CommunityIDBuilder {
     fn name(&self) -> &'static str { "CommunityIDBuilder" }
     fn build(&self, registry:&mut PluginRegistry, config:&Config) {
         let seed = config.get_usize("plugin.community_id.seed").unwrap_or(0) as u16;
-        let plugin = CommunityID{ seed };
+        let output_dir = output::get_output_dir(config).to_owned();
+        let plugin = CommunityID{
+            seed,
+            ids:IndexMap::new(),
+            output_dir
+        };
         let safe_p = build_safeplugin!(plugin);
         registry.add_plugin(safe_p.clone());
         registry.register_transport_layer_all(safe_p.clone());
@@ -92,8 +103,20 @@ impl Plugin for CommunityID {
     }
 
     fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketInfo) {
-        debug!("five_tuple: {}", pdata.five_tuple);
-        let hash = hash_community_id(&pdata.five_tuple, pdata.l4_type, self.seed);
-        debug!("flow community ID: {}", hash);
+        if let Some(flow) = pdata.flow {
+            let hash = hash_community_id(&pdata.five_tuple, pdata.l4_type, self.seed);
+            self.ids.insert(flow.flow_id, hash);
+        }
+    }
+
+    fn post_process(&mut self) {
+        self.ids.sort_keys();
+        info!("Community IDs:");
+        for (t5, id) in self.ids.iter() {
+            info!("    {}: {}", t5, id);
+        }
+        let js = json!({"community_ids:": self.ids});
+        let file = output::create_file(&self.output_dir, "community-ids.json").expect("Cannot create output file");
+        serde_json::to_writer(file, &js).unwrap();
     }
 }
