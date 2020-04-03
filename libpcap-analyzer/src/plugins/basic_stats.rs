@@ -4,14 +4,15 @@ use crate::output;
 use crate::packet_info::PacketInfo;
 use crate::plugin::{PLUGIN_L3, PLUGIN_L4};
 use indexmap::IndexMap;
-use libpcap_tools::{FiveTuple, Packet, ThreeTuple};
+use libpcap_tools::{FiveTuple, FlowID, Packet, ThreeTuple};
 use serde::Serialize;
 use serde_json::{json, Value};
 
 #[derive(Default, Serialize)]
-pub struct Count {
-    pub num_bytes : usize,
-    pub num_packets : usize,
+struct Stats {
+    num_bytes : usize,
+    num_packets : usize,
+    flow_id: Option<FlowID>,
 }
 
 #[derive(Default)]
@@ -19,8 +20,8 @@ pub struct BasicStats {
     pub total_bytes_l3 : usize,
     pub total_packets : usize,
 
-    pub l3_conversations: IndexMap<ThreeTuple,Count>,
-    pub l4_conversations: IndexMap<FiveTuple,Count>,
+    l3_conversations: IndexMap<ThreeTuple, Stats>,
+    l4_conversations: IndexMap<FiveTuple, Stats>,
 
     output_dir: String,
 }
@@ -39,7 +40,7 @@ impl Plugin for BasicStats {
 
     fn handle_l3(&mut self, _packet:&Packet, data: &[u8], _ethertype:u16, t3:&ThreeTuple) {
         // info!("BasicStats::handle_l3 (len {})", data.len());
-        let entry = self.l3_conversations.entry(t3.clone()).or_insert_with(Count::default);
+        let entry = self.l3_conversations.entry(t3.clone()).or_insert_with(Stats::default);
         entry.num_bytes += data.len();
         entry.num_packets += 1;
         self.total_bytes_l3 += data.len();
@@ -47,8 +48,11 @@ impl Plugin for BasicStats {
     }
 
     fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketInfo) {
-        let entry = self.l4_conversations.entry(pdata.five_tuple.clone()).or_insert_with(Count::default);
+        let entry = self.l4_conversations.entry(pdata.five_tuple.clone()).or_insert_with(Stats::default);
         entry.num_bytes += pdata.l4_payload.map(|l4| l4.len()).unwrap_or(0);
+        if let Some(flow) = pdata.flow {
+            entry.flow_id = Some(flow.flow_id);
+        }
         entry.num_packets += 1;
     }
 
@@ -94,6 +98,9 @@ impl Plugin for BasicStats {
                 if let Value::Object(mut m) = json!(t5) {
                     m.insert("num_bytes".into(), s.num_bytes.into());
                     m.insert("num_packets".into(), s.num_packets.into());
+                    if let Some(flow_id) = s.flow_id {
+                        m.insert("flow_id".into(), flow_id.into());
+                    }
                     Value::Object(m)
                 } else {
                     panic!("json! macro returned unexpected type");
