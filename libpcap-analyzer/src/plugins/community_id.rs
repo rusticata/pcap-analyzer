@@ -11,8 +11,7 @@ use crate::plugin::PLUGIN_L4;
 use base64;
 use indexmap::IndexMap;
 use libpcap_tools::{FiveTuple, Packet};
-use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::json;
 use sha1::Sha1;
 use std::net::IpAddr;
 
@@ -37,7 +36,7 @@ impl crate::plugin::PluginBuilder for CommunityIDBuilder {
         };
         let safe_p = build_safeplugin!(plugin);
         registry.add_plugin(safe_p.clone());
-        registry.register_transport_layer_all(safe_p.clone());
+        registry.register_transport_layer_all(safe_p);
     }
 }
 
