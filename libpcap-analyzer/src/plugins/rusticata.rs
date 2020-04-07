@@ -10,11 +10,11 @@ use rusticata::*;
 
 type ProbeFn = fn(&[u8]) -> bool;
 
-const PROBE_TCP: u32 = 0x0600;
-const PROBE_UDP: u32 = 0x1100;
+const PROBE_TCP: u32 = 0x0600_0000;
+const PROBE_UDP: u32 = 0x1100_0000;
 
 // This enum defines the order TCP probes will be applied
-#[repr(u8)]
+#[repr(u16)]
 enum tcp_probe_order {
     Dns,
     Tls,
@@ -24,7 +24,7 @@ enum tcp_probe_order {
 }
 
 // This enum defines the order UDP probes will be applied
-#[repr(u8)]
+#[repr(u16)]
 enum udp_probe_order {
     Dhcp,
     Dns,
