@@ -5,6 +5,8 @@ use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
 use crate::packet_info::PacketInfo;
 use crate::plugin::*;
 use crate::plugin_registry::PluginRegistry;
+use crate::ppp::{PppPacket, PppProtocolTypes};
+use crate::pppoe::PppoeSessionPacket;
 use crate::vxlan::*;
 use libpcap_tools::*;
 
@@ -130,13 +132,17 @@ pub(crate) fn handle_l3(
         return Ok(());
     }
 
+    // see https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
     match ethertype {
         EtherTypes::Ipv4 => handle_l3_ipv4(packet, ctx, data, ethertype, analyzer),
         EtherTypes::Ipv6 => handle_l3_ipv6(packet, ctx, data, ethertype, analyzer),
         EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, data, ethertype, analyzer),
         // ignore ARP packets
         EtherTypes::Arp => Ok(()),
+        // 0x880b: PPP (rfc7042)
+        EtherType(0x880b) => handle_l3_ppp(packet, ctx, data, ethertype, analyzer),
         EtherType(0x88be) => handle_l3_erspan(packet, ctx, data, ethertype, analyzer),
+        EtherTypes::PppoeSession => handle_l3_pppoesession(packet, ctx, data, ethertype, analyzer),
 
         e => {
             warn!(
@@ -306,6 +312,48 @@ fn handle_l3_erspan(
         EthernetPacket::new(eth_data).ok_or("Could not build EthernetPacket packet from data")?;
     let next_ethertype = eth.get_ethertype();
     handle_l3(&packet, &ctx, eth.payload(), next_ethertype, analyzer)
+}
+
+fn handle_l3_pppoesession(
+    packet: &Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    ethertype: EtherType,
+    analyzer: &mut Analyzer,
+) -> Result<(), Error> {
+    trace!("handle_l3_pppoesession (idx={})", ctx.pcap_index);
+    let session =
+        PppoeSessionPacket::new(data).ok_or("Could not build PppoeSession packet from data")?;
+    trace!(
+        "    pppoesession: version={} type={} code={}",
+        session.get_version(),
+        session.get_type(),
+        session.get_code(),
+    );
+    let ppp_data = session.payload();
+    handle_l3_ppp(packet, ctx, ppp_data, ethertype, analyzer)
+}
+
+fn handle_l3_ppp(
+    packet: &Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    ethertype: EtherType,
+    analyzer: &mut Analyzer,
+) -> Result<(), Error> {
+    trace!("handle_l3_ppp (idx={})", ctx.pcap_index);
+    let ppp = PppPacket::new(data).ok_or("Could not build Ppp packet from data")?;
+    let proto = ppp.get_protocol();
+    let payload = ppp.payload();
+    trace!("    ppp: protocol=0x{:02x}", proto.0,);
+    match proto {
+        PppProtocolTypes::Ipv4 => handle_l3_ipv4(packet, ctx, payload, ethertype, analyzer),
+        PppProtocolTypes::Ipv6 => handle_l3_ipv6(packet, ctx, payload, ethertype, analyzer),
+        _ => {
+            warn!("Unsupported PPP protocol 0x{:02x}", proto.0);
+            Ok(())
+        }
+    }
 }
 
 // Called when L3 layer is unknown
@@ -484,7 +532,22 @@ fn handle_l4_gre(
     //     warn!("Source routed GRE packets not supported");
     //     return Ok(());
     // }
-    let data = gre.payload();
+    let data = if next_proto == 0x880b {
+        // PPTP GRE is slightly different, and pnet_packet offset is wrong
+        // See https://en.wikipedia.org/wiki/Generic_Routing_Encapsulation
+        let mut offset = 8;
+        if gre.get_sequence_present() != 0 {
+            offset += 4;
+        }
+        if l3_data[1] >> 7 != 0 {
+            // there is an acknowledge number
+            offset += 4;
+        }
+        debug_assert!(offset <= l3_data.len());
+        &l3_data[offset..]
+    } else {
+        gre.payload()
+    };
     trace!("GRE: type=0x{:x}", next_proto);
 
     handle_l3(packet, ctx, data, EtherType(next_proto), analyzer)
