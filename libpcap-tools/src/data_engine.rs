@@ -122,6 +122,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                 Packet {
                     interface: epb.if_id,
                     ts,
+                    link_type: if_info.link_type,
                     data,
                     origlen: epb.origlen,
                     caplen: epb.caplen,
@@ -138,6 +139,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                     interface: 0,
                     ts: Duration::default(),
                     data,
+                    link_type: if_info.link_type,
                     origlen: spb.origlen,
                     caplen: if_info.snaplen,
                     pcap_index: block_ctx.pcap_index,
@@ -163,6 +165,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                 Packet {
                     interface: 0,
                     ts: Duration::new(b.ts_sec, b.ts_usec),
+                    link_type: if_info.link_type,
                     data,
                     origlen: b.origlen,
                     caplen: b.caplen,
