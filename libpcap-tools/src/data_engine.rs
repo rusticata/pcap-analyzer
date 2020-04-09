@@ -16,32 +16,32 @@ struct PcapDataAnalyzer<A: PcapAnalyzer> {
 }
 
 /// pcap/pcap-ng data analyzer engine
-/// 
+///
 /// `PcapDataEngine` iterates over a pcap input, parses data and abstracts the
 /// format (pcap datalink, endianness etc.) for the analysis.
 ///
 /// `PcapDataEngine` stores a `PcapAnalyzer` instance, and wraps it to receive parsed data blocks.
 /// Internally, it is an abstraction over a `BlockEngine`.
-/// 
+///
 /// ## example
-/// 
+///
 /// ```
 /// use libpcap_tools::{Config, Error, Packet, ParseContext, PcapAnalyzer, PcapDataEngine, PcapEngine};
 /// #[derive(Default)]
 /// pub struct ExampleAnalyzer {
 ///     packet_count: usize,
 /// }
-/// 
+///
 /// impl PcapAnalyzer for ExampleAnalyzer {
 ///     fn handle_packet(&mut self, packet: &Packet, ctx: &ParseContext) -> Result<(), Error> {
 ///         Ok(())
 ///     }
 /// }
-/// 
+///
 /// let config = Config::default();
 /// let analyzer = ExampleAnalyzer::default();
 /// let mut engine = PcapDataEngine::new(analyzer, &config);
-/// 
+///
 /// // `engine.run()` can take any `mut Read` as input
 /// // Here, we use a cursor as an example
 /// use std::io::Cursor;
@@ -192,9 +192,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
             self.ctx.rel_ts.micros
         );
         // call data analyzer
-        self.data_analyzer
-            .handle_packet(&packet, &self.ctx)
-            .or(Err("Analyzer error"))?;
+        self.data_analyzer.handle_packet(&packet, &self.ctx)?;
         Ok(())
     }
 

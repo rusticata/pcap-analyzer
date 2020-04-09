@@ -773,7 +773,10 @@ impl PcapAnalyzer for Analyzer {
                 handle_l3(packet, &ctx, data, EtherType(ethertype), self)
             }
             PacketData::L4(_, _) => unimplemented!(), // XXX
-            PacketData::Unsupported(_) => unimplemented!(), // XXX
+            PacketData::Unsupported(_) => {
+                warn!("Unsupported data format (unknown linktype ?)");
+                Err(Error::Generic("Unsupported data format"))
+            }
         }
     }
 
