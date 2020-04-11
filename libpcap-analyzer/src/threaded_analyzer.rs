@@ -25,7 +25,7 @@ pub struct Worker {
 /// Pcap/Pcap-ng Multi-threaded analyzer
 ///
 pub struct ThreadedAnalyzer<'a> {
-    registry: PluginRegistry,
+    registry: Arc<PluginRegistry>,
 
     local_jobs: Vec<Sender<Job<'a>>>,
     workers: Vec<Worker>,
@@ -38,6 +38,7 @@ impl<'a> ThreadedAnalyzer<'a> {
             .get_usize("num_threads")
             .unwrap_or_else(num_cpus::get);
         let barrier = Arc::new(Barrier::new(n_workers + 1));
+        let registry = Arc::new(registry);
 
         let mut workers = Vec::new();
         let mut local_jobs = Vec::new();

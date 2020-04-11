@@ -13,6 +13,7 @@ use libpcap_tools::*;
 use pcap_parser::data::PacketData;
 use std::cmp::min;
 use std::net::IpAddr;
+use std::sync::Arc;
 
 use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
@@ -46,7 +47,7 @@ struct L3Info {
 /// All callbacks for a single ISO layer will be called concurrently before
 /// calling the next level callbacks.
 pub struct Analyzer {
-    pub(crate) registry: PluginRegistry,
+    pub(crate) registry: Arc<PluginRegistry>,
 
     pub(crate) flows: FlowMap,
 
@@ -57,7 +58,7 @@ pub struct Analyzer {
 }
 
 impl Analyzer {
-    pub fn new(registry: PluginRegistry, config: &Config) -> Analyzer {
+    pub fn new(registry: Arc<PluginRegistry>, config: &Config) -> Analyzer {
         let do_checksums = config.get_bool("do_checksums").unwrap_or(true);
         Analyzer {
             registry,

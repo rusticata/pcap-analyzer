@@ -14,6 +14,7 @@ use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
@@ -195,7 +196,7 @@ fn main() -> io::Result<()> {
     };
 
     let mut engine = if config.get_usize("num_threads") == Some(1) {
-        let analyzer = Analyzer::new(registry, &config);
+        let analyzer = Analyzer::new(Arc::new(registry), &config);
         Box::new(PcapDataEngine::new(analyzer, &config)) as Box<dyn PcapEngine>
     } else {
         let analyzer = ThreadedAnalyzer::new(registry, &config);

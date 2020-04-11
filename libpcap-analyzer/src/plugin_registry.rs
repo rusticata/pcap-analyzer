@@ -16,7 +16,7 @@ macro_rules! build_safeplugin {
     };
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct PluginRegistry {
     plugins_l2: Vec<SafePlugin>,
     plugins_ethertype_ipv4: Vec<SafePlugin>,
