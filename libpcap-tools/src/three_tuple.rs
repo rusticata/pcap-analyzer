@@ -6,8 +6,8 @@ use std::net::{IpAddr, Ipv4Addr};
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 #[derive(Serialize)]
 pub struct ThreeTuple {
-    /// Layer 4 protocol (e.g TCP, UDP, ICMP)
-    pub proto: u8,
+    /// Layer 3 protocol (e.g IPv4, IPv6)
+    pub proto: u16,
     /// Source IP address
     pub src: IpAddr,
     /// Destination IP address

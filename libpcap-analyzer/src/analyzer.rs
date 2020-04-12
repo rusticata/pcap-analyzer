@@ -28,9 +28,10 @@ use pnet_packet::udp::UdpPacket;
 use pnet_packet::vlan::VlanPacket;
 use pnet_packet::Packet as PnetPacket;
 
-struct L3Info {
-    l3_proto: u16,
-    three_tuple: ThreeTuple,
+pub struct L3Info {
+    /// Layer 4 protocol (e.g TCP, UDP, ICMP)
+    pub l4_proto: u8,
+    pub three_tuple: ThreeTuple,
 }
 
 /// Pcap/Pcap-ng analyzer
@@ -180,9 +181,8 @@ fn handle_l3_ipv4(
         }
     };
 
-    let l4_proto = ipv4.get_next_level_protocol();
     let t3 = ThreeTuple {
-        proto: l4_proto.0,
+        proto: ethertype.0,
         src: IpAddr::V4(ipv4.get_source()),
         dst: IpAddr::V4(ipv4.get_destination()),
     };
@@ -241,9 +241,10 @@ fn handle_l3_ipv4(
         }
     };
 
+    let l4_proto = ipv4.get_next_level_protocol().0;
     let l3_info = L3Info {
         three_tuple: t3,
-        l3_proto: ethertype.0,
+        l4_proto,
     };
 
     handle_l3_common(packet, ctx, payload, &l3_info, analyzer)
@@ -258,12 +259,12 @@ fn handle_l3_ipv6(
 ) -> Result<(), Error> {
     trace!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
     let ipv6 = Ipv6Packet::new(data).ok_or("Could not build IPv6 packet from data")?;
-    let l4_proto = ipv6.get_next_header();
+    let l4_proto = ipv6.get_next_header().0;
 
     // XXX remove padding ?
 
     let t3 = ThreeTuple {
-        proto: l4_proto.0,
+        proto: ethertype.0,
         src: IpAddr::V6(ipv6.get_source()),
         dst: IpAddr::V6(ipv6.get_destination()),
     };
@@ -272,7 +273,7 @@ fn handle_l3_ipv6(
 
     let l3_info = L3Info {
         three_tuple: t3,
-        l3_proto: ethertype.0,
+        l4_proto,
     };
 
     let data = ipv6.payload();
@@ -387,7 +388,7 @@ fn handle_l3_common(
     l3_info: &L3Info,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
-    match IpNextHeaderProtocol(l3_info.three_tuple.proto) {
+    match IpNextHeaderProtocol(l3_info.l4_proto) {
         IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, &l3_info, analyzer),
         IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, &l3_info, analyzer),
         IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, &l3_info, analyzer),
@@ -666,7 +667,7 @@ fn handle_l4_common(
     l4_payload: Option<&[u8]>,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
-    let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
+    let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port, l3_info.l4_proto);
     trace!("5t: {}", five_tuple);
     let now = packet.ts;
 
@@ -702,9 +703,9 @@ fn handle_l4_common(
     let pinfo = PacketInfo {
         five_tuple: &five_tuple,
         to_server,
-        l3_type: l3_info.l3_proto,
+        l3_type: l3_info.three_tuple.proto,
         l4_data,
-        l4_type: l3_info.three_tuple.proto,
+        l4_type: l3_info.l4_proto,
         l4_payload,
         flow: Some(flow),
         pcap_index: ctx.pcap_index,

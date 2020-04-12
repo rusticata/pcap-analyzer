@@ -36,10 +36,10 @@ pub trait ToFiveTuple {
 }
 
 impl FiveTuple {
-    /// Creates a `FiveTuple` from a `ThreeTuple` and the source/destination ports
-    pub fn from_three_tuple(t3: &ThreeTuple, src_port: u16, dst_port: u16) -> Self {
+    /// Creates a `FiveTuple` from a `ThreeTuple`, the source/destination ports, and the layer 4 protocol
+    pub fn from_three_tuple(t3: &ThreeTuple, src_port: u16, dst_port: u16, proto: u8) -> Self {
         FiveTuple {
-            proto: t3.proto,
+            proto,
             src: t3.src,
             dst: t3.dst,
             src_port,
