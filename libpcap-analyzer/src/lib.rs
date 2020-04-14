@@ -8,8 +8,10 @@ extern crate pcap_parser;
 extern crate rand;
 
 mod flow_map;
+mod layers;
 mod packet_info;
 pub use flow_map::FlowMap;
+pub use layers::*;
 
 mod plugin;
 #[macro_use] mod plugin_registry;

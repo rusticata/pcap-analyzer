@@ -1,4 +1,4 @@
-use super::Plugin;
+use crate::plugin::{Plugin, PluginResult};
 use crate::plugin_builder;
 use crate::output;
 use crate::packet_info::PacketInfo;
@@ -38,22 +38,34 @@ impl Plugin for BasicStats {
     fn name(&self) -> &'static str { "BasicStats" }
     fn plugin_type(&self) -> u16 { PLUGIN_L3|PLUGIN_L4 }
 
-    fn handle_l3(&mut self, _packet:&Packet, data: &[u8], _ethertype:u16, t3:&ThreeTuple) {
+    fn handle_layer_network<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        data: &'i [u8],
+        t3: &'s ThreeTuple,
+        _l4_proto: u8,
+    ) -> PluginResult<'i> {
         // info!("BasicStats::handle_l3 (len {})", data.len());
         let entry = self.l3_conversations.entry(t3.clone()).or_insert_with(Stats::default);
         entry.num_bytes += data.len();
         entry.num_packets += 1;
         self.total_bytes_l3 += data.len();
         self.total_packets += 1;
+        PluginResult::None
     }
 
-    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketInfo) {
-        let entry = self.l4_conversations.entry(pdata.five_tuple.clone()).or_insert_with(Stats::default);
-        entry.num_bytes += pdata.l4_payload.map(|l4| l4.len()).unwrap_or(0);
-        if let Some(flow) = pdata.flow {
+    fn handle_layer_transport<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        pinfo: &PacketInfo,
+    ) -> PluginResult<'i> {
+        let entry = self.l4_conversations.entry(pinfo.five_tuple.clone()).or_insert_with(Stats::default);
+        entry.num_bytes += pinfo.l4_payload.map(|l4| l4.len()).unwrap_or(0);
+        if let Some(flow) = pinfo.flow {
             entry.flow_id = Some(flow.flow_id);
         }
         entry.num_packets += 1;
+        PluginResult::None
     }
 
     fn post_process(&mut self) {

@@ -1,9 +1,11 @@
-use crate::analyzer::{handle_l3, Analyzer};
+use crate::analyzer::{handle_l3, run_plugins_v2_link, run_plugins_v2_physical, Analyzer};
+use crate::layers::LinkLayerType;
 use crate::plugin_registry::PluginRegistry;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use libpcap_tools::*;
 use pcap_parser::data::PacketData;
 use pnet_base::MacAddr;
+use pnet_macros_support::packet::Packet as PnetPacket;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use std::cmp::min;
 use std::panic::AssertUnwindSafe;
@@ -26,6 +28,9 @@ pub struct Worker {
 ///
 pub struct ThreadedAnalyzer<'a> {
     registry: Arc<PluginRegistry>,
+    /// create a local analyzer, so L2 packets can be handled without
+    /// dispatching them to threads
+    analyzer: Analyzer,
 
     local_jobs: Vec<Sender<Job<'a>>>,
     workers: Vec<Worker>,
@@ -39,6 +44,7 @@ impl<'a> ThreadedAnalyzer<'a> {
             .unwrap_or_else(num_cpus::get);
         let barrier = Arc::new(Barrier::new(n_workers + 1));
         let registry = Arc::new(registry);
+        let analyzer = Analyzer::new(registry.clone(), &config);
 
         let mut workers = Vec::new();
         let mut local_jobs = Vec::new();
@@ -48,8 +54,7 @@ impl<'a> ThreadedAnalyzer<'a> {
             let (sender, receiver) = unbounded();
             // NOTE: remove job queue from lifetime management, it must be made 'static
             // to be sent to threads
-            let r : Receiver<Job<'static>> =
-                unsafe { ::std::mem::transmute(receiver) };
+            let r: Receiver<Job<'static>> = unsafe { ::std::mem::transmute(receiver) };
             let barrier = barrier.clone();
             let builder = thread::Builder::new();
             let handler = builder
@@ -65,6 +70,7 @@ impl<'a> ThreadedAnalyzer<'a> {
 
         ThreadedAnalyzer {
             registry,
+            analyzer,
             local_jobs,
             workers,
             barrier,
@@ -79,7 +85,7 @@ impl<'a> ThreadedAnalyzer<'a> {
         self.barrier.wait();
     }
 
-    fn dispatch(&self, packet: Packet<'static>, ctx: &ParseContext) -> Result<(), Error> {
+    fn dispatch(&mut self, packet: Packet<'static>, ctx: &ParseContext) -> Result<(), Error> {
         match packet.data {
             PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
             PacketData::L3(ethertype, data) => {
@@ -97,7 +103,7 @@ impl<'a> ThreadedAnalyzer<'a> {
     }
 
     fn handle_l2(
-        &self,
+        &mut self,
         packet: Packet<'static>,
         ctx: &ParseContext,
         data: &'static [u8],
@@ -108,7 +114,7 @@ impl<'a> ThreadedAnalyzer<'a> {
         let data = &data[..datalen];
 
         // let start = ::std::time::Instant::now();
-        self.registry.run_plugins_l2(&packet, &data);
+        run_plugins_v2_physical(&packet, ctx, data, &mut self.analyzer)?;
         // let elapsed = start.elapsed();
         // debug!("Time to run l2 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
@@ -134,7 +140,16 @@ impl<'a> ThreadedAnalyzer<'a> {
                 // }
                 trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
                 // self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype())
+                let ethertype = eth.get_ethertype();
+                let payload = eth.payload();
                 let payload = &data[14..];
+                run_plugins_v2_link(
+                    &packet,
+                    ctx,
+                    LinkLayerType::Ethernet,
+                    payload,
+                    &mut self.analyzer,
+                )?;
                 extern_dispatch_l3(&self.local_jobs, packet, &ctx, payload, eth.get_ethertype())
             }
             None => {
@@ -241,7 +256,7 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
                 // buf[0..32].copy_from_slice(&data[8..40]);
                 let sz = 16;
                 for i in 0..16 {
-                    buf[i] = data[8+i] ^ data[24+i];
+                    buf[i] = data[8 + i] ^ data[24 + i];
                 }
                 // we may append source and destination ports
                 // XXX breaks fragmentation
@@ -269,7 +284,7 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
     }
 }
 
-fn worker(mut a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
+fn worker(mut a: Analyzer, idx: usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
     debug!("worker thread {} starting", idx);
     let mut pcap_index = 0;
     let res = ::std::panic::catch_unwind(AssertUnwindSafe(|| loop {
@@ -278,23 +293,13 @@ fn worker(mut a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
                 Job::Exit => break,
                 Job::PrintDebug => {
                     {
-                        debug!(
-                            "thread {}: hash table size: {}",
-                            idx,
-                            a.flows.len()
-                        );
+                        debug!("thread {}: hash table size: {}", idx, a.flows.len());
                     };
                 }
                 Job::New(packet, ctx, data, ethertype) => {
                     pcap_index = ctx.pcap_index;
                     trace!("thread {}: got a job", idx);
-                    let h3_res = handle_l3(
-                        &packet,
-                        &ctx,
-                        data,
-                        ethertype,
-                        &mut a,
-                    );
+                    let h3_res = handle_l3(&packet, &ctx, data, ethertype, &mut a);
                     if h3_res.is_err() {
                         warn!("thread {}: handle_l3 failed", idx);
                     }
@@ -323,8 +328,8 @@ fn worker(mut a: Analyzer, idx:usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
 
 #[cfg(test)]
 mod tests {
-    use libpcap_tools::Flow;
     use super::Job;
+    use libpcap_tools::Flow;
     use libpcap_tools::{Packet, ParseContext};
     use std::mem;
     #[test]

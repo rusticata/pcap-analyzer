@@ -1,6 +1,6 @@
 use crate::packet_info::PacketInfo;
-use crate::plugin::PLUGIN_L4;
-use crate::{output, plugin_builder, Plugin};
+use crate::plugin::{Plugin, PluginResult, PLUGIN_L4};
+use crate::{output, plugin_builder};
 use libpcap_tools::{FiveTuple, Packet};
 use rusticata::*;
 use serde_json::{self, json};
@@ -38,29 +38,34 @@ impl<'a> Plugin for TlsStats<'a> {
     fn plugin_type(&self) -> u16 {
         PLUGIN_L4
     }
-    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketInfo) {
-        let data = match pdata.l4_payload {
+    fn handle_layer_transport<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        pinfo: &PacketInfo,
+    ) -> PluginResult<'i> {
+        let data = match pinfo.l4_payload {
             Some(data) => data,
-            None => return,
+            None => return PluginResult::None,
         };
-        let flow = match pdata.flow {
+        let flow = match pinfo.flow {
             Some(flow) => flow,
-            None => return,
+            None => return PluginResult::None,
         };
-        // test if pdata.five_tuple is in self.tls_conversations
+        // test if pinfo.five_tuple is in self.tls_conversations
         if let Some(stats) = self.tls_conversations.get_mut(&flow.five_tuple) {
-            stats.update(data, pdata);
+            stats.update(data, pinfo);
         } else {
             // if not, try to detect TLS
             if !tls_probe(data) {
-                return;
+                return PluginResult::None;
             }
             // could be TLS. instanciate parser and add flow to tracked conversations
             let mut stats = Stats::new();
-            stats.update(data, pdata);
+            stats.update(data, pinfo);
             self.tls_conversations
                 .insert(flow.five_tuple.clone(), stats);
         }
+        PluginResult::None
     }
     fn post_process(&mut self) {
         self.to_json();

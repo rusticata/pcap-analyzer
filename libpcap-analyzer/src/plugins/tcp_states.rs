@@ -1,10 +1,7 @@
-use libpcap_tools::Config;
+use crate::plugin::{Plugin, PluginResult, PLUGIN_FLOW_DEL, PLUGIN_L4, TRANSPORT_TCP};
 use crate::plugin_registry::PluginRegistry;
-
-use super::Plugin;
 use crate::packet_info::PacketInfo;
-use crate::plugin::{PLUGIN_FLOW_DEL, PLUGIN_L4, TRANSPORT_TCP};
-use libpcap_tools::{FlowID, Flow, Packet};
+use libpcap_tools::{Config, FlowID, Flow, Packet};
 
 use std::collections::HashMap;
 
@@ -55,8 +52,8 @@ impl crate::plugin::PluginBuilder for TcpStatesBuilder {
         let plugin = TcpStates::default();
         // do not register, there is no callback ?
         let safe_p = build_safeplugin!(plugin);
-        registry.add_plugin(safe_p.clone());
-        registry.register_transport_layer(TRANSPORT_TCP, safe_p);
+        let id = registry.add_plugin(safe_p);
+        registry.register_layer(4, TRANSPORT_TCP as u16, id);
     }
 }
 // default_plugin_builder!(TcpStates, TcpStatesBuilder);
@@ -65,22 +62,26 @@ impl Plugin for TcpStates {
     fn name(&self) -> &'static str { "TcpStates" }
     fn plugin_type(&self) -> u16 { PLUGIN_FLOW_DEL|PLUGIN_L4 }
 
-    fn handle_l4(&mut self, _packet:&Packet, pdata: &PacketInfo) {
-        debug!("proto {}", pdata.five_tuple.proto);
+    fn handle_layer_transport<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        pinfo: &PacketInfo,
+    ) -> PluginResult<'i> {
+        debug!("proto {}", pinfo.five_tuple.proto);
 
-        if pdata.l4_type != 6 { return; }
+        if pinfo.l4_type != 6 { return PluginResult::None; }
 
-        let flow = match pdata.flow {
+        let flow = match pinfo.flow {
             Some(f) => f,
             None    => {
-                warn!("TCP pdata without flow!");
-                return;
+                warn!("TCP packetinfo without flow!");
+                return PluginResult::None;
             }
         };
 
         let e = self.ctx_map.entry(flow.flow_id).or_default();
 
-        let tcp = TcpPacket::new(pdata.l4_data).expect("TcpPacket");
+        let tcp = TcpPacket::new(pinfo.l4_data).expect("TcpPacket");
         let tcp_flags = tcp.get_flags();
         let seq = tcp.get_sequence();
         let ack = tcp.get_acknowledgement();
@@ -92,7 +93,7 @@ impl Plugin for TcpStates {
 
         // XXX store tcp state, last seq & ack values for client and server, key flowid
 
-        let (mut conn, mut rev_conn) = if pdata.to_server {
+        let (mut conn, mut rev_conn) = if pinfo.to_server {
             (&mut e.0, &mut e.1)
         } else {
             (&mut e.1, &mut e.0)
@@ -118,14 +119,14 @@ debug!("SYN");
                     conn.syn_seq = seq;
                     // SYN-ACK
                     if tcp_flags & TcpFlags::ACK == TcpFlags::ACK {
-                        if pdata.to_server {
+                        if pinfo.to_server {
                             warn!("NEW/SYN-ACK in direct flow. Missed SYN ?");
-                            return;
+                            return PluginResult::None;
                         }
                         // check ack value
                         if ack != rev_conn.syn_seq.wrapping_add(1) {
                             warn!("NEW/SYN-ACK: ack number is wrong");
-                            return;
+                            return PluginResult::None;
                         }
                     }
                 }
@@ -134,7 +135,7 @@ debug!("SYN");
                     // check ack value
                     if ack != rev_conn.syn_seq.wrapping_add(1) {
                         warn!("NEW/ACK: ack number is wrong");
-                        return;
+                        return PluginResult::None;
                     }
                     // connection established
                     conn.state = TcpState::Established;
@@ -176,7 +177,7 @@ debug!("SYN");
                 }
                 // XXX end debug
                 // if pdata.to_server {
-                    conn.next_seq = conn.next_seq.wrapping_add(pdata.l4_payload.map(|d| d.len() as u32).unwrap_or(0));
+                    conn.next_seq = conn.next_seq.wrapping_add(pinfo.l4_payload.map(|d| d.len() as u32).unwrap_or(0));
                 // } else {
                 //     rev_conn.next_ack += pdata.l4_data.map(|d| d.len() as u32).unwrap_or(0);
                 // }
@@ -209,6 +210,7 @@ debug!("SYN");
             // }
         }
         debug!("    Tcp state(after) direct {:?} / rev {:?}", e.0.state, e.1.state);
+        PluginResult::None
     }
 
     fn flow_destroyed(&mut self, flow: &Flow) {

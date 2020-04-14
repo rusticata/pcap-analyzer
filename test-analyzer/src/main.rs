@@ -111,7 +111,7 @@ fn main() -> Result<(), io::Error> {
         )
     } else {
         factory.build_plugins(&config)
-    };    debug!("test-analyzer instanciated plugins:");
+    };    debug!("test-analyzer instantiated plugins:");
     registry.run_plugins(
         |_| true,
         |p| {

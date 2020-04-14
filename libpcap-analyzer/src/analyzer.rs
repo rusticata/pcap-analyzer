@@ -2,17 +2,19 @@ use crate::erspan::ErspanPacket;
 use crate::flow_map::FlowMap;
 use crate::ip6_defrag::IPv6FragmentPacket;
 use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
+use crate::layers::LinkLayerType;
 use crate::packet_info::PacketInfo;
 use crate::plugin::*;
-use crate::plugin_registry::PluginRegistry;
+use crate::plugin_registry::*;
 use crate::ppp::{PppPacket, PppProtocolTypes};
 use crate::pppoe::PppoeSessionPacket;
 use crate::vxlan::*;
 use libpcap_tools::*;
 
-use pcap_parser::data::PacketData;
+use pcap_parser::{data::PacketData, Linktype};
 use std::cmp::min;
 use std::net::IpAddr;
+use std::ops::DerefMut;
 use std::sync::Arc;
 
 use pnet_base::MacAddr;
@@ -28,6 +30,7 @@ use pnet_packet::udp::UdpPacket;
 use pnet_packet::vlan::VlanPacket;
 use pnet_packet::Packet as PnetPacket;
 
+#[derive(Clone, Debug, Default)]
 pub struct L3Info {
     /// Layer 4 protocol (e.g TCP, UDP, ICMP)
     pub l4_proto: u8,
@@ -89,7 +92,7 @@ pub(crate) fn handle_l2(
     let data = &data[..datalen];
 
     // let start = ::std::time::Instant::now();
-    analyzer.registry.run_plugins_l2(&packet, &data);
+    run_plugins_v2_physical(packet, ctx, data, analyzer)?;
     // let elapsed = start.elapsed();
     // debug!("Time to run l2 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
@@ -114,7 +117,10 @@ pub(crate) fn handle_l2(
             //     }
             // }
             trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
-            handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype(), analyzer)
+            let ethertype = eth.get_ethertype();
+            let payload = eth.payload();
+            run_plugins_v2_link(packet, ctx, LinkLayerType::Ethernet, payload, analyzer)?;
+            handle_l3(&packet, &ctx, payload, ethertype, analyzer)
         }
         None => {
             // packet too small to be ethernet
@@ -151,7 +157,7 @@ pub(crate) fn handle_l3(
                 "Unsupported ethertype {} (0x{:x}) (idx={})",
                 e, e.0, ctx.pcap_index
             );
-            handle_l3_generic(packet, ctx, data, e, analyzer)
+            Ok(())
         }
     }
 }
@@ -186,6 +192,7 @@ fn handle_l3_ipv4(
         src: IpAddr::V4(ipv4.get_source()),
         dst: IpAddr::V4(ipv4.get_destination()),
     };
+    let l4_proto = ipv4.get_next_level_protocol().0;
 
     if analyzer.do_checksums {
         let cksum = ::pnet_packet::ipv4::checksum(&ipv4);
@@ -194,7 +201,7 @@ fn handle_l3_ipv4(
         }
     }
 
-    run_l3_plugins(packet, data, ethertype.0, &t3, &analyzer.registry);
+    run_plugins_v2_network(packet, ctx, data, &t3, l4_proto, analyzer)?;
 
     // if get_total_length is 0, assume TSO offloading and no padding
     let payload = if ip_len == 0 {
@@ -241,12 +248,10 @@ fn handle_l3_ipv4(
         }
     };
 
-    let l4_proto = ipv4.get_next_level_protocol().0;
     let l3_info = L3Info {
         three_tuple: t3,
         l4_proto,
     };
-
     handle_l3_common(packet, ctx, payload, &l3_info, analyzer)
 }
 
@@ -269,7 +274,7 @@ fn handle_l3_ipv6(
         dst: IpAddr::V6(ipv6.get_destination()),
     };
 
-    run_l3_plugins(packet, data, ethertype.0, &t3, &analyzer.registry);
+    run_plugins_v2_network(packet, ctx, data, &t3, l4_proto, analyzer)?;
 
     let l3_info = L3Info {
         three_tuple: t3,
@@ -356,29 +361,6 @@ fn handle_l3_ppp(
             Ok(())
         }
     }
-}
-
-// Called when L3 layer is unknown
-fn handle_l3_generic(
-    packet: &Packet,
-    ctx: &ParseContext,
-    data: &[u8],
-    ethertype: EtherType,
-    analyzer: &mut Analyzer,
-) -> Result<(), Error> {
-    trace!("handle_l3_generic (idx={})", ctx.pcap_index);
-    // we don't know if there is padding to remove
-    //run Layer 3 plugins
-    // self.run_l3_plugins(packet, data, ethertype.0, &ThreeTuple::default());
-    // run l3 plugins
-    // let start = ::std::time::Instant::now();
-    analyzer
-        .registry
-        .run_plugins_ethertype(packet, ethertype.0, &ThreeTuple::default(), data);
-    // let elapsed = start.elapsed();
-    // debug!("Time to run l3 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
-    // don't try to parse l4, we don't know how to get L4 data
-    Ok(())
 }
 
 fn handle_l3_common(
@@ -667,7 +649,8 @@ fn handle_l4_common(
     l4_payload: Option<&[u8]>,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
-    let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port, l3_info.l4_proto);
+    let five_tuple =
+        FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port, l3_info.l4_proto);
     trace!("5t: {}", five_tuple);
     let now = packet.ts;
 
@@ -696,7 +679,8 @@ fn handle_l4_common(
     let flow = analyzer
         .flows
         .get_flow(flow_id)
-        .expect("could not get flow from ID");
+        .expect("could not get flow from ID")
+        .clone(); // clone because run_plugins_v2_transport borrows analyzer
 
     let to_server = flow.five_tuple == five_tuple;
 
@@ -705,15 +689,13 @@ fn handle_l4_common(
         to_server,
         l3_type: l3_info.three_tuple.proto,
         l4_data,
-        l4_type: l3_info.l4_proto,
+        l4_type: five_tuple.proto,
         l4_payload,
-        flow: Some(flow),
+        flow: Some(&flow),
         pcap_index: ctx.pcap_index,
     };
     // let start = ::std::time::Instant::now();
-    analyzer
-        .registry
-        .run_plugins_transport(pinfo.l4_type, packet, &pinfo);
+    run_plugins_v2_transport(packet, ctx, &pinfo, analyzer)?;
     // let elapsed = start.elapsed();
     // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
 
@@ -734,19 +716,125 @@ fn handle_l4_common(
     Ok(())
 }
 
-// Run all Layer 3 plugins
-pub(crate) fn run_l3_plugins(
+fn run_plugins_v2<'i, F>(
     packet: &Packet,
-    data: &[u8],
-    ethertype: u16,
+    ctx: &ParseContext,
+    layer: u8,
+    layer_filter: u16,
+    cb: F,
+    analyzer: &mut Analyzer,
+) -> Result<(), Error>
+where
+    F: for<'p> Fn(&'p mut dyn Plugin) -> PluginResult<'i>,
+{
+    trace!(
+        "running plugins for layer={} filter=0x{:04x}",
+        layer,
+        layer_filter
+    );
+    // clone the registry (which is an Arc)
+    // so analyzer is not borrowed for the plugins loop
+    let registry = analyzer.registry.clone();
+    let empty_vec = vec![];
+    // get plugins for this specific filter
+    let l1 = registry
+        .get_plugins_for_layer(layer, layer_filter)
+        .unwrap_or(&empty_vec)
+        .as_slice();
+    // get catch-all plugins (filter == 0)
+    let l2 = registry
+        .get_plugins_for_layer(layer, 0)
+        .unwrap_or(&empty_vec)
+        .as_slice();
+    for plugin in l1.iter().chain(l2) {
+        let r = {
+            // limit duration of lock to vallback
+            let mut p = plugin.lock().expect("locking plugin failed (recursion ?)");
+            cb(p.deref_mut())
+        };
+        match r {
+            PluginResult::None => continue,
+            PluginResult::Error(e) => {
+                // XXX ignore error in plugins ? just log ?
+                warn!("Plugin returned error {:?}", e);
+                continue;
+            }
+            PluginResult::L2(e, payload) => {
+                handle_l3(packet, ctx, payload, EtherType(e), analyzer)?
+            }
+            PluginResult::L3(l3, payload) => handle_l3_common(packet, ctx, payload, &l3, analyzer)?,
+            PluginResult::L4(t5, payload) => {
+                let l3_info = L3Info::default(); // XXX
+                handle_l4_common(
+                    packet,
+                    ctx,
+                    &[],
+                    &l3_info,
+                    t5.src_port,
+                    t5.dst_port,
+                    Some(payload),
+                    analyzer,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Run plugins attached to the physical layer
+pub(crate) fn run_plugins_v2_physical<'a>(
+    packet: &Packet,
+    ctx: &ParseContext,
+    data: &'a [u8],
+    analyzer: &mut Analyzer,
+) -> Result<(), Error> {
+    let cb = move |p: &mut dyn Plugin| p.handle_layer_physical(packet, data);
+    let layer = 1;
+    let layer_filter = 0;
+    run_plugins_v2(packet, ctx, layer, layer_filter, cb, analyzer)
+}
+
+/// Run plugins attached to the link layer (ethernet, etc.)
+pub(crate) fn run_plugins_v2_link<'a>(
+    packet: &Packet,
+    ctx: &ParseContext,
+    linktype: LinkLayerType,
+    l2_payload: &'a [u8],
+    analyzer: &mut Analyzer,
+) -> Result<(), Error> {
+    let cb = move |p: &mut dyn Plugin| p.handle_layer_link(packet, linktype as u16, l2_payload);
+    let layer = 2;
+    let layer_filter = linktype as u16;
+    run_plugins_v2(packet, ctx, layer, layer_filter, cb, analyzer)
+}
+
+/// Run plugins attached to the network layer (IPv4, IPv6, Arp, IPsec, etc.)
+fn run_plugins_v2_network<'a>(
+    packet: &Packet,
+    ctx: &ParseContext,
+    l3_payload: &'a [u8],
     three_tuple: &ThreeTuple,
-    registry: &PluginRegistry,
-) {
-    // run l3 plugins
-    // let start = ::std::time::Instant::now();
-    registry.run_plugins_ethertype(packet, ethertype, three_tuple, data);
-    // let elapsed = start.elapsed();
-    // debug!("Time to run l3 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
+    l4_proto: u8,
+    analyzer: &mut Analyzer,
+) -> Result<(), Error> {
+    let cb =
+        move |p: &mut dyn Plugin| p.handle_layer_network(packet, l3_payload, three_tuple, l4_proto);
+    let layer = 3;
+    let layer_filter = three_tuple.proto;
+    run_plugins_v2(packet, ctx, layer, layer_filter, cb, analyzer)
+}
+
+/// Run plugins attached to the transport layer (TCP, UDP, etc.)
+fn run_plugins_v2_transport(
+    packet: &Packet,
+    ctx: &ParseContext,
+    pinfo: &PacketInfo,
+    analyzer: &mut Analyzer,
+) -> Result<(), Error> {
+    let cb = move |p: &mut dyn Plugin| p.handle_layer_transport(packet, pinfo);
+    let layer = 4;
+    let layer_filter = pinfo.l4_type as u16;
+    run_plugins_v2(packet, ctx, layer, layer_filter, cb, analyzer)
 }
 
 pub(crate) fn gen_event_new_flow(flow: &Flow, registry: &PluginRegistry) {

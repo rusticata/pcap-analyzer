@@ -1,7 +1,22 @@
+use crate::analyzer::L3Info;
 use crate::plugin_registry::PluginRegistry;
 
 use crate::packet_info::PacketInfo;
-use libpcap_tools::{Config, Flow, Packet, ThreeTuple};
+use libpcap_tools::{Config, FiveTuple, Flow, Packet, ThreeTuple};
+
+/// Result struct manipulated by all plugins
+///
+/// Layer n means the *payload* of layer n
+pub enum PluginResult<'a> {
+    None,
+    Error(libpcap_tools::Error),
+    /// Layer 2: ethertype and payload
+    L2(u16, &'a [u8]),
+    /// Layer 3: L3 info (includes l2_proto, src, dst, and next layer proto), and payload
+    L3(&'a L3Info, &'a [u8]),
+    /// Layer 4: 5-tuple and payload
+    L4(FiveTuple, &'a [u8]),
+}
 
 /// Plugin builder
 ///
@@ -10,20 +25,22 @@ use libpcap_tools::{Config, Flow, Packet, ThreeTuple};
 pub trait PluginBuilder: Sync + Send {
     /// Name of the plugin builder
     fn name(&self) -> &'static str;
-    /// Builder function: instanciates zero or more plugins from configuration.
+    /// Builder function: instantiates zero or more plugins from configuration.
     /// All created plugins must be registered to `registry`
-    fn build(&self, registry:&mut PluginRegistry, config: &Config);
+    fn build(&self, registry: &mut PluginRegistry, config: &Config);
 }
 
 /// Indicates the plugin does not register any callback function
 pub const PLUGIN_NONE: u16 = 0;
 
+/// Indicates the plugin register for Layer 1 data
+pub const PLUGIN_L1: u16 = 0b0001;
 /// Indicates the plugin register for Layer 2 data
-pub const PLUGIN_L2: u16 = 0b0001;
+pub const PLUGIN_L2: u16 = 0b0010;
 /// Indicates the plugin register for Layer 3 data
-pub const PLUGIN_L3: u16 = 0b0010;
+pub const PLUGIN_L3: u16 = 0b0100;
 /// Indicates the plugin register for Layer 4 data
-pub const PLUGIN_L4: u16 = 0b0100;
+pub const PLUGIN_L4: u16 = 0b1000;
 
 /// Indicates the plugin registers for 'flow created' events
 pub const PLUGIN_FLOW_NEW: u16 = 0b0001_0000;
@@ -33,44 +50,85 @@ pub const PLUGIN_FLOW_DEL: u16 = 0b0010_0000;
 /// Indicates the plugin register for all layers
 pub const PLUGIN_ALL: u16 = 0b1111_1111;
 
-pub const ETHERTYPE_IPV4 : u16 = 0x0800;
-pub const ETHERTYPE_IPV6 : u16 = 0x86dd;
+pub const ETHERTYPE_IPV4: u16 = 0x0800;
+pub const ETHERTYPE_IPV6: u16 = 0x86dd;
 
-pub const TRANSPORT_ICMP : u8 = 1;
-pub const TRANSPORT_TCP : u8 = 6;
-pub const TRANSPORT_UDP : u8 = 17;
+pub const TRANSPORT_ICMP: u8 = 1;
+pub const TRANSPORT_TCP: u8 = 6;
+pub const TRANSPORT_UDP: u8 = 17;
 
-/// Pcap/Pcap-ng analyzis plugin instance
+/// Pcap/Pcap-ng analysis plugin instance
 ///
 /// Plugins must be thread-safe because functions can (and will) be called
 /// concurrently from multiple threads.
 pub trait Plugin: Sync + Send {
+    // *Note*: lifetimes means that the reference on `input` must life as long
+    // as the plugin object (`'s` for `self`), while the result has a different lifetime,
+    // tied only to the input (`'i`)
+
     /// Returns the name of the plugin instance
     fn name(&self) -> &'static str;
+
     /// Returns the layers registered by this plugin
-    fn plugin_type(&self) -> u16 { PLUGIN_ALL }
+    fn plugin_type(&self) -> u16 {
+        PLUGIN_ALL
+    }
+
     /// Plugin initialization function
     /// Called before processing a pcap file
     fn pre_process(&mut self) {}
     /// Plugin end of processing function
     /// Called after processing a pcap file
     fn post_process(&mut self) {}
+
+    fn handle_layer_physical<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        _data: &'i [u8],
+    ) -> PluginResult<'i> {
+        PluginResult::None
+    }
+
     /// Callback function when layer 2 data is available
     /// `data` is the raw ethernet data
-    /// `PLUGIN_L2` must be added to `plugin_type()` return
-    fn handle_l2(&mut self, _packet: &Packet, _data: &[u8]) {}
+    /// `PLUGIN_L1` must be added to `plugin_type()` return
+    /// See crate::layers for possible linklayertype values
+    fn handle_layer_link<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        _linklayertype: u16,
+        _data: &'i [u8],
+    ) -> PluginResult<'i> {
+        PluginResult::None
+    }
+
     /// Callback function when layer 3 data is available
     /// `packet` is the initial layer 3 packet information
     /// `data` is the layer 3 data. It can be different from packet.data if defragmentation occured
     /// `ethertype` is the type of `data` as declared in ethernet frame
     /// `PLUGIN_L3` must be added to `plugin_type()` return
-    fn handle_l3(&mut self, _packet: &Packet, _data: &[u8], _ethertype: u16, _t3: &ThreeTuple) {}
+    fn handle_layer_network<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        _data: &'i [u8],
+        _t3: &'s ThreeTuple,
+        _l4_proto: u8,
+    ) -> PluginResult<'i> {
+        PluginResult::None
+    }
+
     /// Callback function when layer 4 data is available
     /// `data` is the layer 4 data, defragmented if possible
     /// `packet` is the initial layer 3 packet information
     /// `pinfo` is the flow and layers information
     /// `PLUGIN_L4` must be added to `plugin_type()` return
-    fn handle_l4(&mut self, _packet: &Packet, _pinfo: &PacketInfo) {}
+    fn handle_layer_transport<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        _pinfo: &PacketInfo,
+    ) -> PluginResult<'i> {
+        PluginResult::None
+    }
     /// Callback function when a new flow is created
     /// `PLUGIN_FLOW_NEW` must be added to `plugin_type()` return
     fn flow_created(&mut self, _flow: &Flow) {}
@@ -101,22 +159,25 @@ macro_rules! plugin_builder {
                 let plugin = $build_fn(config);
                 let protos = plugin.plugin_type();
                 let safe_p = $crate::build_safeplugin!(plugin);
-                registry.add_plugin(safe_p.clone());
+                let id = registry.add_plugin(safe_p);
                 if protos & $crate::PLUGIN_L2 != 0 {
-                    registry.register_l2(safe_p.clone());
+                    // XXX no filter, so register for all
+                    registry.register_layer(2, 0, id);
                 }
                 if protos & $crate::PLUGIN_L3 != 0 {
-                    registry.register_ethertype_all(safe_p.clone());
+                    // XXX no filter, so register for all
+                    registry.register_layer(3, 0, id);
                 }
                 if protos & $crate::PLUGIN_L4 != 0 {
-                    registry.register_transport_layer_all(safe_p.clone());
+                    // XXX no filter, so register for all
+                    registry.register_layer(4, 0, id);
                 }
             }
         }
     };
-    ($name:ident, $builder_name:ident) => (
+    ($name:ident, $builder_name:ident) => {
         $crate::plugin_builder!($name, $builder_name, |_| $name::default());
-    );
+    };
 }
 /// Derives a plugin builder relying on the Plugin::default() function
 #[macro_export]

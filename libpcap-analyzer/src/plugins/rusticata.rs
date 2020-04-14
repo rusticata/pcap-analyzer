@@ -1,7 +1,6 @@
-use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_info::PacketInfo;
-use crate::plugin::PLUGIN_L4;
+use crate::plugin::{Plugin, PluginResult, PLUGIN_L4};
 use libpcap_tools::{FlowID, Packet};
 
 use std::collections::{BTreeMap, HashMap};
@@ -95,17 +94,21 @@ impl Plugin for Rusticata {
         self.probe_map = probe_map;
     }
 
-    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketInfo) {
-        let flow_id = match pdata.flow {
+    fn handle_layer_transport<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        pinfo: &PacketInfo,
+    ) -> PluginResult<'i> {
+        let flow_id = match pinfo.flow {
             Some(f) => f.flow_id,
             None => {
                 info!("No flow");
-                return;
+                return PluginResult::None;
             }
         };
-        if let Some(d) = pdata.l4_payload {
+        if let Some(d) = pinfo.l4_payload {
             if d.is_empty() {
-                return;
+                return PluginResult::None;
             }
             let parser = {
                 // check if we already have a parser
@@ -113,24 +116,24 @@ impl Plugin for Rusticata {
                     parser
                 } else {
                     // no parser, try to probe protocol
-                    let maybe_s = self.probe(d, pdata.l4_type);
+                    let maybe_s = self.probe(d, pinfo.l4_type);
                     if let Some(parser_name) = maybe_s {
                         debug!("Protocol recognized as {}", parser_name);
-                        // warn!("Protocol recognized as {} (5t: {})", parser_name, pdata.five_tuple);
+                        // warn!("Protocol recognized as {} (5t: {})", parser_name, pinfo.five_tuple);
                         if let Some(builder) = self.builder_map.get((&parser_name) as &str) {
                             self.flow_parsers.insert(flow_id, builder.build());
                             self.flow_parsers.get_mut(&flow_id).unwrap()
                         } else {
                             warn!("Could not build parser for proto {}", parser_name);
-                            return;
+                            return PluginResult::None;
                         }
                     } else {
                         // proto not recognized
-                        return;
+                        return PluginResult::None;
                     }
                 }
             };
-            let direction = if pdata.to_server {
+            let direction = if pinfo.to_server {
                 STREAM_TOSERVER
             } else {
                 STREAM_TOCLIENT
@@ -139,12 +142,13 @@ impl Plugin for Rusticata {
             if res == R_STATUS_FAIL {
                 warn!(
                     "rusticata: parser failed (idx={}) (5t: {})",
-                    pdata.pcap_index, pdata.five_tuple
+                    pinfo.pcap_index, pinfo.five_tuple
                 );
                 // remove or disable parser for flow?
                 let _ = self.flow_parsers.remove(&flow_id);
             }
         }
+        PluginResult::None
     }
 
     fn post_process(&mut self) {

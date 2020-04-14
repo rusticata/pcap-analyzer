@@ -1,9 +1,8 @@
 //! Plugin to debug packets/flows/layers by displaying hex data
 
-use super::Plugin;
 use crate::default_plugin_builder;
 use crate::packet_info::PacketInfo;
-use crate::plugin::{PLUGIN_L3, PLUGIN_L4};
+use crate::plugin::{Plugin, PluginResult, PLUGIN_L3, PLUGIN_L4};
 use nom::HexDisplay;
 use libpcap_tools::{Packet, ThreeTuple};
 
@@ -20,23 +19,34 @@ impl Plugin for HexDump {
         PLUGIN_L3|PLUGIN_L4
     }
 
-    fn handle_l3(&mut self, _packet:&Packet, data: &[u8], ethertype:u16, t3:&ThreeTuple) {
+    fn handle_layer_network<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        data: &'i [u8],
+        t3: &'s ThreeTuple,
+        l4_proto: u8,
+    ) -> PluginResult<'i> {
         info!("HexDump::handle_l3 (len {})", data.len());
-        debug!("    ethertype: {:x}", ethertype);
         debug!("    3t: {}", t3);
+        debug!("    l4_proto: {:x}", l4_proto);
         debug!("    l3_data:\n{}", data.to_hex(16));
+        PluginResult::None
     }
 
-    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketInfo) {
-        let five_tuple = &pdata.five_tuple;
+    fn handle_layer_transport<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        pinfo: &PacketInfo,
+    ) -> PluginResult<'i> {
+        let five_tuple = &pinfo.five_tuple;
         info!("HexDump::handle_l4");
         debug!("    5t: {}", five_tuple);
-        debug!("    to_server: {}", pdata.to_server);
-        debug!("    l3_type: 0x{:x}", pdata.l3_type);
-        debug!("    l4_data_len: {}", pdata.l4_data.len());
-        debug!("    l4_type: {}", pdata.l4_type);
-        debug!("    l4_payload_len: {}", pdata.l4_payload.map_or(0, |d| d.len()));
-        if let Some(flow) = pdata.flow {
+        debug!("    to_server: {}", pinfo.to_server);
+        debug!("    l3_type: 0x{:x}", pinfo.l3_type);
+        debug!("    l4_data_len: {}", pinfo.l4_data.len());
+        debug!("    l4_type: {}", pinfo.l4_type);
+        debug!("    l4_payload_len: {}", pinfo.l4_payload.map_or(0, |d| d.len()));
+        if let Some(flow) = pinfo.flow {
             let five_tuple = &flow.five_tuple;
             debug!("    flow: [{}]:{} -> [{}]:{} [{}]",
                    five_tuple.src,
@@ -45,8 +55,9 @@ impl Plugin for HexDump {
                    five_tuple.dst_port,
                    five_tuple.proto);
         }
-        if let Some(d) = pdata.l4_payload {
+        if let Some(d) = pinfo.l4_payload {
             debug!("    l4_payload:\n{}", d.to_hex(16));
         }
+        PluginResult::None
     }
 }

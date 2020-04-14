@@ -5,7 +5,7 @@ use crate::output;
 use crate::plugin_registry::PluginRegistry;
 use libpcap_tools::{Config, FlowID};
 
-use super::Plugin;
+use crate::plugin::{Plugin, PluginResult};
 use crate::packet_info::PacketInfo;
 use crate::plugin::PLUGIN_L4;
 use base64;
@@ -35,8 +35,8 @@ impl crate::plugin::PluginBuilder for CommunityIDBuilder {
             output_dir
         };
         let safe_p = build_safeplugin!(plugin);
-        registry.add_plugin(safe_p.clone());
-        registry.register_transport_layer_all(safe_p);
+        let id = registry.add_plugin(safe_p);
+        registry.register_layer(4, 0, id);
     }
 }
 
@@ -101,11 +101,16 @@ impl Plugin for CommunityID {
         PLUGIN_L4
     }
 
-    fn handle_l4(&mut self, _packet: &Packet, pdata: &PacketInfo) {
-        if let Some(flow) = pdata.flow {
-            let hash = hash_community_id(&pdata.five_tuple, pdata.l4_type, self.seed);
+    fn handle_layer_transport<'s, 'i>(
+        &'s mut self,
+        _packet: &'s Packet,
+        pinfo: &PacketInfo,
+    ) -> PluginResult<'i> {
+        if let Some(flow) = pinfo.flow {
+            let hash = hash_community_id(&pinfo.five_tuple, pinfo.l4_type, self.seed);
             self.ids.insert(flow.flow_id, hash);
         }
+        PluginResult::None
     }
 
     fn post_process(&mut self) {
