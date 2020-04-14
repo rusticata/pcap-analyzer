@@ -50,13 +50,6 @@ pub const PLUGIN_FLOW_DEL: u16 = 0b0010_0000;
 /// Indicates the plugin register for all layers
 pub const PLUGIN_ALL: u16 = 0b1111_1111;
 
-pub const ETHERTYPE_IPV4: u16 = 0x0800;
-pub const ETHERTYPE_IPV6: u16 = 0x86dd;
-
-pub const TRANSPORT_ICMP: u8 = 1;
-pub const TRANSPORT_TCP: u8 = 6;
-pub const TRANSPORT_UDP: u8 = 17;
-
 /// Pcap/Pcap-ng analysis plugin instance
 ///
 /// Plugins must be thread-safe because functions can (and will) be called

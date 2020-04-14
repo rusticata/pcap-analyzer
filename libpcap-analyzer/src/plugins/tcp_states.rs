@@ -1,4 +1,5 @@
-use crate::plugin::{Plugin, PluginResult, PLUGIN_FLOW_DEL, PLUGIN_L4, TRANSPORT_TCP};
+use crate::layers::TransportLayerType;
+use crate::plugin::{Plugin, PluginResult, PLUGIN_FLOW_DEL, PLUGIN_L4};
 use crate::plugin_registry::PluginRegistry;
 use crate::packet_info::PacketInfo;
 use libpcap_tools::{Config, FlowID, Flow, Packet};
@@ -53,7 +54,7 @@ impl crate::plugin::PluginBuilder for TcpStatesBuilder {
         // do not register, there is no callback ?
         let safe_p = build_safeplugin!(plugin);
         let id = registry.add_plugin(safe_p);
-        registry.register_layer(4, TRANSPORT_TCP as u16, id);
+        registry.register_layer(4, TransportLayerType::Tcp as u16, id);
     }
 }
 // default_plugin_builder!(TcpStates, TcpStatesBuilder);
