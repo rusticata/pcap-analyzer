@@ -1,5 +1,5 @@
 use crate::plugin_registry::PluginRegistry;
-use crate::plugin::{Plugin, PLUGIN_NONE};
+use crate::plugin::{Plugin, PluginBuilderError, PLUGIN_NONE};
 use crate::default_plugin_builder;
 use libpcap_tools::Config;
 
@@ -37,7 +37,7 @@ pub struct EmptyWithConfigBuilder;
 
 impl crate::plugin::PluginBuilder for EmptyWithConfigBuilder {
     fn name(&self) -> &'static str { "EmptyWithConfigBuilder" }
-    fn build(&self, registry:&mut PluginRegistry, config:&Config) {
+    fn build(&self, registry:&mut PluginRegistry, config:&Config) -> Result<(), PluginBuilderError> {
         let name = config.get("plugin.emptywithconfig.name");
         let plugin = EmptyWithConfig {
             name: name.map(|s| s.to_string()),
@@ -45,5 +45,6 @@ impl crate::plugin::PluginBuilder for EmptyWithConfigBuilder {
         let safe_p = build_safeplugin!(plugin);
         registry.add_plugin(safe_p);
         // do not register, there is no callback
+        Ok(())
     }
 }

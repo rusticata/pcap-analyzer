@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use crate::{Plugin, PluginBuilder, PluginRegistry};
+use crate::{Plugin, PluginBuilder, PluginBuilderError, PluginRegistry};
 use libpcap_tools::Config;
 
 mod basic_stats;
@@ -42,31 +42,31 @@ impl PluginsFactory {
         self.list.push(b);
     }
 
-    /// Instanciate all plugins
-    pub fn build_plugins(&self, config: &Config) -> PluginRegistry {
+    /// Instantiate all plugins
+    pub fn build_plugins(&self, config: &Config) -> Result<PluginRegistry, PluginBuilderError> {
         let mut registry = PluginRegistry::new();
 
-        self.list.iter().for_each(|b| {
-            b.build(&mut registry, &config);
-        });
+        for b in &self.list {
+            b.build(&mut registry, &config)?;
+        };
 
-        registry
+        Ok(registry)
     }
 
-    /// Instanciate plugins if they match predicate
-    pub fn build_filter_plugins<P>(&self, predicate: P, config: &Config) -> PluginRegistry
+    /// Instantiate plugins if they match predicate
+    pub fn build_filter_plugins<P>(&self, predicate: P, config: &Config) -> Result<PluginRegistry, PluginBuilderError>
     where
         P: Fn(&str) -> bool,
     {
         let mut registry = PluginRegistry::new();
 
-        self.list.iter().for_each(|b| {
+        for b in &self.list {
             if predicate(b.name()) {
-                b.build(&mut registry, &config);
+                b.build(&mut registry, &config)?;
             }
-        });
+        };
 
-        registry
+        Ok(registry)
     }
 
     /// Iterate builder names

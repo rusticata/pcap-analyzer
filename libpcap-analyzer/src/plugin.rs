@@ -18,6 +18,17 @@ pub enum PluginResult<'a> {
     L4(FiveTuple, &'a [u8]),
 }
 
+#[derive(Debug)]
+pub enum PluginBuilderError {
+    RegistrationFailed(&'static str),
+}
+
+impl From<&'static str> for PluginBuilderError {
+    fn from(s: &'static str) -> Self {
+        PluginBuilderError::RegistrationFailed(s)
+    }
+}
+
 /// Plugin builder
 ///
 /// A plugin build is responsible for creating plugin instances
@@ -27,7 +38,7 @@ pub trait PluginBuilder: Sync + Send {
     fn name(&self) -> &'static str;
     /// Builder function: instantiates zero or more plugins from configuration.
     /// All created plugins must be registered to `registry`
-    fn build(&self, registry: &mut PluginRegistry, config: &Config);
+    fn build(&self, registry: &mut PluginRegistry, config: &Config) -> Result<(), PluginBuilderError>;
 }
 
 /// Indicates the plugin does not register any callback function
@@ -148,23 +159,24 @@ macro_rules! plugin_builder {
             fn name(&self) -> &'static str {
                 stringify!($builder_name)
             }
-            fn build(&self, registry: &mut $crate::PluginRegistry, config: &libpcap_tools::Config) {
+            fn build(&self, registry: &mut $crate::PluginRegistry, config: &libpcap_tools::Config) -> Result<(), $crate::PluginBuilderError> {
                 let plugin = $build_fn(config);
                 let protos = plugin.plugin_type();
                 let safe_p = $crate::build_safeplugin!(plugin);
                 let id = registry.add_plugin(safe_p);
                 if protos & $crate::PLUGIN_L2 != 0 {
                     // XXX no filter, so register for all
-                    registry.register_layer(2, 0, id);
+                    registry.register_layer(2, 0, id)?;
                 }
                 if protos & $crate::PLUGIN_L3 != 0 {
                     // XXX no filter, so register for all
-                    registry.register_layer(3, 0, id);
+                    registry.register_layer(3, 0, id)?;
                 }
                 if protos & $crate::PLUGIN_L4 != 0 {
                     // XXX no filter, so register for all
-                    registry.register_layer(4, 0, id);
+                    registry.register_layer(4, 0, id)?;
                 }
+                Ok(())
             }
         }
     };

@@ -5,7 +5,7 @@ use crate::output;
 use crate::plugin_registry::PluginRegistry;
 use libpcap_tools::{Config, FlowID};
 
-use crate::plugin::{Plugin, PluginResult};
+use crate::plugin::{Plugin, PluginBuilderError, PluginResult};
 use crate::packet_info::PacketInfo;
 use crate::plugin::PLUGIN_L4;
 use base64;
@@ -26,7 +26,7 @@ pub struct CommunityIDBuilder;
 
 impl crate::plugin::PluginBuilder for CommunityIDBuilder {
     fn name(&self) -> &'static str { "CommunityIDBuilder" }
-    fn build(&self, registry:&mut PluginRegistry, config:&Config) {
+    fn build(&self, registry:&mut PluginRegistry, config:&Config) -> Result<(), PluginBuilderError> {
         let seed = config.get_usize("plugin.community_id.seed").unwrap_or(0) as u16;
         let output_dir = output::get_output_dir(config).to_owned();
         let plugin = CommunityID{
@@ -36,7 +36,8 @@ impl crate::plugin::PluginBuilder for CommunityIDBuilder {
         };
         let safe_p = build_safeplugin!(plugin);
         let id = registry.add_plugin(safe_p);
-        registry.register_layer(4, 0, id);
+        registry.register_layer(4, 0, id)?;
+        Ok(())
     }
 }
 

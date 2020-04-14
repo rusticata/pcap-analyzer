@@ -108,10 +108,11 @@ fn main() -> Result<(), io::Error> {
                 names.iter().any(|&x| n.contains(x))
             },
             &config,
-        )
+        ).expect("Could not build factory")
     } else {
-        factory.build_plugins(&config)
-    };    debug!("test-analyzer instantiated plugins:");
+        factory.build_plugins(&config).expect("Could not build factory")
+    };
+    debug!("test-analyzer instantiated plugins:");
     registry.run_plugins(
         |_| true,
         |p| {

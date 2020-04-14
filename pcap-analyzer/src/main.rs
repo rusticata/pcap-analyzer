@@ -142,9 +142,9 @@ fn main() -> io::Result<()> {
                 names.iter().any(|&x| n.contains(x))
             },
             &config,
-        )
+        ).expect("Could not build factory")
     } else {
-        factory.build_plugins(&config)
+        factory.build_plugins(&config).expect("Could not build factory")
     };
     // check if asked to list plugins
     if matches.is_present("list-plugins") {
