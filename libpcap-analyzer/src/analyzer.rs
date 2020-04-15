@@ -17,7 +17,6 @@ use std::net::IpAddr;
 use std::ops::DerefMut;
 use std::sync::Arc;
 
-use pnet_base::MacAddr;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use pnet_packet::gre::GrePacket;
 use pnet_packet::icmp::IcmpPacket;
@@ -98,27 +97,28 @@ pub(crate) fn handle_l2(
 
     match EthernetPacket::new(data) {
         Some(eth) => {
-            // // debug!("    source: {}", eth.get_source());
-            // // debug!("    dest  : {}", eth.get_destination());
-            // let dest = eth.get_destination();
-            // if dest.is_multicast() {
-            //     match dest {
-            //     MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) => {
-            //         info!("Cisco CDP/VTP/UDLD");
-            //         return Ok(());
-            //     },
-            //     MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) => {
-            //         info!("Cisco Multicast address");
-            //         return Ok(());
-            //     },
-            //     _ => {
-            //         info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
-            //     }
-            //     }
-            // }
-            trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
+            // debug!("    source: {}", eth.get_source());
+            // debug!("    dest  : {}", eth.get_destination());
+            let dest = eth.get_destination();
+            if dest.is_multicast() {
+                match &data[..6] {
+                    [0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc] => {
+                        info!("Cisco CDP/VTP/UDLD - ignoring");
+                        // the 'ethertype' field is used for length
+                        return Ok(());
+                    }
+                    [0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0] => {
+                        info!("Cisco Multicast address - ignoring");
+                        return Ok(());
+                    }
+                    _ => {
+                        info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
+                    }
+                }
+            }
             let ethertype = eth.get_ethertype();
             let payload = eth.payload();
+            trace!("    ethertype: 0x{:x}", ethertype.0);
             run_plugins_v2_link(packet, ctx, LinkLayerType::Ethernet, payload, analyzer)?;
             handle_l3(&packet, &ctx, payload, ethertype, analyzer)
         }
@@ -314,11 +314,7 @@ fn handle_l3_erspan(
         erspan.get_vlan(),
         erspan.get_span_id()
     );
-    let eth_data = erspan.payload();
-    let eth =
-        EthernetPacket::new(eth_data).ok_or("Could not build EthernetPacket packet from data")?;
-    let next_ethertype = eth.get_ethertype();
-    handle_l3(&packet, &ctx, eth.payload(), next_ethertype, analyzer)
+    handle_l2(packet, ctx, erspan.payload(), analyzer)
 }
 
 fn handle_l3_pppoesession(

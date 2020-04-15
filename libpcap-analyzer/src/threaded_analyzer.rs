@@ -4,8 +4,6 @@ use crate::plugin_registry::PluginRegistry;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use libpcap_tools::*;
 use pcap_parser::data::PacketData;
-use pnet_base::MacAddr;
-use pnet_macros_support::packet::Packet as PnetPacket;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use std::cmp::min;
 use std::panic::AssertUnwindSafe;
@@ -123,26 +121,23 @@ impl<'a> ThreadedAnalyzer<'a> {
                 // debug!("    source: {}", eth.get_source());
                 // debug!("    dest  : {}", eth.get_destination());
                 let dest = eth.get_destination();
-                // if dest.is_multicast() {
-                //     match dest {
-                //     MacAddr(0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc) => {
-                //         info!("Cisco CDP/VTP/UDLD");
-                //         return Ok(());
-                //     },
-                //     MacAddr(0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0) => {
-                //         info!("Cisco Multicast address");
-                //         return Ok(());
-                //     },
-                //     _ => {
-                //         info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
-                //     }
-                //     }
-                // }
-                trace!("    ethertype: 0x{:x}", eth.get_ethertype().0);
-                // self.handle_l3(&packet, &ctx, eth.payload(), eth.get_ethertype())
+                match &data[..6] {
+                    [0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc] => {
+                        info!("Cisco CDP/VTP/UDLD - ignoring");
+                        // the 'ethertype' field is used for length
+                        return Ok(());
+                    }
+                    [0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0] => {
+                        info!("Cisco Multicast address - ignoring");
+                        return Ok(());
+                    }
+                    _ => {
+                        info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
+                    }
+                }
                 let ethertype = eth.get_ethertype();
-                let payload = eth.payload();
                 let payload = &data[14..];
+                trace!("    ethertype: 0x{:x}", ethertype.0);
                 run_plugins_v2_link(
                     &packet,
                     ctx,
@@ -150,7 +145,7 @@ impl<'a> ThreadedAnalyzer<'a> {
                     payload,
                     &mut self.analyzer,
                 )?;
-                extern_dispatch_l3(&self.local_jobs, packet, &ctx, payload, eth.get_ethertype())
+                extern_dispatch_l3(&self.local_jobs, packet, &ctx, payload, ethertype)
             }
             None => {
                 // packet too small to be ethernet
