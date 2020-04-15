@@ -78,7 +78,7 @@ impl<'a> ThreadedAnalyzer<'a> {
     fn wait_for_empty_jobs(&self) {
         trace!("waiting for threads to finish processing");
         for job in self.local_jobs.iter() {
-            job.send(Job::Wait);
+            job.send(Job::Wait).expect("Error while sending job");
         }
         self.barrier.wait();
     }
@@ -174,8 +174,8 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
         self.wait_for_empty_jobs();
         for job in self.local_jobs.iter() {
             // XXX expire flows?
-            job.send(Job::PrintDebug);
-            job.send(Job::Exit);
+            job.send(Job::PrintDebug).expect("Error while sending job");
+            job.send(Job::Exit).expect("Error while sending job");
         }
         while let Some(w) = self.workers.pop() {
             w.handler.join().expect("panic occurred in a thread");
@@ -202,8 +202,9 @@ pub(crate) fn extern_dispatch_l3<'a>(
     let n_workers = jobs.len();
     let i = fan_out(data, ethertype, n_workers);
     debug_assert!(i < n_workers);
-    jobs[i].send(Job::New(packet, ctx.clone(), data, ethertype));
-    Ok(())
+    jobs[i]
+        .send(Job::New(packet, ctx.clone(), data, ethertype))
+        .or(Err(Error::Generic("Error while sending job")))
 }
 
 fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
