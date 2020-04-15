@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 /// Defragmentation engine
@@ -129,23 +130,26 @@ impl DefragEngine for IPDefragEngine {
                             f.next_is_complete = false;
                         } else {
                             // check for partial cover
-                            if new_buffer_len > next_offset {
-                                warn!("defrag: hole partially covered");
-                                // we already know the next operations cannot underflow
-                                let bytes_to_skip = next_offset - new_buffer_len;
-                                f.buffer.extend_from_slice(&f.next_data[bytes_to_skip..]);
-                                f.last_complete_offset = f.buffer.len();
-                                f.next_data.clear();
-                                // leave next_is_complete unchanged
-                                f.next_offset = None;
-                            } else if new_buffer_len == next_offset {
-                                // exact match
-                                warn!("defrag: hole exactly covered (probably a reorder)");
-                                f.buffer.append(&mut f.next_data);
-                                f.next_offset = None;
-                                f.last_complete_offset = f.buffer.len();
-                            } else {
-                                // not fully covered - leave it
+                            match new_buffer_len.cmp(&next_offset) {
+                                Ordering::Greater => {
+                                    warn!("defrag: hole partially covered");
+                                    // we already know the next operations cannot underflow
+                                    let bytes_to_skip = next_offset - new_buffer_len;
+                                    f.buffer.extend_from_slice(&f.next_data[bytes_to_skip..]);
+                                    f.last_complete_offset = f.buffer.len();
+                                    f.next_data.clear();
+                                    // leave next_is_complete unchanged
+                                    f.next_offset = None;
+                                }
+                                Ordering::Equal => {
+                                    warn!("defrag: hole exactly covered (probably a reorder)");
+                                    f.buffer.append(&mut f.next_data);
+                                    f.next_offset = None;
+                                    f.last_complete_offset = f.buffer.len();
+                                }
+                                Ordering::Less => {
+                                    // not fully covered - leave it
+                                },
                             }
                         }
                     }
