@@ -33,7 +33,7 @@ impl<'a> ErspanPacket<'a> {
     pub fn get_version(&self) -> u4 {
         let _self = self;
         let co = 0;
-        ((_self.packet[co] as u4) >> 4)
+        (_self.packet[co] as u4) >> 4
     }
     /// Get the vlan field.
     #[inline]
@@ -52,7 +52,7 @@ impl<'a> ErspanPacket<'a> {
     pub fn get_cos(&self) -> u3 {
         let _self = self;
         let co = 2;
-        ((_self.packet[co] as u3) >> 5)
+        (_self.packet[co] as u3) >> 5
     }
     /// Get the encap field.
     #[inline]

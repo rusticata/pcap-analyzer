@@ -36,7 +36,7 @@ impl<'a> IPv6FragmentPacket<'a> {
         #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
         fn get_arg0(_self: &IPv6FragmentPacket) -> u8 {
             let co = 0;
-            (_self.packet[co] as u8)
+            _self.packet[co] as u8
         }
         IpNextHeaderProtocol::new(get_arg0(&self))
     }

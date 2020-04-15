@@ -120,7 +120,6 @@ impl<'a> ThreadedAnalyzer<'a> {
             Some(eth) => {
                 // debug!("    source: {}", eth.get_source());
                 // debug!("    dest  : {}", eth.get_destination());
-                let dest = eth.get_destination();
                 match &data[..6] {
                     [0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc] => {
                         info!("Cisco CDP/VTP/UDLD - ignoring");
