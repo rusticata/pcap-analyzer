@@ -14,7 +14,7 @@ const PROBE_UDP: u32 = 0x1100_0000;
 
 // This enum defines the order TCP probes will be applied
 #[repr(u16)]
-enum tcp_probe_order {
+enum TcpProbeOrder {
     Dns,
     Tls,
     Ssh,
@@ -24,7 +24,8 @@ enum tcp_probe_order {
 
 // This enum defines the order UDP probes will be applied
 #[repr(u16)]
-enum udp_probe_order {
+#[allow(dead_code)]
+enum UdpProbeOrder {
     Dhcp,
     Dns,
     Ikev2,
@@ -72,23 +73,23 @@ impl Plugin for Rusticata {
         let mut probe_map: BTreeMap<u32, (&'static str, ProbeFn)> = BTreeMap::new();
 
         // TCP
-        add_parser!(tcp "dns_tcp", tcp_probe_order::Dns, DnsTCPBuilder {}, dns_probe_tcp, builder_map, probe_map);
-        add_parser!(tcp "kerberos_tcp", tcp_probe_order::Kerberos, KerberosTCPBuilder {}, kerberos_probe_tcp, builder_map, probe_map);
-        add_parser!(udp "openvpn_tcp", tcp_probe_order::OpenVpn, OpenVPNTCPBuilder {}, openvpn_tcp_probe, builder_map, probe_map);
-        add_parser!(tcp "ssh", tcp_probe_order::Ssh, SSHBuilder {}, ssh_probe, builder_map, probe_map);
-        add_parser!(tcp "tls", tcp_probe_order::Tls, TLSBuilder {}, tls_probe, builder_map, probe_map);
+        add_parser!(tcp "dns_tcp", TcpProbeOrder::Dns, DnsTCPBuilder {}, dns_probe_tcp, builder_map, probe_map);
+        add_parser!(tcp "kerberos_tcp", TcpProbeOrder::Kerberos, KerberosTCPBuilder {}, kerberos_probe_tcp, builder_map, probe_map);
+        add_parser!(udp "openvpn_tcp", TcpProbeOrder::OpenVpn, OpenVPNTCPBuilder {}, openvpn_tcp_probe, builder_map, probe_map);
+        add_parser!(tcp "ssh", TcpProbeOrder::Ssh, SSHBuilder {}, ssh_probe, builder_map, probe_map);
+        add_parser!(tcp "tls", TcpProbeOrder::Tls, TLSBuilder {}, tls_probe, builder_map, probe_map);
         // UDP
-        add_parser!(udp "dhcp", udp_probe_order::Dhcp, DHCPBuilder {}, dhcp_probe, builder_map, probe_map);
-        add_parser!(udp "dns_udp", udp_probe_order::Dns, DnsUDPBuilder {}, dns_probe_udp, builder_map, probe_map);
-        add_parser!(udp "ikev2", udp_probe_order::Ikev2, IPsecBuilder {}, ipsec_probe, builder_map, probe_map);
-        add_parser!(udp "ikev2_natt", udp_probe_order::Ikev2Natt, IPsecNatTBuilder {}, ikev2_natt_probe, builder_map, probe_map);
-        add_parser!(udp "kerberos_udp", udp_probe_order::Kerberos, KerberosUDPBuilder {}, kerberos_probe_udp, builder_map, probe_map);
-        add_parser!(udp "ntp", udp_probe_order::Ntp, NTPBuilder {}, ntp_probe, builder_map, probe_map);
-        add_parser!(udp "openvpn_udp", udp_probe_order::OpenVpn, OpenVPNUDPBuilder {}, openvpn_udp_probe, builder_map, probe_map);
-        // add_parser!(udp "radius", udp_probe_order::Radius, RadiusBuilder {}, radius_probe, builder_map, probe_map);
-        add_parser!(udp "snmpv1", udp_probe_order::Snmpv1, SNMPv1Builder {}, snmpv1_probe, builder_map, probe_map);
-        add_parser!(udp "snmpv2c", udp_probe_order::Snmpv2c, SNMPv2cBuilder {}, snmpv2c_probe, builder_map, probe_map);
-        add_parser!(udp "snmpv3", udp_probe_order::Snmpv3, SNMPv3Builder {}, snmpv3_probe, builder_map, probe_map);
+        add_parser!(udp "dhcp", UdpProbeOrder::Dhcp, DHCPBuilder {}, dhcp_probe, builder_map, probe_map);
+        add_parser!(udp "dns_udp", UdpProbeOrder::Dns, DnsUDPBuilder {}, dns_probe_udp, builder_map, probe_map);
+        add_parser!(udp "ikev2", UdpProbeOrder::Ikev2, IPsecBuilder {}, ipsec_probe, builder_map, probe_map);
+        add_parser!(udp "ikev2_natt", UdpProbeOrder::Ikev2Natt, IPsecNatTBuilder {}, ikev2_natt_probe, builder_map, probe_map);
+        add_parser!(udp "kerberos_udp", UdpProbeOrder::Kerberos, KerberosUDPBuilder {}, kerberos_probe_udp, builder_map, probe_map);
+        add_parser!(udp "ntp", UdpProbeOrder::Ntp, NTPBuilder {}, ntp_probe, builder_map, probe_map);
+        add_parser!(udp "openvpn_udp", UdpProbeOrder::OpenVpn, OpenVPNUDPBuilder {}, openvpn_udp_probe, builder_map, probe_map);
+        // add_parser!(udp "radius", UdpProbeOrder::Radius, RadiusBuilder {}, radius_probe, builder_map, probe_map);
+        add_parser!(udp "snmpv1", UdpProbeOrder::Snmpv1, SNMPv1Builder {}, snmpv1_probe, builder_map, probe_map);
+        add_parser!(udp "snmpv2c", UdpProbeOrder::Snmpv2c, SNMPv2cBuilder {}, snmpv2c_probe, builder_map, probe_map);
+        add_parser!(udp "snmpv3", UdpProbeOrder::Snmpv3, SNMPv3Builder {}, snmpv3_probe, builder_map, probe_map);
 
         self.builder_map = builder_map;
         self.probe_map = probe_map;
