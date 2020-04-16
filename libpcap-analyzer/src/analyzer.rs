@@ -261,7 +261,8 @@ fn is_ipv6_opt(opt: IpNextHeaderProtocol) -> bool {
         | IpNextHeaderProtocols::Ipv6Route
         | IpNextHeaderProtocols::Ipv6Frag
         | IpNextHeaderProtocols::Esp
-        | IpNextHeaderProtocols::Ah => true,
+        | IpNextHeaderProtocols::Ah
+        | IpNextHeaderProtocols::MobilityHeader => true,
         _ => false,
     }
 }
@@ -323,6 +324,16 @@ fn handle_l3_ipv6(
     };
 
     run_plugins_v2_network(packet, ctx, payload, &t3, l4_proto.0, analyzer)?;
+
+    if l4_proto == IpNextHeaderProtocols::Ipv6NoNxt {
+        // usually the case for IPv6 mobility
+        // XXX header data could be inspected?
+        trace!("No next header");
+        if !payload.is_empty() {
+            warn!("No next header, but data is present (len={})", payload.len());
+        }
+        return Ok(());
+    }
 
     let l3_info = L3Info {
         three_tuple: t3,
