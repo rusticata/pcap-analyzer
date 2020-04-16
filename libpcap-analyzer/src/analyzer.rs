@@ -2,6 +2,7 @@ use crate::erspan::ErspanPacket;
 use crate::flow_map::FlowMap;
 use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
 use crate::layers::LinkLayerType;
+use crate::mpls::*;
 use crate::packet_info::PacketInfo;
 use crate::plugin::*;
 use crate::plugin_registry::*;
@@ -148,6 +149,11 @@ pub(crate) fn handle_l3(
         EtherTypes::Arp => Ok(()),
         // 0x880b: PPP (rfc7042)
         EtherType(0x880b) => handle_l3_ppp(packet, ctx, data, ethertype, analyzer),
+        // 0x8847: MPLS (RFC5332)
+        // 0x8848: MPLS with upstream-assigned label (RFC5332)
+        EtherTypes::Mpls | EtherTypes::MplsMcast => {
+            handle_l3_mpls(packet, ctx, data, ethertype, analyzer)
+        }
         EtherType(0x88be) => handle_l3_erspan(packet, ctx, data, ethertype, analyzer),
         EtherTypes::PppoeSession => handle_l3_pppoesession(packet, ctx, data, ethertype, analyzer),
 
@@ -382,6 +388,35 @@ fn handle_l3_erspan(
         erspan.get_span_id()
     );
     handle_l2(packet, ctx, erspan.payload(), analyzer)
+}
+
+fn handle_l3_mpls(
+    packet: &Packet,
+    ctx: &ParseContext,
+    data: &[u8],
+    _ethertype: EtherType,
+    analyzer: &mut Analyzer,
+) -> Result<(), Error> {
+    trace!("handle_l2_mpls (idx={})", ctx.pcap_index);
+    let mpls = MplsPacket::new(data).ok_or("Could not build MPLS packet from data")?;
+
+    let payload = mpls.payload();
+    trace!("    MPLS # labels: {}", mpls.get_num_labels());
+    trace!("    MPLS top label: {}", mpls.get_top_label().get_label());
+
+    // MPLS does not have a next header field. Try to guess possible values from
+    // (IPv4, IPv6, Ethernet)
+    if payload.is_empty() {
+        warn!("MPLS packet but no data");
+        return Ok(());
+    }
+    let first_nibble = payload[0] >> 4;
+    match first_nibble {
+        4 => handle_l3_ipv4(packet, ctx, payload, EtherTypes::Ipv4, analyzer),
+        6 => handle_l3_ipv6(packet, ctx, payload, EtherTypes::Ipv6, analyzer),
+        _ => handle_l2(packet, ctx, payload, analyzer),
+    }
+    // store top label / decoder association?
 }
 
 fn handle_l3_pppoesession(

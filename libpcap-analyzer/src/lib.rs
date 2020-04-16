@@ -28,10 +28,12 @@ pub use threaded_analyzer::*;
 
 mod erspan;
 mod ip_defrag;
+mod mpls;
 mod ppp;
 mod pppoe;
 mod vxlan;
 pub use erspan::*;
+pub use mpls::*;
 pub use ppp::*;
 pub use pppoe::*;
 pub use vxlan::*;
