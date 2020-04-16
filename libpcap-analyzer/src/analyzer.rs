@@ -330,7 +330,10 @@ fn handle_l3_ipv6(
         // XXX header data could be inspected?
         trace!("No next header");
         if !payload.is_empty() {
-            warn!("No next header, but data is present (len={})", payload.len());
+            warn!(
+                "No next header, but data is present (len={})",
+                payload.len()
+            );
         }
         return Ok(());
     }
