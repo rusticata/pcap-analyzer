@@ -310,6 +310,7 @@ fn handle_l3_ipv6(
         let ext = ExtensionPacket::new(payload)
             .ok_or("Could not build IPv6 Extension packet from payload")?;
         let next_header = ext.get_next_header();
+        trace!("option header: {}", l4_proto);
         if l4_proto == IpNextHeaderProtocols::Ipv6Frag {
             if frag_ext.is_some() {
                 warn!("multiple IPv6Frag extensions idx={}", ctx.pcap_index);
@@ -317,7 +318,21 @@ fn handle_l3_ipv6(
             }
             frag_ext = FragmentPacket::new(payload);
         }
-        let offset = ext.packet_size();
+        // XXX fixup wrong extension size calculation in pnet
+        let offset = if l4_proto != IpNextHeaderProtocols::Ah {
+            ext.packet_size()
+        } else {
+            // https://en.wikipedia.org/wiki/IPsec#Authentication_Header
+            // The length of this Authentication Header in 4-octet units, minus 2. For example, an
+            // AH value of 4 equals 3×(32-bit fixed-length AH fields) + 3×(32-bit ICV fields) − 2
+            // and thus an AH value of 4 means 24 octets. Although the size is measured in 4-octet
+            // units, the length of this header needs to be a multiple of 8 octets if carried in an
+            // IPv6 packet. This restriction does not apply to an Authentication Header carried in
+            // an IPv4 packet.
+            let l1 = (payload[1] - 1) as usize;
+            let val = l1*4 + l1*4 - 2;
+            (val + 7) & (!7)
+        };
         extensions.push((l4_proto, ext));
         l4_proto = next_header;
         payload = &payload[offset..];
