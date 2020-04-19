@@ -206,8 +206,6 @@ fn handle_l3_ipv4(
         }
     }
 
-    run_plugins_v2_network(packet, ctx, data, &t3, l4_proto, analyzer)?;
-
     // if get_total_length is 0, assume TSO offloading and no padding
     let payload = if ip_len == 0 {
         warn!(
@@ -252,6 +250,8 @@ fn handle_l3_ipv4(
             return Ok(());
         }
     };
+
+    run_plugins_v2_network(packet, ctx, payload, &t3, l4_proto, analyzer)?;
 
     let l3_info = L3Info {
         three_tuple: t3,
