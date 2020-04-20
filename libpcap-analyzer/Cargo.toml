@@ -21,11 +21,12 @@ maintenance                       = { status     = "actively-developed" }
 
 [features]
 default = ["release"]
-release = ["plugin_community_id", "plugin_rusticata", "plugin_tls_stats"]
+release = ["plugin_community_id", "plugin_ospf", "plugin_rusticata", "plugin_tls_stats"]
 all = ["release", "plugins_debug", "plugin_examples"]
 plugin_community_id = ["sha1", "base64"]
 plugins_debug = []
 plugin_examples = []
+plugin_ospf = ["ospf-parser"]
 plugin_rusticata = ["rusticata"]
 plugin_tls_stats = ["rusticata","tls-parser"]
 
@@ -40,6 +41,7 @@ log = "0.4"
 multimap = "0.8"
 nom = "5.0"
 num_cpus = "1.10"
+ospf-parser = { version="0.1", optional=true }
 pnet_base = "0.25"
 pnet_macros_support = "0.25"
 pnet_packet = "0.25"

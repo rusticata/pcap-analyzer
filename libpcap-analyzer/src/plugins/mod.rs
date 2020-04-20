@@ -12,6 +12,8 @@ mod community_id;
 mod examples;
 #[cfg(feature = "plugins_debug")]
 mod hexdump;
+#[cfg(feature = "plugin_ospf")]
+mod ospf;
 #[cfg(feature = "plugin_rusticata")]
 mod rusticata;
 mod tcp_states;
@@ -100,6 +102,8 @@ impl Default for PluginsFactory {
             v.push(Box::new(examples::EmptyBuilder));
             v.push(Box::new(examples::EmptyWithConfigBuilder));
         }
+        #[cfg(feature = "plugin_ospf")]
+        v.push(Box::new(ospf::OspfLogBuilder));
 
         PluginsFactory { list: v }
     }
