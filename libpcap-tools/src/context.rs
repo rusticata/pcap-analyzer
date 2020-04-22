@@ -6,7 +6,7 @@ use std::convert::TryFrom;
 #[derive(Clone, Default)]
 pub struct ParseBlockContext {
     /// Index of current block in the pcap file
-    pub pcap_index: usize,
+    pub block_index: usize,
 }
 
 /// pcap parsing context

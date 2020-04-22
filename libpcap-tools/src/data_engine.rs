@@ -84,7 +84,6 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
         block_ctx: &ParseBlockContext,
     ) -> Result<(), Error> {
         self.data_analyzer.handle_block(block, &block_ctx)?;
-        self.ctx.pcap_index = block_ctx.pcap_index;
         let packet = match block {
             PcapBlockOwned::NG(Block::SectionHeader(ref shb)) => {
                 // reset section-related variables
@@ -98,6 +97,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                 return Ok(());
             }
             PcapBlockOwned::NG(Block::EnhancedPacket(ref epb)) => {
+                self.ctx.pcap_index += 1;
                 assert!((epb.if_id as usize) < self.ctx.interfaces.len());
                 let if_info = &self.ctx.interfaces[epb.if_id as usize];
                 let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(
@@ -126,10 +126,11 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                     data,
                     origlen: epb.origlen,
                     caplen: epb.caplen,
-                    pcap_index: block_ctx.pcap_index,
+                    pcap_index: self.ctx.pcap_index,
                 }
             }
             PcapBlockOwned::NG(Block::SimplePacket(ref spb)) => {
+                self.ctx.pcap_index += 1;
                 assert!(!self.ctx.interfaces.is_empty());
                 let if_info = &self.ctx.interfaces[0];
                 let blen = (spb.block_len1 - 16) as usize;
@@ -142,7 +143,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                     link_type: if_info.link_type,
                     origlen: spb.origlen,
                     caplen: if_info.snaplen,
-                    pcap_index: block_ctx.pcap_index,
+                    pcap_index: self.ctx.pcap_index,
                 }
             }
             PcapBlockOwned::LegacyHeader(ref hdr) => {
@@ -157,6 +158,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                 return Ok(());
             }
             PcapBlockOwned::Legacy(ref b) => {
+                self.ctx.pcap_index += 1;
                 assert!(!self.ctx.interfaces.is_empty());
                 let if_info = &self.ctx.interfaces[0];
                 let blen = b.caplen as usize;
@@ -169,7 +171,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                     data,
                     origlen: b.origlen,
                     caplen: b.caplen,
-                    pcap_index: block_ctx.pcap_index,
+                    pcap_index: self.ctx.pcap_index,
                 }
             }
             PcapBlockOwned::NG(Block::InterfaceStatistics(_))

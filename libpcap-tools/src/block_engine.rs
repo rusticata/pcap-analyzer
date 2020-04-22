@@ -44,18 +44,18 @@ impl<A: BlockAnalyzer> BlockEngine<A> {
             match reader.next() {
                 Ok((offset, block)) => {
                     self.analyzer.handle_block(&block, &ctx)?;
-                    ctx.pcap_index += 1;
+                    ctx.block_index += 1;
                     reader.consume_noshift(offset);
                     continue;
                 }
                 Err(PcapError::Eof) => break,
                 Err(PcapError::Incomplete) => {
-                    if last_incomplete_index == ctx.pcap_index {
+                    if last_incomplete_index == ctx.block_index {
                         warn!("Could not read complete data block.");
                         warn!("Hint: the reader buffer size may be too small, or the input file may be truncated.");
                         break;
                     }
-                    last_incomplete_index = ctx.pcap_index;
+                    last_incomplete_index = ctx.block_index;
                     // refill the buffer
                     debug!("need refill");
                     self.analyzer.before_refill();
