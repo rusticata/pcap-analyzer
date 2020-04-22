@@ -1,4 +1,3 @@
-use crate::packet_info::PacketInfo;
 use libpcap_tools::{Duration, Flow, FlowID};
 use pnet_macros_support::packet::Packet as PnetPacket;
 use pnet_packet::tcp::{TcpFlags, TcpPacket};
@@ -212,7 +211,7 @@ impl TcpStream {
         to_server: bool,
         pcap_index: usize,
     ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
-        let (mut origin, mut destination) = if to_server {
+        let (mut origin, destination) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
             (&mut self.server, &mut self.client)
@@ -627,7 +626,7 @@ impl TcpStreamReassembly {
 
 pub(crate) fn finalize_tcp_streams(analyzer: &mut crate::analyzer::Analyzer) {
     warn!("expiring all TCP connections");
-    for (flow_id, stream) in analyzer.tcp_defrag.m.iter() {
+    for (flow_id, _stream) in analyzer.tcp_defrag.m.iter() {
         // TODO do we have anything to do?
         if let Some(flow) = analyzer.flows.get_flow(*flow_id) {
             debug!("  flow: {:?}", flow);
