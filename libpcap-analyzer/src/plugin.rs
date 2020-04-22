@@ -108,13 +108,13 @@ pub trait Plugin: Sync + Send {
 
     /// Callback function when layer 3 data is available
     /// `packet` is the initial layer 3 packet information
-    /// `data` is the layer 3 data. It can be different from packet.data if defragmentation occured
+    /// `payload` is the layer 3 payload. It can be different from packet.data if defragmentation occured
     /// `ethertype` is the type of `data` as declared in ethernet frame
     /// `PLUGIN_L3` must be added to `plugin_type()` return
     fn handle_layer_network<'s, 'i>(
         &'s mut self,
         _packet: &'s Packet,
-        _data: &'i [u8],
+        _payload: &'i [u8],
         _t3: &'s ThreeTuple,
         _l4_proto: u8,
     ) -> PluginResult<'i> {
@@ -122,9 +122,8 @@ pub trait Plugin: Sync + Send {
     }
 
     /// Callback function when layer 4 data is available
-    /// `data` is the layer 4 data, defragmented if possible
     /// `packet` is the initial layer 3 packet information
-    /// `pinfo` is the flow and layers information
+    /// `pinfo` is the flow and layers information, including payload
     /// `PLUGIN_L4` must be added to `plugin_type()` return
     fn handle_layer_transport<'s, 'i>(
         &'s mut self,

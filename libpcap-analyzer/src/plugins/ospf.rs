@@ -268,17 +268,17 @@ impl Plugin for OspfLog {
     fn handle_layer_network<'s, 'i>(
         &'s mut self,
         packet: &'s Packet,
-        data: &'i [u8],
+        payload: &'i [u8],
         _t3: &'s ThreeTuple,
-        _l4_proto: u8,
+        l4_proto: u8,
     ) -> PluginResult<'i> {
-        if _l4_proto != 89 || data.is_empty()
+        if l4_proto != 89 || payload.is_empty()
         /* OSPFIGP */
         {
             return PluginResult::None;
         }
-        match data[0] {
-            2 => match parse_ospfv2_packet(data) {
+        match payload[0] {
+            2 => match parse_ospfv2_packet(payload) {
                 Ok((_, ospf)) => self.log_packet_v2(&ospf),
                 Err(e) => {
                     warn!(
@@ -287,7 +287,7 @@ impl Plugin for OspfLog {
                     );
                 }
             },
-            3 => match parse_ospfv3_packet(data) {
+            3 => match parse_ospfv3_packet(payload) {
                 Ok((_, ospf)) => self.log_packet_v3(&ospf),
                 Err(e) => {
                     warn!(
@@ -297,7 +297,7 @@ impl Plugin for OspfLog {
                 }
             },
             _ => {
-                warn!("Not OSPF data (invalid version {})", data[0]);
+                warn!("Not OSPF data (invalid version {})", payload[0]);
             }
         }
         PluginResult::None
