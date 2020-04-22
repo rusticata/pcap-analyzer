@@ -351,6 +351,26 @@ impl TcpStream {
                     warn!("Not a FIN");
                 }
                 origin.status = TcpStatus::FinWait1;
+                destination.status = TcpStatus::CloseWait; // we are not sure it was received
+            }
+            TcpStatus::CloseWait => {
+                if tcp_flags & TcpFlags::FIN == 0 {
+                    warn!("Origin should have sent a FIN");
+                }
+                origin.status = TcpStatus::LastAck;
+                if tcp_flags & TcpFlags::ACK != 0 {
+                    destination.status = TcpStatus::TimeWait;
+                } else {
+                    destination.status = TcpStatus::Closing;
+                }
+            }
+            TcpStatus::TimeWait => {
+                // only an ACK should be sent (XXX nothing else)
+                if tcp_flags & TcpFlags::ACK != 0 {
+                    // this is the end!
+                    origin.status = TcpStatus::Closed;
+                    destination.status = TcpStatus::Closed;
+                }
             }
             _ => {
                 warn!(
