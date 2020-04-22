@@ -12,8 +12,6 @@ pub struct ParseBlockContext {
 /// pcap parsing context
 #[derive(Clone, Default)]
 pub struct ParseContext {
-    pub interfaces: Vec<InterfaceInfo>,
-    pub bigendian: bool,
     /// Timestamp of first packet seen
     pub first_packet_ts: Duration,
     /// Relative timestamp of current packet

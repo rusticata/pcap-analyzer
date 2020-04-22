@@ -11,7 +11,7 @@ use crate::pppoe::PppoeSessionPacket;
 use crate::vxlan::*;
 use libpcap_tools::*;
 
-use pcap_parser::{data::PacketData, Linktype};
+use pcap_parser::data::PacketData;
 use std::cmp::min;
 use std::net::IpAddr;
 use std::ops::DerefMut;
@@ -330,7 +330,7 @@ fn handle_l3_ipv6(
             // IPv6 packet. This restriction does not apply to an Authentication Header carried in
             // an IPv4 packet.
             let l1 = (payload[1] - 1) as usize;
-            let val = l1*4 + l1*4 - 2;
+            let val = l1 * 4 + l1 * 4 - 2;
             (val + 7) & (!7)
         };
         extensions.push((l4_proto, ext));

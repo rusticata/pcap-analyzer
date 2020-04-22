@@ -13,6 +13,7 @@ struct PcapDataAnalyzer<A: PcapAnalyzer> {
     data_analyzer: A,
 
     ctx: ParseContext,
+    interfaces: Vec<InterfaceInfo>,
 }
 
 /// pcap/pcap-ng data analyzer engine
@@ -63,7 +64,12 @@ impl<A: PcapAnalyzer> PcapDataEngine<A> {
 impl<A: PcapAnalyzer> PcapDataAnalyzer<A> {
     pub fn new(data_analyzer: A) -> Self {
         let ctx = ParseContext::default();
-        PcapDataAnalyzer { data_analyzer, ctx }
+        let interfaces = Vec::new();
+        PcapDataAnalyzer {
+            data_analyzer,
+            ctx,
+            interfaces,
+        }
     }
 }
 
@@ -85,21 +91,20 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
     ) -> Result<(), Error> {
         self.data_analyzer.handle_block(block, &block_ctx)?;
         let packet = match block {
-            PcapBlockOwned::NG(Block::SectionHeader(ref shb)) => {
+            PcapBlockOwned::NG(Block::SectionHeader(_)) => {
                 // reset section-related variables
-                self.ctx.interfaces = Vec::new();
-                self.ctx.bigendian = shb.is_bigendian();
+                self.interfaces = Vec::new();
                 return Ok(());
             }
             PcapBlockOwned::NG(Block::InterfaceDescription(ref idb)) => {
                 let if_info = pcapng_build_interface(idb);
-                self.ctx.interfaces.push(if_info);
+                self.interfaces.push(if_info);
                 return Ok(());
             }
             PcapBlockOwned::NG(Block::EnhancedPacket(ref epb)) => {
                 self.ctx.pcap_index += 1;
-                assert!((epb.if_id as usize) < self.ctx.interfaces.len());
-                let if_info = &self.ctx.interfaces[epb.if_id as usize];
+                assert!((epb.if_id as usize) < self.interfaces.len());
+                let if_info = &self.interfaces[epb.if_id as usize];
                 let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(
                     epb.ts_high,
                     epb.ts_low,
@@ -131,8 +136,8 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
             }
             PcapBlockOwned::NG(Block::SimplePacket(ref spb)) => {
                 self.ctx.pcap_index += 1;
-                assert!(!self.ctx.interfaces.is_empty());
-                let if_info = &self.ctx.interfaces[0];
+                assert!(!self.interfaces.is_empty());
+                let if_info = &self.interfaces[0];
                 let blen = (spb.block_len1 - 16) as usize;
                 let data = pcap_parser::data::get_packetdata(spb.data, if_info.link_type, blen)
                     .ok_or(Error::Generic("Parsing PacketData failed (SimplePacket)"))?;
@@ -153,14 +158,14 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                     if_tsresol: 6,
                     snaplen: hdr.snaplen,
                 };
-                self.ctx.interfaces.push(if_info);
+                self.interfaces.push(if_info);
                 trace!("Legacy pcap,  link type: {}", hdr.network);
                 return Ok(());
             }
             PcapBlockOwned::Legacy(ref b) => {
                 self.ctx.pcap_index += 1;
-                assert!(!self.ctx.interfaces.is_empty());
-                let if_info = &self.ctx.interfaces[0];
+                assert!(!self.interfaces.is_empty());
+                let if_info = &self.interfaces[0];
                 let blen = b.caplen as usize;
                 let data = pcap_parser::data::get_packetdata(b.data, if_info.link_type, blen)
                     .ok_or(Error::Generic("Parsing PacketData failed (Legacy Packet)"))?;

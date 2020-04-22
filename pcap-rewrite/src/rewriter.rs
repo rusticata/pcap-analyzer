@@ -96,11 +96,7 @@ impl PcapAnalyzer for Rewriter {
     }
 
     fn handle_packet(&mut self, packet: &Packet, ctx: &ParseContext) -> Result<(), Error> {
-        let if_info = ctx
-            .interfaces
-            .get(packet.interface as usize)
-            .ok_or(Error::Generic("Missing interface info"))?;
-        let link_type = if_info.link_type;
+        let link_type = packet.link_type;
         // let snaplen = if_info.snaplen;
         // debug!("snaplen: {}", snaplen);
         // apply filters
