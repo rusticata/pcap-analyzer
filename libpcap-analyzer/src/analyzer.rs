@@ -520,7 +520,8 @@ fn handle_l4_tcp(
     let dst_port = tcp.get_destination();
 
     // XXX begin copy/paste of handle_l4_common
-    let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
+    let five_tuple =
+        FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port, l3_info.l4_proto);
     trace!("5t: {}", five_tuple);
     let now = packet.ts;
 
@@ -549,27 +550,62 @@ fn handle_l4_tcp(
     let flow = analyzer
         .flows
         .get_flow(flow_id)
-        .expect("could not get flow from ID");
+        .expect("could not get flow from ID")
+        .clone();
 
     let to_server = flow.five_tuple == five_tuple;
 
-    let pinfo = PacketInfo {
-        five_tuple: &five_tuple,
-        to_server,
-        l3_type: l3_info.l3_proto,
-        l4_data,
-        l4_type: l3_info.three_tuple.proto,
-        l4_payload: None,
-        flow: Some(flow),
-        pcap_index: ctx.pcap_index,
-    };
     // XXX end copy/paste
 
     let res = analyzer
         .tcp_defrag
-        .update(flow, &tcp, to_server, &pinfo, &analyzer.registry);
-    if res.is_err() {
-        warn!("Tcp steam reassembly error: {:?}", res);
+        .update(&flow, &tcp, to_server, ctx.pcap_index);
+    match res {
+        Ok(None) => (),
+        Ok(Some(segments)) => {
+            for segment in &segments {
+                // send to upper layer and call plugins
+                // since this is ACK'ed data, data origin is the current destination
+                let t5 = five_tuple.get_reverse();
+                let origin_addr = t5.src;
+                let origin_port = t5.src_port;
+                trace!(
+                    "Sending segment from {}:{} (plen={}, pcap_index={})",
+                    origin_addr,
+                    origin_port,
+                    segment.data.len(),
+                    segment.pcap_index,
+                );
+                // XXX build a dummy packet
+                let l4_payload = &segment.data;
+                let dummy_packet = Packet {
+                    interface: packet.interface,
+                    caplen: 0,
+                    origlen: 0,
+                    ts: packet.ts, // this is the timestamp of ACK, not data
+                    link_type: packet.link_type,
+                    data: PacketData::L4(t5.proto, &[]),
+                    pcap_index: segment.pcap_index,
+                };
+                let packet_info = PacketInfo {
+                    five_tuple: &t5,
+                    to_server: !to_server,
+                    l3_type: l3_info.three_tuple.proto,
+                    l4_data: &[], // reassembled, so no L4 data
+                    l4_type: t5.proto,
+                    l4_payload: Some(l4_payload),
+                    flow: Some(&flow),
+                    pcap_index: segment.pcap_index,
+                };
+                // let start = ::std::time::Instant::now();
+                run_plugins_v2_transport(&dummy_packet, &ctx, &packet_info, analyzer)?;
+                // let elapsed = start.elapsed();
+                // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
+            }
+        }
+        Err(e) => {
+            warn!("Tcp steam reassembly error: {:?}", e);
+        }
     }
 
     // check if TCP streams did timeout or expire

@@ -1,7 +1,5 @@
 use crate::packet_info::PacketInfo;
-use crate::plugin_registry::PluginRegistry;
-use libpcap_tools::{Duration, Flow, FlowID, Packet};
-use pcap_parser::data::PacketData;
+use libpcap_tools::{Duration, Flow, FlowID};
 use pnet_macros_support::packet::Packet as PnetPacket;
 use pnet_packet::tcp::{TcpFlags, TcpPacket};
 use std::cmp::Ordering;
@@ -31,6 +29,7 @@ impl Default for TcpStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct TcpSegment {
     pub rel_seq: Wrapping<u32>,
     pub rel_ack: Wrapping<u32>,
@@ -135,7 +134,7 @@ impl TcpStream {
         &mut self,
         tcp: &'a TcpPacket,
         to_server: bool,
-    ) -> Result<(), TcpStreamError> {
+    ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
         let seq = Wrapping(tcp.get_sequence());
         let ack = Wrapping(tcp.get_acknowledgement());
         let tcp_flags = tcp.get_flags();
@@ -152,7 +151,7 @@ impl TcpStream {
                 if tcp_flags & TcpFlags::RST != 0 {
                     // TODO check if destination.segments must be removed
                     // client sent a RST, this is expected
-                    return Ok(());
+                    return Ok(None);
                 }
                 // XXX check flags: SYN ?
                 if tcp_flags & TcpFlags::SYN == 0 {
@@ -204,16 +203,15 @@ impl TcpStream {
             }
             _ => unreachable!(),
         }
-        Ok(())
+        Ok(None)
     }
 
     pub fn handle_established_connection<'a>(
         &mut self,
         tcp: &'a TcpPacket,
         to_server: bool,
-        pinfo: &PacketInfo,
-        registry: &PluginRegistry,
-    ) -> Result<(), TcpStreamError> {
+        pcap_index: usize,
+    ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
         let (mut origin, mut destination) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
@@ -242,7 +240,7 @@ impl TcpStream {
             rel_ack,
             flags: tcp_flags,
             data: tcp.payload().to_vec(), // XXX data cloned here
-            pcap_index: pinfo.pcap_index,
+            pcap_index,
         };
         queue_segment(&mut origin, segment);
 
@@ -259,10 +257,12 @@ impl TcpStream {
         //     self.handle_closing_connection(tcp, to_server);
         // }
 
-        // TODO if there is a ACK, check & send segments on the *other* side
-        if tcp_flags & TcpFlags::ACK != 0 {
-            send_peer_segments(destination, origin, rel_ack, pinfo, registry);
-        }
+        // if there is a ACK, check & send segments on the *other* side
+        let ret = if tcp_flags & TcpFlags::ACK != 0 {
+            send_peer_segments(destination, origin, rel_ack)
+        } else {
+            None
+        };
 
         // if ack > destination.next_seq {
         //     warn!("EST/data: ack number is wrong (missed packet?)");
@@ -284,16 +284,15 @@ impl TcpStream {
             destination.next_rel_seq, destination.last_rel_ack,
         );
 
-        Ok(())
+        Ok(ret)
     }
 
     fn handle_closing_connection(
         &mut self,
         tcp: &TcpPacket,
         to_server: bool,
-        pinfo: &PacketInfo,
-        registry: &PluginRegistry,
-    ) -> Result<(), TcpStreamError> {
+        pcap_index: usize,
+    ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
         let (mut origin, destination) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
@@ -304,10 +303,12 @@ impl TcpStream {
         let rel_seq = Wrapping(tcp.get_sequence()) - origin.isn;
         let rel_ack = Wrapping(tcp.get_acknowledgement()) - destination.isn;
 
-        if tcp_flags & TcpFlags::ACK != 0 {
+        let ret = if tcp_flags & TcpFlags::ACK != 0 {
             debug!("ACKing segments up to {}", rel_ack);
-            send_peer_segments(destination, origin, rel_ack, pinfo, registry);
-        }
+            send_peer_segments(destination, origin, rel_ack)
+        } else {
+            None
+        };
         if tcp_flags & TcpFlags::RST != 0 {
             // if we get a RST, check the sequence number and remove matching segments
             debug!("RST received. rel_seq: {}", rel_seq);
@@ -325,7 +326,7 @@ impl TcpStream {
                 destination.segments.len()
             );
             origin.status = TcpStatus::Closed; // XXX except if ACK ?
-            return Ok(());
+            return Ok(ret);
         }
 
         // queue segment (even if FIN, to get correct seq numbers)
@@ -336,7 +337,7 @@ impl TcpStream {
             rel_ack,
             flags: tcp_flags,
             data: tcp.payload().to_vec(), // XXX data cloned here
-            pcap_index: pinfo.pcap_index,
+            pcap_index,
         };
         queue_segment(&mut origin, segment);
 
@@ -376,10 +377,10 @@ impl TcpStream {
         // TODO what now?
 
         if origin.segments.is_empty() {
-            return Ok(());
+            return Ok(ret);
         }
 
-        Ok(())
+        Ok(ret)
     }
 
     // force expiration (for ex after timeout) of this stream
@@ -430,16 +431,14 @@ fn send_peer_segments(
     origin: &mut TcpPeer,
     destination: &mut TcpPeer,
     rel_ack: Wrapping<u32>,
-    pinfo: &PacketInfo,
-    registry: &PluginRegistry,
-) {
+) -> Option<Vec<TcpSegment>> {
     debug!(
         "Trying to send segments for {}:{} up to {} (last ack: {})",
         origin.addr, origin.port, rel_ack, origin.last_rel_ack
     );
     if rel_ack == origin.last_rel_ack {
         trace!("re-acking last data, doing nothing");
-        return;
+        return None;
     }
     if rel_ack < origin.last_rel_ack {
         warn!("ack < last_ack");
@@ -451,6 +450,8 @@ fn send_peer_segments(
     }
 
     // TODO check consistency of segment ACK numbers + order and/or missing fragments and/or overlap
+
+    let mut acked = Vec::new();
 
     #[allow(clippy::while_let_loop)]
     loop {
@@ -479,7 +480,7 @@ fn send_peer_segments(
 
         let mut segment = match origin.segments.pop_front() {
             Some(s) => s,
-            None => return,
+            None => return Some(acked),
         };
 
         if rel_ack < segment.rel_seq {
@@ -509,11 +510,14 @@ fn send_peer_segments(
             origin.insert_sorted(new_segment);
         }
 
-        send_single_segment(origin, destination, segment, pinfo, registry);
+        adjust_seq_numbers(origin, destination, &segment);
+        if !segment.data.is_empty() {
+            acked.push(segment);
+        }
     }
 
     if origin.next_rel_seq != rel_ack {
-        // missed segments, or mayber received FIN ?
+        // missed segments, or maybe received FIN ?
         warn!(
             "TCP ACKed unseen segment next_seq {} != ack {} (Missed segments?)",
             origin.next_rel_seq, rel_ack
@@ -522,48 +526,11 @@ fn send_peer_segments(
     }
 
     origin.last_rel_ack = rel_ack;
+    Some(acked)
 }
 
-fn send_single_segment(
-    origin: &mut TcpPeer,
-    _destination: &mut TcpPeer,
-    segment: TcpSegment,
-    pinfo: &PacketInfo,
-    registry: &PluginRegistry,
-) {
-    trace!(
-        "Sending segment from {}:{} (plen={}, pcap_index={})",
-        origin.addr,
-        origin.port,
-        segment.data.len(),
-        segment.pcap_index,
-    );
-
+fn adjust_seq_numbers(origin: &mut TcpPeer, _destination: &mut TcpPeer, segment: &TcpSegment) {
     if !segment.data.is_empty() {
-        // send ACKed segments for remote connection side
-        let five_tuple = &pinfo.five_tuple.get_reverse();
-        let to_server = !pinfo.to_server;
-        let pinfo = PacketInfo {
-            five_tuple,
-            to_server,
-            l4_payload: Some(&segment.data),
-            ..*pinfo
-        };
-
-        // XXX build a dummy packet
-        let packet = Packet {
-            interface: 0,
-            caplen: 0,
-            origlen: 0,
-            ts: Duration::new(0, 0),
-            data: PacketData::L4(pinfo.l4_type, &segment.data),
-            pcap_index: segment.pcap_index,
-        };
-        // let start = ::std::time::Instant::now();
-        registry.run_plugins_transport(pinfo.l4_type, &packet, &pinfo);
-        // let elapsed = start.elapsed();
-        // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
-
         origin.next_rel_seq += Wrapping(segment.data.len() as u32);
     }
 
@@ -586,9 +553,8 @@ impl TcpStreamReassembly {
         flow: &Flow,
         tcp: &TcpPacket,
         to_server: bool,
-        pinfo: &PacketInfo,
-        registry: &PluginRegistry,
-    ) -> Result<(), TcpStreamError> {
+        pcap_index: usize,
+    ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
         trace!("5-t: {}", flow.five_tuple);
         trace!("  flow id: {:x}", flow.flow_id);
         trace!(
@@ -634,12 +600,12 @@ impl TcpStreamReassembly {
                 // check for close request
                 if tcp.get_flags() & (TcpFlags::FIN | TcpFlags::RST) != 0 {
                     trace!("Requesting end of connection");
-                    stream.handle_closing_connection(tcp, to_server, pinfo, registry)
+                    stream.handle_closing_connection(tcp, to_server, pcap_index)
                 } else {
-                    stream.handle_established_connection(tcp, to_server, pinfo, registry)
+                    stream.handle_established_connection(tcp, to_server, pcap_index)
                 }
             }
-            _ => stream.handle_closing_connection(tcp, to_server, pinfo, registry),
+            _ => stream.handle_closing_connection(tcp, to_server, pcap_index),
         }
     }
     pub(crate) fn check_expired_connections(&mut self, now: Duration) {
