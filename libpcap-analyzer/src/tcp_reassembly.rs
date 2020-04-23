@@ -513,12 +513,15 @@ fn send_peer_segments(
             // split data and insert new dummy segment
             debug!("rel_ack {} segment.rel_seq {}", rel_ack, segment.rel_seq);
             debug!("segment data len {}", segment.data.len());
+            let acked_len = (rel_ack - segment.rel_seq).0 as usize;
             let remaining = segment
                 .data
-                .split_off((rel_ack - segment.rel_seq).0 as usize);
+                .split_off(acked_len);
+            let rel_seq = segment.rel_seq + Wrapping(acked_len as u32);
             let new_segment = TcpSegment {
                 data: remaining,
                 rel_ack,
+                rel_seq,
                 ..segment
             };
             debug!(
