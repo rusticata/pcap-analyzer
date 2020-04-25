@@ -3,6 +3,7 @@ use crate::plugin::{Plugin, PluginResult, PLUGIN_L4};
 use crate::{output, plugin_builder};
 use libpcap_tools::{FiveTuple, Packet};
 use rusticata::*;
+use rusticata::tls::*;
 use serde_json::{self, json};
 use std::collections::HashMap;
 use tls_parser::TlsVersion;
@@ -55,11 +56,16 @@ impl<'a> Plugin for TlsStats<'a> {
         if let Some(stats) = self.tls_conversations.get_mut(&flow.five_tuple) {
             stats.update(data, pinfo);
         } else {
+            let l4_info = rusticata::probe::L4Info {
+                src_port: pinfo.five_tuple.src_port,
+                dst_port: pinfo.five_tuple.dst_port,
+                l4_proto: pinfo.l4_type,
+            };
             // if not, try to detect TLS
-            if !tls_probe(data) {
+            if !tls_probe(data, &l4_info).is_certain() {
                 return PluginResult::None;
             }
-            // could be TLS. instanciate parser and add flow to tracked conversations
+            // could be TLS. instantiate parser and add flow to tracked conversations
             let mut stats = Stats::new();
             stats.update(data, pinfo);
             self.tls_conversations
