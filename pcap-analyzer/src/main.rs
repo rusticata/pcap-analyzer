@@ -42,7 +42,7 @@ fn main() -> io::Result<()> {
         )
         .arg(
             Arg::with_name("jobs")
-                .help("Number of concurrent jobs to run (default: number of cpus)")
+                .help("Number of concurrent jobs to run (default: 1)")
                 .short("j")
                 .long("jobs")
                 .takes_value(true),
@@ -132,7 +132,7 @@ fn main() -> io::Result<()> {
     // Now, really start
     info!("Pcap analyser {}", crate_version!());
 
-    // instanciate all plugins
+    // instantiate all plugins
     let registry = if let Some(plugin_names) = matches.value_of("plugins") {
         debug!("Restricting plugins to: {}", plugin_names);
         let names: Vec<_> = plugin_names.split(',').collect();
@@ -195,7 +195,8 @@ fn main() -> io::Result<()> {
         }
     };
 
-    let mut engine = if config.get_usize("num_threads") == Some(1) {
+    let num_threads = config.get_usize("num_threads").unwrap_or(1);
+    let mut engine = if num_threads == 1 {
         let analyzer = Analyzer::new(Arc::new(registry), &config);
         Box::new(PcapDataEngine::new(analyzer, &config)) as Box<dyn PcapEngine>
     } else {

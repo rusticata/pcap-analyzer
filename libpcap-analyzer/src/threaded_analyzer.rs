@@ -39,7 +39,7 @@ impl<'a> ThreadedAnalyzer<'a> {
     pub fn new(registry: PluginRegistry, config: &Config) -> Self {
         let n_workers = config
             .get_usize("num_threads")
-            .unwrap_or_else(num_cpus::get);
+            .map_or_else(num_cpus::get, |n| if n == 0 { num_cpus::get() } else { n });
         let barrier = Arc::new(Barrier::new(n_workers + 1));
         let registry = Arc::new(registry);
         let analyzer = Analyzer::new(registry.clone(), &config);
