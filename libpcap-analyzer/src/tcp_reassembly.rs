@@ -159,6 +159,20 @@ impl TcpStream {
                     // XXX test is ACK + data, and set established if possible ?
                     return Err(TcpStreamError::Anomaly);
                 }
+                if tcp_flags & TcpFlags::ACK != 0 {
+                    warn!("First packet is SYN+ACK - missed SYN?");
+                    // XXX swap sides and set status
+                    // std::mem::swap(conn, rev_conn);
+                    rev_conn.isn = ack - Wrapping(1);
+                    rev_conn.status = TcpStatus::SynSent;
+                    rev_conn.next_rel_seq = Wrapping(1);
+                    conn.isn = seq;
+                    conn.ian = ack;
+                    conn.last_rel_ack = Wrapping(1);
+                    conn.next_rel_seq = Wrapping(1);
+                    conn.status = TcpStatus::Listen;
+                    return Ok(None);
+                }
                 conn.isn = seq;
                 conn.next_rel_seq = Wrapping(1);
                 rev_conn.ian = seq;
@@ -244,6 +258,10 @@ impl TcpStream {
         queue_segment(&mut origin, segment);
 
         debug!("  segments count: {}", origin.segments.len());
+        // DEBUG
+        for (n, s) in origin.segments.iter().enumerate() {
+            debug!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
+        }
         debug!(
             "  PEER segments count (before ACK): {}",
             destination.segments.len()
@@ -410,12 +428,40 @@ impl TcpStream {
 } // TcpStream
 
 fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
-    // only store segments with data
+    // only store segments with data, except FIN
     if segment.data.is_empty() && segment.flags & TcpFlags::FIN == 0 {
         return;
     }
-    // TODO check & merge segments
-    if let Some(s) = peer.segments.front_mut() {
+    // // DEBUG
+    // for (n, s) in peer.segments.iter().enumerate() {
+    //     debug!(
+    //         "  XXX peer s[{}]: rel_seq={} plen={}",
+    //         n,
+    //         s.rel_seq,
+    //         s.data.len()
+    //     );
+    // }
+    // trivial case: list is empty - just push segment
+    if peer.segments.is_empty() {
+        peer.segments.push_front(segment);
+        return;
+    }
+    // find last element before candidate and first element after candidate
+    let mut before = None;
+    let mut after = None;
+    let mut opt_pos = None;
+    for (n, s) in peer.segments.iter().enumerate() {
+        if s.rel_seq < segment.rel_seq {
+            before = Some(s);
+        } else {
+            after = Some(s);
+            opt_pos = Some(n);
+            break;
+        }
+    }
+    // trace!("tcp segment insertion index: {:?}", opt_pos);
+    // check for left overlap
+    if let Some(s) = before {
         let next_seq = s.rel_seq + Wrapping(s.data.len() as u32);
         match segment.rel_seq.cmp(&next_seq) {
             Ordering::Equal => {
@@ -434,16 +480,33 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
             }
             Ordering::Greater => {
                 // we have a hole
-                warn!("Missing segment");
+                warn!("Missing segment on left of incoming segment");
             }
             Ordering::Less => {
                 // overlap
-                warn!("Segment with overlap");
+                warn!("Segment with left overlap");
+            }
+        }
+    }
+    // check for right overlap
+    if let Some(s) = after {
+        let right_next_seq = segment.rel_seq + Wrapping(segment.data.len() as u32);
+        match right_next_seq.cmp(&s.rel_seq) {
+            Ordering::Equal => (),
+            Ordering::Greater => {
+                warn!("Segment with right overlap");
+            }
+            Ordering::Less => {
+                trace!("hole remaining on right of incoming segment");
             }
         }
     }
     trace!("Pushing segment");
-    peer.insert_sorted(segment);
+    match opt_pos {
+        Some(idx) => peer.segments.insert(idx, segment),
+        None => peer.segments.push_back(segment),
+    }
+    // peer.insert_sorted(segment);
 }
 
 fn send_peer_segments(
