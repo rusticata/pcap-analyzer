@@ -3,24 +3,23 @@ use nom::Err;
 use pcap_parser::PcapError;
 use std::convert::From;
 use std::io;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
-    Generic(&'static str),
+    #[error("Internal parser error {0:?}")]
     Nom(ErrorKind),
-    IoError(io::Error),
-    Pcap(PcapError),
+    #[error("I/O error: {0}")]
+    IoError(#[from] io::Error),
+    #[error("Pcap parser error {0:?}")]
+    Pcap(#[from] PcapError),
+    #[error("Generic error {0}")]
+    Generic(&'static str),
 }
 
 impl From<&'static str> for Error {
     fn from(s: &'static str) -> Self {
         Error::Generic(s)
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(e: io::Error) -> Self {
-        Error::IoError(e)
     }
 }
 
@@ -36,11 +35,5 @@ impl From<Err<PcapError>> for Error {
             Err::Incomplete(_) => Error::Pcap(PcapError::Incomplete),
             Err::Error(e) | Err::Failure(e) => Error::Pcap(e),
         }
-    }
-}
-
-impl From<PcapError> for Error {
-    fn from(e: PcapError) -> Self {
-        Error::Pcap(e)
     }
 }
