@@ -8,7 +8,6 @@ use libpcap_tools::{Config, FlowID};
 use crate::plugin::{Plugin, PluginBuilderError, PluginResult};
 use crate::packet_info::PacketInfo;
 use crate::plugin::PLUGIN_L4;
-use base64;
 use indexmap::IndexMap;
 use libpcap_tools::{FiveTuple, Packet};
 use serde_json::json;

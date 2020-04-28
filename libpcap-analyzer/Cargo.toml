@@ -31,7 +31,7 @@ plugin_rusticata = ["rusticata"]
 plugin_tls_stats = ["rusticata","tls-parser"]
 
 [dependencies]
-base64 = { version="0.11", optional=true }
+base64 = { version="0.12", optional=true }
 crossbeam-channel = "0.4"
 fasthash = "0.4"
 indexmap = { version="1.1", features=["serde-1"] }
