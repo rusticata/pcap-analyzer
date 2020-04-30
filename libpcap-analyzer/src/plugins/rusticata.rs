@@ -1,9 +1,10 @@
 use crate::default_plugin_builder;
 use crate::packet_info::PacketInfo;
 use crate::plugin::{Plugin, PluginResult, PLUGIN_FLOW_DEL, PLUGIN_L4};
+use fnv::{FnvHashMap, FnvHashSet};
 use libpcap_tools::{Flow, FlowID, Packet};
 use rusticata::prologue::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 const PROBE_TCP: u32 = 0x0600_0000;
 const PROBE_UDP: u32 = 0x1100_0000;
@@ -43,9 +44,9 @@ pub struct Rusticata {
     builder_map: HashMap<&'static str, Box<dyn RBuilder>>,
     probes_l4: Vec<ProbeDef>,
 
-    flow_probes: HashMap<FlowID, Vec<ProbeDef>>,
-    flow_parsers: HashMap<FlowID, Box<dyn RParser>>,
-    flow_bypass: HashSet<FlowID>,
+    flow_probes: FnvHashMap<FlowID, Vec<ProbeDef>>,
+    flow_parsers: FnvHashMap<FlowID, Box<dyn RParser>>,
+    flow_bypass: FnvHashSet<FlowID>,
 }
 
 default_plugin_builder!(Rusticata, RusticataBuilder);

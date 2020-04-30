@@ -1,3 +1,4 @@
+use fnv::FnvHashMap;
 use libpcap_tools::{FiveTuple, Flow, FlowID};
 use rand::prelude::*;
 use rand_chacha::*;
@@ -10,7 +11,7 @@ use std::collections::HashMap;
 /// Multiple `FlowID` may point to the same flow (direct and reverse flow, for ex.).
 pub struct FlowMap {
     trng: ChaChaRng,
-    flows: HashMap<FlowID, Flow>,
+    flows: FnvHashMap<FlowID, Flow>,
     flows_id: HashMap<FiveTuple, FlowID>,
 }
 
@@ -18,7 +19,7 @@ impl Default for FlowMap {
     fn default() -> Self {
         FlowMap {
             trng: ChaChaRng::from_rng(rand::thread_rng()).unwrap(),
-            flows: HashMap::new(),
+            flows: FnvHashMap::default(),
             flows_id: HashMap::new(),
         }
     }
