@@ -14,6 +14,7 @@ const PROBE_UDP: u32 = 0x1100_0000;
 enum TcpProbeOrder {
     Dns,
     Tls,
+    Http,
     Ssh,
     Kerberos,
     OpenVpn,
@@ -82,6 +83,7 @@ impl Plugin for Rusticata {
 
         // TCP
         add_parser!(tcp "dns_tcp", TcpProbeOrder::Dns, DnsTCPBuilder {}, builder_map, probes_l4);
+        add_parser!(tcp "http", TcpProbeOrder::Http, HTTPBuilder {}, builder_map, probes_l4);
         add_parser!(tcp "kerberos_tcp", TcpProbeOrder::Kerberos, KerberosTCPBuilder {}, builder_map, probes_l4);
         add_parser!(udp "openvpn_tcp", TcpProbeOrder::OpenVpn, OpenVPNTCPBuilder {}, builder_map, probes_l4);
         add_parser!(tcp "ssh", TcpProbeOrder::Ssh, SSHBuilder {}, builder_map, probes_l4);
