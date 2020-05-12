@@ -135,6 +135,7 @@ impl TcpStream {
         &mut self,
         tcp: &'a TcpPacket,
         to_server: bool,
+        pcap_index: usize,
     ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
         let seq = Wrapping(tcp.get_sequence());
         let ack = Wrapping(tcp.get_acknowledgement());
@@ -154,11 +155,33 @@ impl TcpStream {
                     // client sent a RST, this is expected
                     return Ok(None);
                 }
-                // XXX check flags: SYN ?
                 if tcp_flags & TcpFlags::SYN == 0 {
                     // not a SYN - usually happens at start of pcap if missed SYN
                     warn!("First packet of a TCP stream is not a SYN");
-                    // XXX test is ACK + data, and set established if possible ?
+                    // test is ACK + data, and set established if possible
+                    if tcp_flags & TcpFlags::ACK != 0 {
+                        trace!("Trying to catch connection on the fly");
+                        conn.isn = seq;
+                        conn.ian = ack;
+                        conn.next_rel_seq = Wrapping(0);
+                        conn.status = TcpStatus::Established;
+                        rev_conn.isn = ack;
+                        rev_conn.ian = seq;
+                        rev_conn.status = TcpStatus::Established;
+                        rev_conn.last_rel_ack = Wrapping(0);
+                        self.status = TcpStatus::Established;
+                        // queue segment (even if FIN, to get correct seq numbers)
+                        let segment = TcpSegment {
+                            rel_seq: Wrapping(0),
+                            rel_ack: Wrapping(0),
+                            flags: tcp_flags,
+                            data: tcp.payload().to_vec(), // XXX data cloned here
+                            pcap_index,
+                        };
+                        queue_segment(&mut conn, segment);
+
+                        return Ok(None);
+                    }
                     return Err(TcpStreamError::Anomaly);
                 }
                 if tcp_flags & TcpFlags::ACK != 0 {
@@ -583,9 +606,7 @@ fn send_peer_segments(
             debug!("rel_ack {} segment.rel_seq {}", rel_ack, segment.rel_seq);
             debug!("segment data len {}", segment.data.len());
             let acked_len = (rel_ack - segment.rel_seq).0 as usize;
-            let remaining = segment
-                .data
-                .split_off(acked_len);
+            let remaining = segment.data.split_off(acked_len);
             let rel_seq = segment.rel_seq + Wrapping(acked_len as u32);
             let new_segment = TcpSegment {
                 data: remaining,
@@ -685,7 +706,7 @@ impl TcpStreamReassembly {
 
         match origin.status {
             TcpStatus::Closed | TcpStatus::Listen | TcpStatus::SynSent | TcpStatus::SynRcv => {
-                stream.handle_new_connection(&tcp, to_server)
+                stream.handle_new_connection(&tcp, to_server, pcap_index)
             }
             TcpStatus::Established => {
                 // check for close request
