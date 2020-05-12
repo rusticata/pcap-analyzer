@@ -201,7 +201,11 @@ impl TcpStream {
             // Client -- ACK --> Server
             TcpStatus::SynSent => {
                 if tcp_flags != TcpFlags::ACK {
-                    // XXX
+                    // can be a disordered handshake (SA before S)
+                    if tcp_flags == TcpFlags::SYN && seq + Wrapping(1) == rev_conn.ian {
+                        trace!("Likely received SA before S - ignoring");
+                        return Ok(None);
+                    }
                     warn!("Not an ACK");
                 }
                 // TODO check seq, ack
