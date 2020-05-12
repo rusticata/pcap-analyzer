@@ -8,7 +8,7 @@ use crate::plugin::*;
 use crate::plugin_registry::*;
 use crate::ppp::{PppPacket, PppProtocolTypes};
 use crate::pppoe::PppoeSessionPacket;
-use crate::tcp_reassembly::{finalize_tcp_streams, TcpStreamReassembly};
+use crate::tcp_reassembly::{finalize_tcp_streams, TcpStreamError, TcpStreamReassembly};
 use crate::vxlan::*;
 use libpcap_tools::*;
 
@@ -602,6 +602,11 @@ fn handle_l4_tcp(
                 // let elapsed = start.elapsed();
                 // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
             }
+        }
+        Err(TcpStreamError::Inverted) => {
+            analyzer.flows.entry(flow_id).and_modify(|f| {
+                f.five_tuple = f.five_tuple.get_reverse();
+            });
         }
         Err(e) => {
             warn!("Tcp steam reassembly error: {:?}", e);

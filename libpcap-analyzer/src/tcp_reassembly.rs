@@ -99,6 +99,8 @@ impl Default for TcpStreamReassembly {
 #[derive(Debug, Eq, PartialEq)]
 pub enum TcpStreamError {
     Anomaly,
+    /// Connection is OK, but sides are inverted
+    Inverted,
     /// Packet received but connection has expired
     Expired,
     HandshakeFailed,
@@ -161,8 +163,6 @@ impl TcpStream {
                 }
                 if tcp_flags & TcpFlags::ACK != 0 {
                     warn!("First packet is SYN+ACK - missed SYN?");
-                    // XXX swap sides and set status
-                    // std::mem::swap(conn, rev_conn);
                     rev_conn.isn = ack - Wrapping(1);
                     rev_conn.status = TcpStatus::SynSent;
                     rev_conn.next_rel_seq = Wrapping(1);
@@ -171,7 +171,9 @@ impl TcpStream {
                     conn.last_rel_ack = Wrapping(1);
                     conn.next_rel_seq = Wrapping(1);
                     conn.status = TcpStatus::Listen;
-                    return Ok(None);
+                    // swap sides and tell analyzer to do the same for flow
+                    std::mem::swap(&mut self.client, &mut self.server);
+                    return Err(TcpStreamError::Inverted);
                 }
                 conn.isn = seq;
                 conn.next_rel_seq = Wrapping(1);
