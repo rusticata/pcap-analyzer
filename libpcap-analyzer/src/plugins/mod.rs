@@ -16,7 +16,6 @@ mod hexdump;
 mod ospf;
 #[cfg(feature = "plugin_rusticata")]
 mod rusticata;
-mod tcp_states;
 #[cfg(feature = "plugin_tls_stats")]
 mod tls_stats;
 
@@ -92,7 +91,6 @@ impl Default for PluginsFactory {
         v.push(Box::new(community_id::CommunityIDBuilder));
         #[cfg(feature = "plugins_debug")]
         v.push(Box::new(hexdump::HexDumpBuilder));
-        v.push(Box::new(tcp_states::TcpStatesBuilder));
         #[cfg(feature = "plugin_tls_stats")]
         v.push(Box::new(tls_stats::TlsStatsBuilder));
         #[cfg(feature = "plugin_rusticata")]
