@@ -40,7 +40,7 @@ impl Plugin for HexDump {
     ) -> PluginResult<'i> {
         let five_tuple = &pinfo.five_tuple;
         info!("HexDump::handle_l4");
-        debug!("    5t: {}", five_tuple);
+        debug!("    5-t: {}", five_tuple);
         debug!("    to_server: {}", pinfo.to_server);
         debug!("    l3_type: 0x{:x}", pinfo.l3_type);
         debug!("    l4_data_len: {}", pinfo.l4_data.len());

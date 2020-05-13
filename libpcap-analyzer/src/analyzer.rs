@@ -522,7 +522,7 @@ fn handle_l4_tcp(
     // XXX begin copy/paste of handle_l4_common
     let five_tuple =
         FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port, l3_info.l4_proto);
-    trace!("5t: {}", five_tuple);
+    trace!("5-t: {}", five_tuple);
     let now = packet.ts;
 
     let flow_id = {
@@ -860,7 +860,7 @@ fn handle_l4_common(
 ) -> Result<(), Error> {
     let five_tuple =
         FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port, l3_info.l4_proto);
-    trace!("5t: {}", five_tuple);
+    trace!("5-t: {}", five_tuple);
     let now = packet.ts;
 
     let flow_id = {
