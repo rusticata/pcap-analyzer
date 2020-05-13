@@ -37,6 +37,7 @@ pub struct TcpSegment {
     pub pcap_index: usize,
 }
 
+#[derive(Debug)]
 pub struct TcpPeer {
     /// Initial Seq number (absolute)
     isn: Wrapping<u32>,
@@ -204,14 +205,32 @@ impl TcpStream {
                 self.status = TcpStatus::SynSent;
                 conn.status = TcpStatus::SynSent;
                 rev_conn.status = TcpStatus::Listen;
+                // do we have data ?
+                if !tcp.payload().is_empty() {
+                    warn!("Data in handshake SYN");
+                    // conn.next_rel_seq += Wrapping(tcp.payload().len() as u32);
+                    let segment = TcpSegment {
+                        rel_seq: seq - conn.isn,
+                        rel_ack: ack - rev_conn.isn,
+                        flags: tcp_flags,
+                        data: tcp.payload().to_vec(), // XXX data cloned here
+                        pcap_index,
+                    };
+                    queue_segment(&mut conn, segment);
+                }
             }
             // Server -- SYN+ACK --> Client
             TcpStatus::Listen => {
                 if tcp_flags != (TcpFlags::SYN | TcpFlags::ACK) {
                     // XXX ?
                 }
-                // XXX if plen != 0, add plen to 1 ?
-                if ack != rev_conn.isn + Wrapping(1) {
+                // if we had data in SYN, add its length
+                let next_rel_seq = if rev_conn.segments.is_empty() {
+                    Wrapping(1)
+                } else {
+                    Wrapping(1) + Wrapping(rev_conn.segments[0].data.len() as u32)
+                };
+                if ack != rev_conn.isn + next_rel_seq {
                     warn!("NEW/SYN-ACK: ack number is wrong");
                     return Err(TcpStreamError::HandshakeFailed);
                 }
@@ -222,6 +241,8 @@ impl TcpStream {
 
                 conn.status = TcpStatus::SynRcv;
                 self.status = TcpStatus::SynRcv;
+
+                // do not push data if we had some in SYN, it will be done after handshake succeeds
             }
             // Client -- ACK --> Server
             TcpStatus::SynSent => {
@@ -484,6 +505,7 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
     // }
     // trivial case: list is empty - just push segment
     if peer.segments.is_empty() {
+        trace!("Pushing segment (front)");
         peer.segments.push_front(segment);
         return;
     }
