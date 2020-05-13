@@ -225,7 +225,7 @@ impl TcpStream {
             }
             // Client -- ACK --> Server
             TcpStatus::SynSent => {
-                if tcp_flags != TcpFlags::ACK {
+                if tcp_flags & TcpFlags::ACK == 0 {
                     // can be a disordered handshake (SA before S)
                     if tcp_flags == TcpFlags::SYN && seq + Wrapping(1) == rev_conn.ian {
                         trace!("Likely received SA before S - ignoring");
@@ -242,6 +242,18 @@ impl TcpStream {
                 rev_conn.status = TcpStatus::Established;
                 rev_conn.last_rel_ack = Wrapping(1);
                 self.status = TcpStatus::Established;
+                // do we have data ?
+                if !tcp.payload().is_empty() {
+                    // warn!("Data in handshake ACK");
+                    let segment = TcpSegment {
+                        rel_seq: seq - conn.isn,
+                        rel_ack: ack - rev_conn.isn,
+                        flags: tcp_flags,
+                        data: tcp.payload().to_vec(), // XXX data cloned here
+                        pcap_index,
+                    };
+                    queue_segment(&mut conn, segment);
+                }
             }
             _ => unreachable!(),
         }
