@@ -840,7 +840,9 @@ impl TcpStreamReassembly {
         trace!("to_server: {}", to_server);
 
         // check time delay with previous packet before updating
-        if flow.last_seen - stream.last_seen_ts > self.timeout {
+        if stream.last_seen_ts > flow.last_seen {
+            warn!("stream is in the future ?");
+        } else if flow.last_seen - stream.last_seen_ts > self.timeout {
             warn!("TCP stream received packet after timeout");
             stream.expire();
             return Err(TcpStreamError::Expired);
