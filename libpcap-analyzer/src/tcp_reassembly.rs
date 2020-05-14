@@ -381,8 +381,10 @@ impl TcpStream {
         let tcp_flags = tcp.get_flags();
         let rel_seq = Wrapping(tcp.get_sequence()) - origin.isn;
         let rel_ack = Wrapping(tcp.get_acknowledgement()) - destination.isn;
+        let has_ack = tcp_flags & TcpFlags::ACK != 0;
+        let has_fin = tcp_flags & TcpFlags::FIN != 0;
 
-        let ret = if tcp_flags & TcpFlags::ACK != 0 {
+        let ret = if has_ack {
             debug!("ACKing segments up to {}", rel_ack);
             send_peer_segments(destination, origin, rel_ack)
         } else {
@@ -427,26 +429,28 @@ impl TcpStream {
 
         match origin.status {
             TcpStatus::Established => {
-                if tcp_flags & TcpFlags::FIN == 0 {
-                    warn!("Not a FIN");
-                }
+                // we know there is a FIN (tested in TcpStreamReassembly::update)
                 origin.status = TcpStatus::FinWait1;
                 destination.status = TcpStatus::CloseWait; // we are not sure it was received
             }
             TcpStatus::CloseWait => {
-                if tcp_flags & TcpFlags::FIN == 0 {
-                    warn!("Origin should have sent a FIN");
-                }
-                origin.status = TcpStatus::LastAck;
-                if tcp_flags & TcpFlags::ACK != 0 {
-                    destination.status = TcpStatus::TimeWait;
+                if !has_fin {
+                    // if only an ACK, do nothing and stay in CloseWait status
+                    if !has_ack {
+                        warn!("Origin should have sent a FIN and/or ACK");
+                    }
                 } else {
-                    destination.status = TcpStatus::Closing;
+                    origin.status = TcpStatus::LastAck;
+                    if has_ack {
+                        destination.status = TcpStatus::TimeWait;
+                    } else {
+                        destination.status = TcpStatus::Closing;
+                    }
                 }
             }
             TcpStatus::TimeWait => {
-                // only an ACK should be sent (XXX nothing else)
-                if tcp_flags & TcpFlags::ACK != 0 {
+                // only an ACK should be sent (XXX nothing else, maybe PSH)
+                if has_ack {
                     // this is the end!
                     origin.status = TcpStatus::Closed;
                     destination.status = TcpStatus::Closed;
