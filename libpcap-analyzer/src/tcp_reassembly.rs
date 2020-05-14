@@ -328,9 +328,11 @@ impl TcpStream {
         let plen = tcp.payload().len();
 
         trace!("EST: plen={}", plen);
-        debug!(
+        trace!(
             "    Tcp rel seq {} ack {} next seq {}",
-            rel_seq, rel_ack, origin.next_rel_seq
+            rel_seq,
+            rel_ack,
+            origin.next_rel_seq
         );
 
         if tcp_flags & TcpFlags::ACK == 0 && tcp.get_acknowledgement() != 0 {
@@ -351,12 +353,12 @@ impl TcpStream {
         };
         queue_segment(&mut origin, segment);
 
-        debug!("  segments count: {}", origin.segments.len());
+        trace!("  segments count: {}", origin.segments.len());
         // DEBUG
         for (n, s) in origin.segments.iter().enumerate() {
-            debug!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
+            trace!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
         }
-        debug!(
+        trace!(
             "  PEER segments count (before ACK): {}",
             destination.segments.len()
         );
@@ -390,9 +392,10 @@ impl TcpStream {
 
         // origin.next_seq = origin.next_seq.wrapping_add(plen as u32);
 
-        debug!(
+        trace!(
             "    PEER EST rel next seq {} last_ack {}",
-            destination.next_rel_seq, destination.last_rel_ack,
+            destination.next_rel_seq,
+            destination.last_rel_ack,
         );
 
         Ok(ret)
@@ -417,7 +420,7 @@ impl TcpStream {
         let has_fin = tcp_flags & TcpFlags::FIN != 0;
 
         let ret = if has_ack {
-            debug!("ACKing segments up to {}", rel_ack);
+            trace!("ACKing segments up to {}", rel_ack);
             send_peer_segments(destination, origin, rel_ack)
         } else {
             if tcp.get_acknowledgement() != 0 {
@@ -432,18 +435,18 @@ impl TcpStream {
         };
         if tcp_flags & TcpFlags::RST != 0 {
             // if we get a RST, check the sequence number and remove matching segments
-            debug!("RST received. rel_seq: {}", rel_seq);
-            debug!(
-                "{} remaining (undelivered) segments DESTINATION",
-                destination.segments.len()
-            );
-            for (n, s) in destination.segments.iter().enumerate() {
-                debug!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
-            }
+            // trace!("RST received. rel_seq: {}", rel_seq);
+            // trace!(
+            //     "{} remaining (undelivered) segments DESTINATION",
+            //     destination.segments.len()
+            // );
+            // for (n, s) in destination.segments.iter().enumerate() {
+            //     trace!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
+            // }
             // remove queued segments up to rel_seq
             destination.segments.retain(|s| s.rel_ack != rel_seq);
-            debug!(
-                "{} remaining (undelivered) segments DESTINATION after removal",
+            trace!(
+                "RST: {} remaining (undelivered) segments DESTINATION after removal",
                 destination.segments.len()
             );
             origin.status = TcpStatus::Closed; // XXX except if ACK ?
@@ -508,13 +511,13 @@ impl TcpStream {
             }
         }
 
-        debug!(
+        trace!(
             "TCP connection closing, {} remaining (undelivered) segments",
             origin.segments.len()
         );
         // DEBUG
         for (n, s) in origin.segments.iter().enumerate() {
-            debug!("  s[{}]: plen={}", n, s.data.len());
+            trace!("  s[{}]: plen={}", n, s.data.len());
         }
 
         // TODO what now?
@@ -669,9 +672,12 @@ fn send_peer_segments(
     destination: &mut TcpPeer,
     rel_ack: Wrapping<u32>,
 ) -> Option<Vec<TcpSegment>> {
-    debug!(
+    trace!(
         "Trying to send segments for {}:{} up to {} (last ack: {})",
-        origin.addr, origin.port, rel_ack, origin.last_rel_ack
+        origin.addr,
+        origin.port,
+        rel_ack,
+        origin.last_rel_ack
     );
     if rel_ack == origin.last_rel_ack {
         trace!("re-acking last data, doing nothing");
@@ -700,7 +706,8 @@ fn send_peer_segments(
             );
             trace!(
                 "  origin.next_rel_seq {} ack {}",
-                origin.next_rel_seq, rel_ack
+                origin.next_rel_seq,
+                rel_ack
             );
             if origin.next_rel_seq > rel_ack {
                 warn!("next_seq > ack - partial ACK ?");
@@ -919,5 +926,5 @@ fn debug_print_tcp_flags(tcp_flags: u16) {
         s += "P"
     }
     s += "]";
-    debug!("{}", s);
+    trace!("{}", s);
 }
