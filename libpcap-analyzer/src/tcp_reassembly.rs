@@ -37,6 +37,35 @@ pub struct TcpSegment {
     pub pcap_index: usize,
 }
 
+impl TcpSegment {
+    /// Return the size of the overlapping area if `self` (as left) overlaps on `right`
+    pub fn overlap_size(&self, right: &TcpSegment) -> Option<usize> {
+        let next_seq = self.rel_seq + Wrapping(self.data.len() as u32);
+        if next_seq > right.rel_seq {
+            let overlap_size = (next_seq - right.rel_seq).0 as usize;
+            Some(overlap_size)
+        } else {
+            None
+        }
+    }
+
+    /// Splits the segment into two at the given offset.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `offset > self.data.len()`
+    pub fn split_off(&mut self, offset: usize) -> TcpSegment {
+        debug_assert!(offset < self.data.len());
+        let remaining = self.data.split_off(offset);
+        let rel_seq = self.rel_seq + Wrapping(offset as u32);
+        TcpSegment {
+            data: remaining,
+            rel_seq,
+            ..*self
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct TcpPeer {
     /// Initial Seq number (absolute)
@@ -550,8 +579,29 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
                 warn!("Missing segment on left of incoming segment");
             }
             Ordering::Less => {
-                // overlap
+                // Left overlap
                 warn!("Segment with left overlap");
+                // let overlap_size = (next_seq - segment.rel_seq).0 as usize;
+                // debug_assert!(overlap_size <= s.data.len());
+                // let overlap_start = s.data.len() - overlap_size;
+                // let overlap_left = &s.data[overlap_start..];
+                // if overlap_left == &segment.data[..overlap_size] {
+                //     info!(
+                //         "TCP Segment with left overlap: area matches idx={}",
+                //         segment.pcap_index
+                //     );
+                //     trace!("Left overlap: removing {} bytes", overlap_size);
+                //     // remove overlapping area and fix offset
+                //     let new_data = segment.data.split_off(overlap_size);
+                //     segment.data = new_data;
+                //     segment.rel_seq += Wrapping(overlap_size as u32);
+                // } else {
+                //     warn!(
+                //         "TCP Segment with left overlap: area differs idx={}",
+                //         segment.pcap_index
+                //     );
+                //     // XXX keep new ?
+                // }
             }
         }
     }
@@ -561,13 +611,40 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
         match right_next_seq.cmp(&s.rel_seq) {
             Ordering::Equal => (),
             Ordering::Greater => {
+                // Right overlap
                 warn!("Segment with right overlap");
+                // let overlap_size = (right_next_seq - s.rel_seq).0 as usize;
+                // debug_assert!(overlap_size <= s.data.len());
+                // let overlap_start = segment.data.len() - overlap_size;
+                // let overlap = &segment.data[overlap_start..];
+                // let right_overlap = &s.data[..overlap_size];
+                // if overlap == right_overlap {
+                //     info!(
+                //         "TCP Segment with right overlap: area matches idx={}",
+                //         segment.pcap_index
+                //     );
+                //     trace!("Right overlap: removing {} bytes", overlap_size);
+                //     segment.data.truncate(overlap_start);
+                // } else {
+                //     warn!(
+                //         "TCP Segment with right overlap: area differs idx={}",
+                //         segment.pcap_index
+                //     );
+                //     // XXX keep new ?
+                // }
             }
             Ordering::Less => {
-                trace!("hole remaining on right of incoming segment");
+                trace!(
+                    "hole remaining on right of incoming segment idx={}",
+                    segment.pcap_index
+                );
             }
         }
     }
+    // if segment.data.is_empty() && segment.flags & TcpFlags::FIN == 0 {
+    //     trace!("No data after overlap, NOT queuing segment");
+    //     return;
+    // }
     trace!("Pushing segment");
     match opt_pos {
         Some(idx) => peer.segments.insert(idx, segment),
@@ -595,22 +672,22 @@ fn send_peer_segments(
 
     // DEBUG
     for (n, s) in origin.segments.iter().enumerate() {
-        debug!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
+        trace!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
     }
 
-    // TODO check consistency of segment ACK numbers + order and/or missing fragments and/or overlap
+    // check consistency of segment ACK numbers + order and/or missing fragments and/or overlap
 
     let mut acked = Vec::new();
 
     #[allow(clippy::while_let_loop)]
     loop {
         if let Some(segment) = origin.segments.front() {
-            debug!(
+            trace!(
                 "segment: rel_seq={}  len={}",
                 segment.rel_seq,
                 segment.data.len()
             );
-            debug!(
+            trace!(
                 "  origin.next_rel_seq {} ack {}",
                 origin.next_rel_seq, rel_ack
             );
@@ -639,20 +716,13 @@ fn send_peer_segments(
 
         if rel_ack < segment.rel_seq + Wrapping(segment.data.len() as u32) {
             // warn!("ACK lower then seq + segment size - SACK?");
-            debug!("ACK for part of buffer");
+            trace!("ACK for part of buffer");
             // split data and insert new dummy segment
-            debug!("rel_ack {} segment.rel_seq {}", rel_ack, segment.rel_seq);
-            debug!("segment data len {}", segment.data.len());
+            trace!("rel_ack {} segment.rel_seq {}", rel_ack, segment.rel_seq);
+            trace!("segment data len {}", segment.data.len());
             let acked_len = (rel_ack - segment.rel_seq).0 as usize;
-            let remaining = segment.data.split_off(acked_len);
-            let rel_seq = segment.rel_seq + Wrapping(acked_len as u32);
-            let new_segment = TcpSegment {
-                data: remaining,
-                rel_ack,
-                rel_seq,
-                ..segment
-            };
-            debug!(
+            let new_segment = segment.split_off(acked_len);
+            trace!(
                 "insert new segment from {} len {}",
                 new_segment.rel_ack,
                 new_segment.data.len()
@@ -661,6 +731,34 @@ fn send_peer_segments(
         }
 
         adjust_seq_numbers(origin, destination, &segment);
+        if !segment.data.is_empty() {
+            // check if overlap
+            // XXX what if several segments overlap the same area?
+            // XXX    currently, `segment` will be dropped, so the last segment remains
+            if let Some(next) = origin.segments.front() {
+                if let Some(overlap_size) = segment.overlap_size(&next) {
+                    warn!("segments overlaps next candidate");
+                    let overlapping_area = segment.split_off(segment.data.len() - overlap_size);
+                    // XXX compare zones
+                    if overlapping_area.data[..] != next.data[..overlap_size] {
+                        warn!("Overlapping area differs!");
+                        unimplemented!();
+                    }
+                    // strategy 1: just drop it
+                    trace!(
+                        "Dropping part of segment: rel_seq={} len={}",
+                        overlapping_area.rel_seq,
+                        overlapping_area.data.len(),
+                    );
+                    drop(overlapping_area);
+                }
+            }
+            trace!(
+                "ACKed: pushing segment: rel_seq={} len={}",
+                segment.rel_seq,
+                segment.data.len(),
+            );
+        }
         if !segment.data.is_empty() {
             acked.push(segment);
         }
@@ -681,16 +779,19 @@ fn send_peer_segments(
 
 fn adjust_seq_numbers(origin: &mut TcpPeer, _destination: &mut TcpPeer, segment: &TcpSegment) {
     if !segment.data.is_empty() {
-        origin.next_rel_seq += Wrapping(segment.data.len() as u32);
+        // adding length is wrong in case of overlap
+        // origin.next_rel_seq += Wrapping(segment.data.len() as u32);
+        origin.next_rel_seq = segment.rel_seq + Wrapping(segment.data.len() as u32);
     }
 
     if segment.flags & TcpFlags::FIN != 0 {
-        trace!("Segment has FIN");
+        // trace!("Segment has FIN");
         origin.next_rel_seq += Wrapping(1);
     }
 
     if segment.flags & TcpFlags::RST != 0 {
-        trace!("Segment has RST");
+        trace!("Segment has RST???");
+        unimplemented!();
         // origin.status = TcpStatus::FinWait1;
         // XXX destination.status
         // XXX stream.status
