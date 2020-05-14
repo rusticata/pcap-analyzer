@@ -333,10 +333,13 @@ impl TcpStream {
             rel_seq, rel_ack, origin.next_rel_seq
         );
 
-        // TODO check if closing connection
-
-        if tcp_flags & TcpFlags::ACK == 0 {
-            warn!("EST/ packet without ACK");
+        if tcp_flags & TcpFlags::ACK == 0 && tcp.get_acknowledgement() != 0 {
+            warn!(
+                "EST/ packet without ACK (broken TCP implementation or attack) idx={}",
+                pcap_index
+            );
+            // ignore segment
+            return Ok(None);
         }
 
         let segment = TcpSegment {
@@ -417,6 +420,14 @@ impl TcpStream {
             debug!("ACKing segments up to {}", rel_ack);
             send_peer_segments(destination, origin, rel_ack)
         } else {
+            if tcp.get_acknowledgement() != 0 {
+                warn!(
+                    "EST/ packet without ACK (broken TCP implementation or attack) idx={}",
+                    pcap_index
+                );
+                // ignore segment
+                return Ok(None);
+            }
             None
         };
         if tcp_flags & TcpFlags::RST != 0 {
