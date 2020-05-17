@@ -561,48 +561,61 @@ fn handle_l4_tcp(
         .tcp_defrag
         .update(&flow, &tcp, to_server, ctx.pcap_index);
     match res {
-        Ok(None) => (),
         Ok(Some(segments)) => {
-            for segment in &segments {
-                // send to upper layer and call plugins
-                // since this is ACK'ed data, data origin is the current destination
-                let t5 = five_tuple.get_reverse();
-                let origin_addr = t5.src;
-                let origin_port = t5.src_port;
-                trace!(
-                    "Sending segment from {}:{} (plen={}, pcap_index={})",
-                    origin_addr,
-                    origin_port,
-                    segment.data.len(),
-                    segment.pcap_index,
-                );
-                // XXX build a dummy packet
-                let l4_payload = &segment.data;
-                let dummy_packet = Packet {
-                    interface: packet.interface,
-                    caplen: 0,
-                    origlen: 0,
-                    ts: packet.ts, // this is the timestamp of ACK, not data
-                    link_type: packet.link_type,
-                    data: PacketData::L4(t5.proto, &[]),
-                    pcap_index: segment.pcap_index,
-                };
-                let packet_info = PacketInfo {
-                    five_tuple: &t5,
-                    to_server: !to_server,
-                    l3_type: l3_info.three_tuple.proto,
-                    l4_data: &[], // reassembled, so no L4 data
-                    l4_type: t5.proto,
-                    l4_payload: Some(l4_payload),
-                    flow: Some(&flow),
-                    pcap_index: segment.pcap_index,
-                };
-                // let start = ::std::time::Instant::now();
-                run_plugins_v2_transport(&dummy_packet, &ctx, &packet_info, analyzer)?;
-                // let elapsed = start.elapsed();
-                // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
-            }
+            // merge into one buffer
+            let mut new_vec = Vec::new();
+            let buffer = match segments.len() {
+                0 => {
+                    return Ok(());
+                }
+                1 => &segments[0].data,
+                _ => {
+                    segments
+                        .iter()
+                        .for_each(|s| new_vec.extend_from_slice(&s.data));
+                    &new_vec
+                }
+            };
+            let pcap_index = segments[0].pcap_index;
+            // send to upper layer and call plugins
+            // since this is ACK'ed data, data origin is the current destination
+            let t5 = five_tuple.get_reverse();
+            let origin_addr = t5.src;
+            let origin_port = t5.src_port;
+            trace!(
+                "Sending reassembled data from {}:{} (len={}, first pcap_index={})",
+                origin_addr,
+                origin_port,
+                buffer.len(),
+                pcap_index,
+            );
+            // XXX build a dummy packet
+            let l4_payload = buffer;
+            let dummy_packet = Packet {
+                interface: packet.interface,
+                caplen: 0,
+                origlen: 0,
+                ts: packet.ts, // this is the timestamp of ACK, not data
+                link_type: packet.link_type,
+                data: PacketData::L4(t5.proto, &[]),
+                pcap_index,
+            };
+            let packet_info = PacketInfo {
+                five_tuple: &t5,
+                to_server: !to_server,
+                l3_type: l3_info.three_tuple.proto,
+                l4_data: &[], // reassembled, so no L4 data
+                l4_type: t5.proto,
+                l4_payload: Some(l4_payload),
+                flow: Some(&flow),
+                pcap_index,
+            };
+            // let start = ::std::time::Instant::now();
+            run_plugins_v2_transport(&dummy_packet, &ctx, &packet_info, analyzer)?;
+            // let elapsed = start.elapsed();
+            // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
         }
+        Ok(_) => (),
         Err(TcpStreamError::Inverted) => {
             analyzer.flows.entry(flow_id).and_modify(|f| {
                 f.five_tuple = f.five_tuple.get_reverse();
