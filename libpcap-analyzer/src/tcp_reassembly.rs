@@ -3,6 +3,7 @@ use pnet_macros_support::packet::Packet as PnetPacket;
 use pnet_packet::tcp::{TcpFlags, TcpPacket};
 use std::cmp::Ordering;
 use std::collections::{HashMap, VecDeque};
+use std::fmt;
 use std::net::IpAddr;
 use std::num::Wrapping;
 
@@ -66,7 +67,6 @@ impl TcpSegment {
     }
 }
 
-#[derive(Debug)]
 pub struct TcpPeer {
     /// Initial Seq number (absolute)
     isn: Wrapping<u32>,
@@ -325,9 +325,8 @@ impl TcpStream {
         let rel_seq = Wrapping(tcp.get_sequence()) - origin.isn;
         let rel_ack = Wrapping(tcp.get_acknowledgement()) - destination.isn;
         let tcp_flags = tcp.get_flags();
-        let plen = tcp.payload().len();
 
-        trace!("EST: plen={}", plen);
+        trace!("EST: payload len={}", tcp.payload().len());
         trace!(
             "    Tcp rel seq {} ack {} next seq {}",
             rel_seq,
@@ -353,44 +352,14 @@ impl TcpStream {
         };
         queue_segment(&mut origin, segment);
 
-        trace!("  segments count: {}", origin.segments.len());
-        // DEBUG
-        for (n, s) in origin.segments.iter().enumerate() {
-            trace!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
-        }
-        trace!(
-            "  PEER segments count (before ACK): {}",
-            destination.segments.len()
-        );
-
-        // TODO check for close request
-        // if tcp_flags & (TcpFlags::FIN | TcpFlags::RST) != 0 {
-        //     // XXX
-        //     warn!("Requesting end of connection");
-        //     self.handle_closing_connection(tcp, to_server);
-        // }
+        // trace!("Destination: {:?}", destination); // TODO to remove
 
         // if there is a ACK, check & send segments on the *other* side
         let ret = if tcp_flags & TcpFlags::ACK != 0 {
-            send_peer_segments(destination, origin, rel_ack)
+            send_peer_segments(destination, rel_ack)
         } else {
             None
         };
-
-        // if ack > destination.next_seq {
-        //     warn!("EST/data: ack number is wrong (missed packet?)");
-        //     warn!("  expected ack 0x{:x}", destination.next_seq);
-        //     warn!("  got ack 0x{:x}", ack);
-        //     return Ok(Fragment::Incomplete);
-        // }
-        // if ack < destination.next_seq {
-        //     trace!(
-        //         "TCP: partially ACKed data (expecting up to ACK {})",
-        //         destination.next_seq.wrapping_sub(destination.isn)
-        //     );
-        // }
-
-        // origin.next_seq = origin.next_seq.wrapping_add(plen as u32);
 
         trace!(
             "    PEER EST rel next seq {} last_ack {}",
@@ -421,7 +390,7 @@ impl TcpStream {
 
         let ret = if has_ack {
             trace!("ACKing segments up to {}", rel_ack);
-            send_peer_segments(destination, origin, rel_ack)
+            send_peer_segments(destination, rel_ack)
         } else {
             if tcp.get_acknowledgement() != 0 {
                 warn!(
@@ -667,70 +636,58 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
     // peer.insert_sorted(segment);
 }
 
-fn send_peer_segments(
-    origin: &mut TcpPeer,
-    destination: &mut TcpPeer,
-    rel_ack: Wrapping<u32>,
-) -> Option<Vec<TcpSegment>> {
+fn send_peer_segments(peer: &mut TcpPeer, rel_ack: Wrapping<u32>) -> Option<Vec<TcpSegment>> {
     trace!(
         "Trying to send segments for {}:{} up to {} (last ack: {})",
-        origin.addr,
-        origin.port,
+        peer.addr,
+        peer.port,
         rel_ack,
-        origin.last_rel_ack
+        peer.last_rel_ack
     );
-    if rel_ack == origin.last_rel_ack {
+    if rel_ack == peer.last_rel_ack {
         trace!("re-acking last data, doing nothing");
         return None;
     }
-    if rel_ack < origin.last_rel_ack {
-        warn!("ack < last_ack");
+    if peer.segments.is_empty() {
+        return None;
     }
 
-    // DEBUG
-    for (n, s) in origin.segments.iter().enumerate() {
-        trace!("  s[{}]: rel_seq={} plen={}", n, s.rel_seq, s.data.len());
+    // is ACK acceptable?
+    if rel_ack < peer.last_rel_ack {
+        warn!("ACK request for already ACKed data (ack < last_ack)");
+        return None;
     }
+
+    trace!("Peer: {:?}", peer); // TODO to remove
 
     // check consistency of segment ACK numbers + order and/or missing fragments and/or overlap
 
     let mut acked = Vec::new();
 
-    #[allow(clippy::while_let_loop)]
-    loop {
-        if let Some(segment) = origin.segments.front() {
-            trace!(
-                "segment: rel_seq={}  len={}",
-                segment.rel_seq,
-                segment.data.len()
-            );
-            trace!(
-                "  origin.next_rel_seq {} ack {}",
-                origin.next_rel_seq,
-                rel_ack
-            );
-            if origin.next_rel_seq > rel_ack {
-                warn!("next_seq > ack - partial ACK ?");
-                break;
-            }
-            if rel_ack == segment.rel_seq {
-                trace!("got a segment, not yet acked: not sending");
-                break;
-            }
-        } else {
-            // warn!("No data segment");
+    while !peer.segments.is_empty() {
+        let segment = &peer.segments[0];
+        trace!(
+            "segment: rel_seq={}  len={}",
+            segment.rel_seq,
+            segment.data.len()
+        );
+        trace!(
+            "  origin.next_rel_seq {} ack {}",
+            peer.next_rel_seq,
+            rel_ack
+        );
+        // if origin.next_rel_seq > rel_ack {
+        //     warn!("next_seq > ack - partial ACK ?");
+        //     unreachable!(); // XXX do we care about that case?
+        //                     // break;
+        // }
+        if rel_ack <= segment.rel_seq {
+            // if packet is in the past (strictly less), we don't care
             break;
         }
 
-        let mut segment = match origin.segments.pop_front() {
-            Some(s) => s,
-            None => return Some(acked),
-        };
-
-        if rel_ack < segment.rel_seq {
-            warn!("TCP ACK of unseen segment");
-            continue;
-        }
+        // safety: segments is just tested above
+        let mut segment = peer.segments.pop_front().unwrap();
 
         if rel_ack < segment.rel_seq + Wrapping(segment.data.len() as u32) {
             // warn!("ACK lower then seq + segment size - SACK?");
@@ -745,57 +702,63 @@ fn send_peer_segments(
                 new_segment.rel_ack,
                 new_segment.data.len()
             );
-            origin.insert_sorted(new_segment);
+            peer.insert_sorted(new_segment);
         }
 
-        adjust_seq_numbers(origin, destination, &segment);
-        if !segment.data.is_empty() {
-            // check if overlap
-            // XXX what if several segments overlap the same area?
-            // XXX    currently, `segment` will be dropped, so the last segment remains
-            if let Some(next) = origin.segments.front() {
-                if let Some(overlap_size) = segment.overlap_size(&next) {
-                    warn!("segments overlaps next candidate");
-                    let overlapping_area = segment.split_off(segment.data.len() - overlap_size);
-                    // XXX compare zones
-                    if overlapping_area.data[..] != next.data[..overlap_size] {
-                        warn!("Overlapping area differs!");
-                        unimplemented!();
-                    }
-                    // strategy 1: just drop it
-                    trace!(
-                        "Dropping part of segment: rel_seq={} len={}",
-                        overlapping_area.rel_seq,
-                        overlapping_area.data.len(),
-                    );
-                    drop(overlapping_area);
-                }
-            }
-            trace!(
-                "ACKed: pushing segment: rel_seq={} len={}",
-                segment.rel_seq,
-                segment.data.len(),
-            );
-        }
+        adjust_seq_numbers(peer, &segment);
+        handle_overlap(peer, &mut segment);
+
+        trace!(
+            "ACKed: pushing segment: rel_seq={} len={}",
+            segment.rel_seq,
+            segment.data.len(),
+        );
         if !segment.data.is_empty() {
             acked.push(segment);
         }
     }
 
-    if origin.next_rel_seq != rel_ack {
+    if peer.next_rel_seq != rel_ack {
         // missed segments, or maybe received FIN ?
         warn!(
             "TCP ACKed unseen segment next_seq {} != ack {} (Missed segments?)",
-            origin.next_rel_seq, rel_ack
+            peer.next_rel_seq, rel_ack
         );
         // TODO notify upper layer for missing data
     }
 
-    origin.last_rel_ack = rel_ack;
+    peer.last_rel_ack = rel_ack;
     Some(acked)
 }
 
-fn adjust_seq_numbers(origin: &mut TcpPeer, _destination: &mut TcpPeer, segment: &TcpSegment) {
+// check for overlap
+// XXX what if several segments overlap the same area?
+// XXX    currently, `segment` will be dropped, so the last segment remains
+fn handle_overlap(peer: &mut TcpPeer, segment: &mut TcpSegment) {
+    if let Some(next) = peer.segments.front() {
+        if let Some(overlap_size) = segment.overlap_size(&next) {
+            warn!("segments overlaps next candidate");
+            let overlapping_area = segment.split_off(segment.data.len() - overlap_size);
+            // XXX compare zones
+            if overlapping_area.data[..] != next.data[..overlap_size] {
+                warn!(
+                    "Overlapping area differs! idx={} vs idx={}",
+                    segment.pcap_index, next.pcap_index
+                );
+                unimplemented!();
+            }
+            // strategy 1: just drop it
+            trace!(
+                "Dropping part of segment: rel_seq={} len={}",
+                overlapping_area.rel_seq,
+                overlapping_area.data.len(),
+            );
+            drop(overlapping_area);
+        }
+    }
+}
+
+fn adjust_seq_numbers(origin: &mut TcpPeer, segment: &TcpSegment) {
     if !segment.data.is_empty() {
         // adding length is wrong in case of overlap
         // origin.next_rel_seq += Wrapping(segment.data.len() as u32);
@@ -805,14 +768,6 @@ fn adjust_seq_numbers(origin: &mut TcpPeer, _destination: &mut TcpPeer, segment:
     if segment.flags & TcpFlags::FIN != 0 {
         // trace!("Segment has FIN");
         origin.next_rel_seq += Wrapping(1);
-    }
-
-    if segment.flags & TcpFlags::RST != 0 {
-        trace!("Segment has RST???");
-        unimplemented!();
-        // origin.status = TcpStatus::FinWait1;
-        // XXX destination.status
-        // XXX stream.status
     }
 }
 
@@ -841,7 +796,7 @@ impl TcpStreamReassembly {
 
         // check time delay with previous packet before updating
         if stream.last_seen_ts > flow.last_seen {
-            warn!("stream is in the future ?");
+            info!("packet received in past of stream idx={}", pcap_index);
         } else if flow.last_seen - stream.last_seen_ts > self.timeout {
             warn!("TCP stream received packet after timeout");
             stream.expire();
@@ -908,25 +863,48 @@ pub(crate) fn finalize_tcp_streams(analyzer: &mut crate::analyzer::Analyzer) {
 }
 
 fn debug_print_tcp_flags(tcp_flags: u16) {
-    let mut s = String::from("tcp_flags: [");
-    if tcp_flags & TcpFlags::SYN != 0 {
-        s += "S"
+    if log::Level::Debug <= log::STATIC_MAX_LEVEL {
+        let mut s = String::from("tcp_flags: [");
+        if tcp_flags & TcpFlags::SYN != 0 {
+            s += "S"
+        }
+        if tcp_flags & TcpFlags::FIN != 0 {
+            s += "F"
+        }
+        if tcp_flags & TcpFlags::RST != 0 {
+            s += "R"
+        }
+        if tcp_flags & TcpFlags::URG != 0 {
+            s += "U"
+        }
+        if tcp_flags & TcpFlags::PSH != 0 {
+            s += "P"
+        }
+        if tcp_flags & TcpFlags::ACK != 0 {
+            s += "A"
+        }
+        s += "]";
+        trace!("{}", s);
     }
-    if tcp_flags & TcpFlags::FIN != 0 {
-        s += "F"
+}
+
+impl fmt::Debug for TcpPeer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Peer: {}:{}", self.addr, self.port)?;
+        writeln!(f, "  status: {:?}", self.status)?;
+        writeln!(f, "  isn: 0x{:x}  ian: 0x{:x}", self.isn, self.ian)?;
+        writeln!(f, "  next_rel_seq: {}", self.next_rel_seq)?;
+        writeln!(f, "  last_rel_ack: {}", self.last_rel_ack)?;
+        writeln!(f, "  #segments: {}", self.segments.len())?;
+        for (n, s) in self.segments.iter().enumerate() {
+            writeln!(
+                f,
+                "    s[{}]: rel_seq={} len={}",
+                n,
+                s.rel_seq,
+                s.data.len()
+            )?;
+        }
+        Ok(())
     }
-    if tcp_flags & TcpFlags::ACK != 0 {
-        s += "A"
-    }
-    if tcp_flags & TcpFlags::RST != 0 {
-        s += "R"
-    }
-    if tcp_flags & TcpFlags::URG != 0 {
-        s += "U"
-    }
-    if tcp_flags & TcpFlags::PSH != 0 {
-        s += "P"
-    }
-    s += "]";
-    trace!("{}", s);
 }
