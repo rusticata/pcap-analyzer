@@ -171,13 +171,13 @@ impl TcpStream {
         let ack = Wrapping(tcp.get_acknowledgement());
         let tcp_flags = tcp.get_flags();
 
-        let (mut conn, mut rev_conn) = if to_server {
+        let (mut src, mut dst) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
             (&mut self.server, &mut self.client)
         };
 
-        match conn.status {
+        match src.status {
             // Client -- SYN --> Server
             TcpStatus::Closed => {
                 if tcp_flags & TcpFlags::RST != 0 {
@@ -191,14 +191,14 @@ impl TcpStream {
                     // test is ACK + data, and set established if possible
                     if tcp_flags & TcpFlags::ACK != 0 {
                         trace!("Trying to catch connection on the fly");
-                        conn.isn = seq;
-                        conn.ian = ack;
-                        conn.next_rel_seq = Wrapping(0);
-                        conn.status = TcpStatus::Established;
-                        rev_conn.isn = ack;
-                        rev_conn.ian = seq;
-                        rev_conn.status = TcpStatus::Established;
-                        rev_conn.last_rel_ack = Wrapping(0);
+                        src.isn = seq;
+                        src.ian = ack;
+                        src.next_rel_seq = Wrapping(0);
+                        src.status = TcpStatus::Established;
+                        dst.isn = ack;
+                        dst.ian = seq;
+                        dst.status = TcpStatus::Established;
+                        dst.last_rel_ack = Wrapping(0);
                         self.status = TcpStatus::Established;
                         // queue segment (even if FIN, to get correct seq numbers)
                         let segment = TcpSegment {
@@ -208,7 +208,7 @@ impl TcpStream {
                             data: tcp.payload().to_vec(), // XXX data cloned here
                             pcap_index,
                         };
-                        queue_segment(&mut conn, segment);
+                        queue_segment(&mut src, segment);
 
                         return Ok(None);
                     }
@@ -216,36 +216,36 @@ impl TcpStream {
                 }
                 if tcp_flags & TcpFlags::ACK != 0 {
                     warn!("First packet is SYN+ACK - missed SYN?");
-                    rev_conn.isn = ack - Wrapping(1);
-                    rev_conn.status = TcpStatus::SynSent;
-                    rev_conn.next_rel_seq = Wrapping(1);
-                    conn.isn = seq;
-                    conn.ian = ack;
-                    conn.last_rel_ack = Wrapping(1);
-                    conn.next_rel_seq = Wrapping(1);
-                    conn.status = TcpStatus::Listen;
+                    dst.isn = ack - Wrapping(1);
+                    dst.status = TcpStatus::SynSent;
+                    dst.next_rel_seq = Wrapping(1);
+                    src.isn = seq;
+                    src.ian = ack;
+                    src.last_rel_ack = Wrapping(1);
+                    src.next_rel_seq = Wrapping(1);
+                    src.status = TcpStatus::Listen;
                     // swap sides and tell analyzer to do the same for flow
                     std::mem::swap(&mut self.client, &mut self.server);
                     return Err(TcpStreamError::Inverted);
                 }
-                conn.isn = seq;
-                conn.next_rel_seq = Wrapping(1);
-                rev_conn.ian = seq;
+                src.isn = seq;
+                src.next_rel_seq = Wrapping(1);
+                dst.ian = seq;
                 self.status = TcpStatus::SynSent;
-                conn.status = TcpStatus::SynSent;
-                rev_conn.status = TcpStatus::Listen;
+                src.status = TcpStatus::SynSent;
+                dst.status = TcpStatus::Listen;
                 // do we have data ?
                 if !tcp.payload().is_empty() {
                     warn!("Data in handshake SYN");
                     // conn.next_rel_seq += Wrapping(tcp.payload().len() as u32);
                     let segment = TcpSegment {
-                        rel_seq: seq - conn.isn,
-                        rel_ack: ack - rev_conn.isn,
+                        rel_seq: seq - src.isn,
+                        rel_ack: ack - dst.isn,
                         flags: tcp_flags,
                         data: tcp.payload().to_vec(), // XXX data cloned here
                         pcap_index,
                     };
-                    queue_segment(&mut conn, segment);
+                    queue_segment(&mut src, segment);
                 }
             }
             // Server -- SYN+ACK --> Client
@@ -254,21 +254,21 @@ impl TcpStream {
                     // XXX ?
                 }
                 // if we had data in SYN, add its length
-                let next_rel_seq = if rev_conn.segments.is_empty() {
+                let next_rel_seq = if dst.segments.is_empty() {
                     Wrapping(1)
                 } else {
-                    Wrapping(1) + Wrapping(rev_conn.segments[0].data.len() as u32)
+                    Wrapping(1) + Wrapping(dst.segments[0].data.len() as u32)
                 };
-                if ack != rev_conn.isn + next_rel_seq {
+                if ack != dst.isn + next_rel_seq {
                     warn!("NEW/SYN-ACK: ack number is wrong");
                     return Err(TcpStreamError::HandshakeFailed);
                 }
-                conn.isn = seq;
-                conn.next_rel_seq = Wrapping(1);
-                rev_conn.ian = seq;
-                rev_conn.last_rel_ack = Wrapping(1);
+                src.isn = seq;
+                src.next_rel_seq = Wrapping(1);
+                dst.ian = seq;
+                dst.last_rel_ack = Wrapping(1);
 
-                conn.status = TcpStatus::SynRcv;
+                src.status = TcpStatus::SynRcv;
                 self.status = TcpStatus::SynRcv;
 
                 // do not push data if we had some in SYN, it will be done after handshake succeeds
@@ -276,34 +276,54 @@ impl TcpStream {
             // Client -- ACK --> Server
             TcpStatus::SynSent => {
                 if tcp_flags & TcpFlags::ACK == 0 {
-                    // can be a disordered handshake (SA before S)
-                    if tcp_flags == TcpFlags::SYN && seq + Wrapping(1) == rev_conn.ian {
-                        trace!("Likely received SA before S - ignoring");
-                        return Ok(None);
+                    if tcp_flags == TcpFlags::SYN {
+                        // can be a SYN resend
+                        if seq == src.isn && ack.0 == 0 {
+                            trace!("SYN resend - ignoring");
+                            return Ok(None);
+                        }
+                        // can be a disordered handshake (receive S after SA)
+                        if seq + Wrapping(1) == dst.ian {
+                            trace!("Likely received SA before S - ignoring");
+                            return Ok(None);
+                        }
                     }
                     warn!("Not an ACK");
                 }
                 // TODO check seq, ack
-                if ack != rev_conn.isn + Wrapping(1) {
+                if ack != dst.isn + Wrapping(1) {
                     warn!("NEW/ACK: ack number is wrong");
                     return Err(TcpStreamError::HandshakeFailed);
                 }
-                conn.status = TcpStatus::Established;
-                rev_conn.status = TcpStatus::Established;
-                rev_conn.last_rel_ack = Wrapping(1);
+                src.status = TcpStatus::Established;
+                dst.status = TcpStatus::Established;
+                dst.last_rel_ack = Wrapping(1);
                 self.status = TcpStatus::Established;
                 // do we have data ?
                 if !tcp.payload().is_empty() {
                     // warn!("Data in handshake ACK");
                     let segment = TcpSegment {
-                        rel_seq: seq - conn.isn,
-                        rel_ack: ack - rev_conn.isn,
+                        rel_seq: seq - src.isn,
+                        rel_ack: ack - dst.isn,
                         flags: tcp_flags,
                         data: tcp.payload().to_vec(), // XXX data cloned here
                         pcap_index,
                     };
-                    queue_segment(&mut conn, segment);
+                    queue_segment(&mut src, segment);
                 }
+            }
+            TcpStatus::SynRcv => {
+                // we received something while in SYN_RCV state - we should only have sent ACK
+                // this could be a SYN+ACK retransmit
+                if tcp_flags == TcpFlags::SYN | TcpFlags::ACK {
+                    // XXX compare SEQ numbers?
+                    // ignore
+                    return Ok(None);
+                }
+                warn!(
+                    "Received unexpected data in SYN_RCV state idx={}",
+                    pcap_index
+                );
             }
             _ => unreachable!(),
         }
