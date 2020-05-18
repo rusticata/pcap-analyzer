@@ -39,12 +39,12 @@ pub struct TcpSegment {
 }
 
 impl TcpSegment {
-    /// Return the size of the overlapping area if `self` (as left) overlaps on `right`
-    pub fn overlap_size(&self, right: &TcpSegment) -> Option<usize> {
+    /// Return the offset of the overlapping area if `self` (as left) overlaps on `right`
+    pub fn overlap_offset(&self, right: &TcpSegment) -> Option<usize> {
         let next_seq = self.rel_seq + Wrapping(self.data.len() as u32);
         if next_seq > right.rel_seq {
-            let overlap_size = (next_seq - right.rel_seq).0 as usize;
-            Some(overlap_size)
+            let overlap_offset = (right.rel_seq - self.rel_seq).0 as usize;
+            Some(overlap_offset)
         } else {
             None
         }
@@ -762,24 +762,35 @@ fn send_peer_segments(peer: &mut TcpPeer, rel_ack: Wrapping<u32>) -> Option<Vec<
 // XXX    currently, `segment` will be dropped, so the last segment remains
 fn handle_overlap(peer: &mut TcpPeer, segment: &mut TcpSegment) {
     if let Some(next) = peer.segments.front() {
-        if let Some(overlap_size) = segment.overlap_size(&next) {
-            warn!("segments overlaps next candidate");
-            let overlapping_area = segment.split_off(segment.data.len() - overlap_size);
-            // XXX compare zones
-            if overlapping_area.data[..] != next.data[..overlap_size] {
+        if let Some(overlap_offset) = segment.overlap_offset(&next) {
+            // strategy 1: find intersection and drop it
+            let mut remaining = None;
+            warn!("segments overlaps next candidate (offset={})", overlap_offset);
+            let mut overlapping_area = segment.split_off(overlap_offset);
+            // next segment can be smaller than current segment
+            if next.data.len() < overlapping_area.data.len() {
+                trace!("re-splitting segment");
+                let rem = overlapping_area.split_off(next.data.len());
+                remaining = Some(rem);
+            }
+            // compare zones
+            if overlapping_area.data[..] != next.data[..] {
                 warn!(
                     "Overlapping area differs! idx={} vs idx={}",
                     segment.pcap_index, next.pcap_index
                 );
-                unimplemented!();
+                // unimplemented!();
             }
-            // strategy 1: just drop it
             trace!(
                 "Dropping part of segment: rel_seq={} len={}",
                 overlapping_area.rel_seq,
                 overlapping_area.data.len(),
             );
             drop(overlapping_area);
+            if let Some(rem) = remaining {
+                trace!("re-inserting remaining data");
+                peer.insert_sorted(rem);
+            }
         }
     }
 }
