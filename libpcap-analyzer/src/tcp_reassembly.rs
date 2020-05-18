@@ -448,12 +448,18 @@ impl TcpStream {
             TcpStatus::CloseWait => {
                 if !has_fin {
                     // if only an ACK, do nothing and stay in CloseWait status
-                    if !has_ack {
+                    if has_ack {
+                        // debug!("destination status: {:?}", destination.status);
+                        if destination.status == TcpStatus::FinWait1 {
+                            destination.status = TcpStatus::FinWait2;
+                        }
+                    } else {
                         warn!("Origin should have sent a FIN and/or ACK");
                     }
                 } else {
                     origin.status = TcpStatus::LastAck;
-                    if has_ack {
+                    // debug!("destination status: {:?}", destination.status);
+                    if has_ack || destination.status == TcpStatus::FinWait2 {
                         destination.status = TcpStatus::TimeWait;
                     } else {
                         destination.status = TcpStatus::Closing;
