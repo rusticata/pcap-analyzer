@@ -88,18 +88,13 @@ pub struct TcpPeer {
 
 impl TcpPeer {
     fn insert_sorted(&mut self, s: TcpSegment) {
-        // find index
-        let idx = self.segments.iter().enumerate().find_map(|(n, item)| {
-            if s.rel_seq < item.rel_seq {
-                Some(n)
-            } else {
-                None
+        for (n, item) in self.segments.iter().enumerate() {
+            if item.rel_seq > s.rel_seq {
+                self.segments.insert(n, s);
+                return;
             }
-        });
-        match idx {
-            Some(idx) => self.segments.insert(idx, s),
-            None => self.segments.push_back(s),
         }
+        self.segments.push_back(s);
     }
 }
 
@@ -650,16 +645,8 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
             }
         }
     }
-    // if segment.data.is_empty() && segment.flags & TcpFlags::FIN == 0 {
-    //     trace!("No data after overlap, NOT queuing segment");
-    //     return;
-    // }
-    trace!("Pushing segment");
-    match opt_pos {
-        Some(idx) => peer.segments.insert(idx, segment),
-        None => peer.segments.push_back(segment),
-    }
-    // peer.insert_sorted(segment);
+    trace!("Adding segment");
+    peer.insert_sorted(segment);
 }
 
 fn send_peer_segments(peer: &mut TcpPeer, rel_ack: Wrapping<u32>) -> Option<Vec<TcpSegment>> {
