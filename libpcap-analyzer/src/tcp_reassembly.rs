@@ -7,6 +7,8 @@ use std::fmt;
 use std::net::IpAddr;
 use std::num::Wrapping;
 
+const EARLY_DETECT_OVERLAP: bool = false;
+
 #[derive(Debug, Eq, PartialEq)]
 #[allow(dead_code)]
 pub enum TcpStatus {
@@ -507,7 +509,13 @@ impl TcpStream {
         );
         // DEBUG
         for (n, s) in origin.segments.iter().enumerate() {
-            trace!("  s[{}]: plen={}", n, s.data.len());
+            trace!(
+                "  s[{}]: seq={} len={} idx={}",
+                n,
+                s.rel_seq.0,
+                s.data.len(),
+                s.pcap_index,
+            );
         }
 
         // TODO what now?
@@ -546,104 +554,111 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
         peer.segments.push_front(segment);
         return;
     }
-    // find last element before candidate and first element after candidate
-    let mut before = None;
-    let mut after = None;
-    let mut opt_pos = None;
-    for (n, s) in peer.segments.iter().enumerate() {
-        if s.rel_seq < segment.rel_seq {
-            before = Some(s);
-        } else {
-            after = Some(s);
-            opt_pos = Some(n);
-            break;
-        }
-    }
-    // trace!("tcp segment insertion index: {:?}", opt_pos);
-    // check for left overlap
-    if let Some(s) = before {
-        let next_seq = s.rel_seq + Wrapping(s.data.len() as u32);
-        match segment.rel_seq.cmp(&next_seq) {
-            Ordering::Equal => {
-                // XXX do nothing, simply queue segment
-                // // simple case: merge segment
-                // trace!(
-                //     "Merging segments (seq {} and {})",
-                //     s.rel_seq,
-                //     segment.rel_seq
-                // );
-                // s.data.extend_from_slice(&segment.data);
-                // s.rel_ack = segment.rel_ack;
-                // // XXX pcap_index should be a list (and append to it)
-                // // TODO check next segment in queue to test if a hole was filled
-                // return;
-            }
-            Ordering::Greater => {
-                // we have a hole
-                warn!("Missing segment on left of incoming segment");
-            }
-            Ordering::Less => {
-                // Left overlap
-                warn!("Segment with left overlap");
-                // let overlap_size = (next_seq - segment.rel_seq).0 as usize;
-                // debug_assert!(overlap_size <= s.data.len());
-                // let overlap_start = s.data.len() - overlap_size;
-                // let overlap_left = &s.data[overlap_start..];
-                // if overlap_left == &segment.data[..overlap_size] {
-                //     info!(
-                //         "TCP Segment with left overlap: area matches idx={}",
-                //         segment.pcap_index
-                //     );
-                //     trace!("Left overlap: removing {} bytes", overlap_size);
-                //     // remove overlapping area and fix offset
-                //     let new_data = segment.data.split_off(overlap_size);
-                //     segment.data = new_data;
-                //     segment.rel_seq += Wrapping(overlap_size as u32);
-                // } else {
-                //     warn!(
-                //         "TCP Segment with left overlap: area differs idx={}",
-                //         segment.pcap_index
-                //     );
-                //     // XXX keep new ?
-                // }
+
+    if EARLY_DETECT_OVERLAP {
+        // find last element before candidate and first element after candidate
+        let mut before = None;
+        let mut after = None;
+        // let mut opt_pos = None;
+        for (_n, s) in peer.segments.iter().enumerate() {
+            if s.rel_seq < segment.rel_seq {
+                before = Some(s);
+            } else {
+                after = Some(s);
+                // opt_pos = Some(n);
+                break;
             }
         }
-    }
-    // check for right overlap
-    if let Some(s) = after {
-        let right_next_seq = segment.rel_seq + Wrapping(segment.data.len() as u32);
-        match right_next_seq.cmp(&s.rel_seq) {
-            Ordering::Equal => (),
-            Ordering::Greater => {
-                // Right overlap
-                warn!("Segment with right overlap");
-                // let overlap_size = (right_next_seq - s.rel_seq).0 as usize;
-                // debug_assert!(overlap_size <= s.data.len());
-                // let overlap_start = segment.data.len() - overlap_size;
-                // let overlap = &segment.data[overlap_start..];
-                // let right_overlap = &s.data[..overlap_size];
-                // if overlap == right_overlap {
-                //     info!(
-                //         "TCP Segment with right overlap: area matches idx={}",
-                //         segment.pcap_index
-                //     );
-                //     trace!("Right overlap: removing {} bytes", overlap_size);
-                //     segment.data.truncate(overlap_start);
-                // } else {
-                //     warn!(
-                //         "TCP Segment with right overlap: area differs idx={}",
-                //         segment.pcap_index
-                //     );
-                //     // XXX keep new ?
-                // }
-            }
-            Ordering::Less => {
-                trace!(
-                    "hole remaining on right of incoming segment idx={}",
-                    segment.pcap_index
-                );
+        // trace!("tcp segment insertion index: {:?}", opt_pos);
+        // check for left overlap
+        if let Some(s) = before {
+            let next_seq = s.rel_seq + Wrapping(s.data.len() as u32);
+            match segment.rel_seq.cmp(&next_seq) {
+                Ordering::Equal => {
+                    // XXX do nothing, simply queue segment
+                    // // simple case: merge segment
+                    // trace!(
+                    //     "Merging segments (seq {} and {})",
+                    //     s.rel_seq,
+                    //     segment.rel_seq
+                    // );
+                    // s.data.extend_from_slice(&segment.data);
+                    // s.rel_ack = segment.rel_ack;
+                    // // XXX pcap_index should be a list (and append to it)
+                    // // TODO check next segment in queue to test if a hole was filled
+                    // return;
+                }
+                Ordering::Greater => {
+                    // we have a hole
+                    warn!("Missing segment on left of incoming segment");
+                }
+                Ordering::Less => {
+                    // Left overlap
+                    warn!("Segment with left overlap");
+                    // let overlap_size = (next_seq - segment.rel_seq).0 as usize;
+                    // debug_assert!(overlap_size <= s.data.len());
+                    // let overlap_start = s.data.len() - overlap_size;
+                    // let overlap_left = &s.data[overlap_start..];
+                    // if overlap_left == &segment.data[..overlap_size] {
+                    //     info!(
+                    //         "TCP Segment with left overlap: area matches idx={}",
+                    //         segment.pcap_index
+                    //     );
+                    //     trace!("Left overlap: removing {} bytes", overlap_size);
+                    //     // remove overlapping area and fix offset
+                    //     let new_data = segment.data.split_off(overlap_size);
+                    //     segment.data = new_data;
+                    //     segment.rel_seq += Wrapping(overlap_size as u32);
+                    // } else {
+                    //     warn!(
+                    //         "TCP Segment with left overlap: area differs idx={}",
+                    //         segment.pcap_index
+                    //     );
+                    //     // XXX keep new ?
+                    // }
+                }
             }
         }
+        // check for right overlap
+        if let Some(s) = after {
+            let right_next_seq = segment.rel_seq + Wrapping(segment.data.len() as u32);
+            match right_next_seq.cmp(&s.rel_seq) {
+                Ordering::Equal => (),
+                Ordering::Greater => {
+                    // Right overlap
+                    warn!("Segment with right overlap");
+                    // let overlap_size = (right_next_seq - s.rel_seq).0 as usize;
+                    // debug_assert!(overlap_size <= s.data.len());
+                    // let overlap_start = segment.data.len() - overlap_size;
+                    // let overlap = &segment.data[overlap_start..];
+                    // let right_overlap = &s.data[..overlap_size];
+                    // if overlap == right_overlap {
+                    //     info!(
+                    //         "TCP Segment with right overlap: area matches idx={}",
+                    //         segment.pcap_index
+                    //     );
+                    //     trace!("Right overlap: removing {} bytes", overlap_size);
+                    //     segment.data.truncate(overlap_start);
+                    // } else {
+                    //     warn!(
+                    //         "TCP Segment with right overlap: area differs idx={}",
+                    //         segment.pcap_index
+                    //     );
+                    //     // XXX keep new ?
+                    // }
+                }
+                Ordering::Less => {
+                    trace!(
+                        "hole remaining on right of incoming segment idx={}",
+                        segment.pcap_index
+                    );
+                }
+            }
+        }
+        // if segment.data.is_empty() && segment.flags & TcpFlags::FIN == 0 {
+        //     trace!("No data after overlap, NOT queuing segment");
+        //     return;
+        // }
     }
     trace!("Adding segment");
     peer.insert_sorted(segment);
@@ -923,10 +938,11 @@ impl fmt::Debug for TcpPeer {
         for (n, s) in self.segments.iter().enumerate() {
             writeln!(
                 f,
-                "    s[{}]: rel_seq={} len={}",
+                "    s[{}]: rel_seq={} len={} idx={}",
                 n,
                 s.rel_seq,
-                s.data.len()
+                s.data.len(),
+                s.pcap_index,
             )?;
         }
         Ok(())
