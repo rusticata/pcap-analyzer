@@ -850,6 +850,16 @@ fn handle_overlap_linux(peer: &mut TcpPeer, segment: &mut TcpSegment) {
 
             // split next
             let overlap_size = segment.data.len() - overlap_offset;
+            let min_overlap_size = std::cmp::min(overlap_size, next.data.len());
+            // compare overlap area
+            if next.data[..min_overlap_size]
+                != segment.data[overlap_offset..overlap_offset + min_overlap_size]
+            {
+                warn!(
+                    "Overlap area differs! left idx={} right idx={}",
+                    segment.pcap_index, next.pcap_index
+                );
+            }
             if overlap_size >= next.data.len() {
                 // subsequent segment starts after and is smaller, so drop it
                 drop(next);
