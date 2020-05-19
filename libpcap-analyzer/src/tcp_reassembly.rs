@@ -733,8 +733,8 @@ fn send_peer_segments(peer: &mut TcpPeer, rel_ack: Wrapping<u32>) -> Option<Vec<
             peer.insert_sorted(new_segment);
         }
 
-        adjust_seq_numbers(peer, &segment);
         handle_overlap_linux(peer, &mut segment);
+        adjust_seq_numbers(peer, &segment);
 
         trace!(
             "ACKed: pushing segment: rel_seq={} len={}",
