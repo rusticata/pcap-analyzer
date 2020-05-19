@@ -734,7 +734,7 @@ fn send_peer_segments(peer: &mut TcpPeer, rel_ack: Wrapping<u32>) -> Option<Vec<
         }
 
         adjust_seq_numbers(peer, &segment);
-        handle_overlap(peer, &mut segment);
+        handle_overlap_linux(peer, &mut segment);
 
         trace!(
             "ACKed: pushing segment: rel_seq={} len={}",
@@ -759,40 +759,110 @@ fn send_peer_segments(peer: &mut TcpPeer, rel_ack: Wrapping<u32>) -> Option<Vec<
     Some(acked)
 }
 
-// check for overlap
-// XXX what if several segments overlap the same area?
-// XXX    currently, `segment` will be dropped, so the last segment remains
-fn handle_overlap(peer: &mut TcpPeer, segment: &mut TcpSegment) {
-    if let Some(next) = peer.segments.front() {
+const FIRST_WINS: bool = false;
+
+// implements the "first segment wins" or the "last segment wins" policies
+#[allow(dead_code)]
+fn handle_overlap_first_last(peer: &mut TcpPeer, segment: &mut TcpSegment) {
+    // loop while segment has overlap
+    while let Some(next) = peer.segments.front() {
         if let Some(overlap_offset) = segment.overlap_offset(&next) {
-            // strategy 1: find intersection and drop it
-            let mut remaining = None;
-            warn!("segments overlaps next candidate (offset={})", overlap_offset);
-            let mut overlapping_area = segment.split_off(overlap_offset);
-            // next segment can be smaller than current segment
-            if next.data.len() < overlapping_area.data.len() {
-                trace!("re-splitting segment");
-                let rem = overlapping_area.split_off(next.data.len());
-                remaining = Some(rem);
-            }
-            // compare zones
-            if overlapping_area.data[..] != next.data[..] {
-                warn!(
-                    "Overlapping area differs! idx={} vs idx={}",
-                    segment.pcap_index, next.pcap_index
-                );
-                // unimplemented!();
-            }
-            trace!(
-                "Dropping part of segment: rel_seq={} len={}",
-                overlapping_area.rel_seq,
-                overlapping_area.data.len(),
+            let next_pcap_index = next.pcap_index;
+            warn!(
+                "segments overlaps next candidate (offset={})",
+                overlap_offset
             );
-            drop(overlapping_area);
-            if let Some(rem) = remaining {
-                trace!("re-inserting remaining data");
-                peer.insert_sorted(rem);
+            trace!("segment idx={}", segment.pcap_index);
+            // split segment at overlapping_offset
+            let mut segment_right = segment.split_off(overlap_offset);
+            let overlap_size;
+            // segment right can be greater, equal or smaller to next
+            match segment_right.data.len().cmp(&next.data.len()) {
+                Ordering::Less => {
+                    // right_segment is smaller than next
+                    overlap_size = segment_right.data.len();
+                    if segment_right.data[..] != next.data[..overlap_size] {
+                        warn!(
+                            "TCP overlapping data differ in packets idx={} and idx={}",
+                            segment_right.pcap_index, next_pcap_index
+                        );
+                    }
+                    let first = peer.segments.front_mut().unwrap();
+                    let front_right = first.split_off(overlap_size);
+                    trace!("front_right idx={}", front_right.pcap_index);
+                    trace!("re-inserting remaining data (next)");
+                    peer.insert_sorted(front_right);
+                }
+                Ordering::Equal => {
+                    if segment_right.data[..] != next.data[..] {
+                        warn!(
+                            "TCP overlapping data differ in packets idx={} and idx={}",
+                            segment_right.pcap_index, next_pcap_index
+                        );
+                    }
+                }
+                Ordering::Greater => {
+                    // right_segment is longer than next
+                    overlap_size = next.data.len();
+                    if segment_right.data[..overlap_size] != next.data[..] {
+                        warn!(
+                            "TCP overlapping data differ in packets idx={} and idx={}",
+                            segment_right.pcap_index, next_pcap_index
+                        );
+                    }
+                    let rem = segment_right.split_off(overlap_size);
+                    trace!("re-inserting remaining data (first)");
+                    peer.insert_sorted(rem);
+                }
             }
+            // which part to keep ? segment_right or next ?
+            // trace!("FIRST_WINS: {}, l:{} r:{}", FIRST_WINS, segment.pcap_index, next_pcap_index);
+            // trace!("(before)\n{:?}", peer);
+            if FIRST_WINS ^ (segment.pcap_index > next_pcap_index) {
+                trace!("dropping next");
+                let _ = peer.segments.pop_front();
+                peer.insert_sorted(segment_right);
+            } else {
+                trace!("dropping first");
+                drop(segment_right);
+            }
+        // trace!("(after)\n{:?}", peer);
+        } else {
+            break;
+        }
+    }
+}
+
+// Linux favors an original segment, EXCEPT when the subsequent begins before the original,
+//or the subsequent segment begins the same and ends after the original segment.
+#[allow(dead_code)]
+fn handle_overlap_linux(peer: &mut TcpPeer, segment: &mut TcpSegment) {
+    // loop while segment has overlap
+    while let Some(next) = peer.segments.front() {
+        if let Some(overlap_offset) = segment.overlap_offset(&next) {
+            warn!(
+                "segments overlaps next candidate (offset={})",
+                overlap_offset
+            );
+            // we will modify the subsequent segment (next)
+            // safety: element presence was tested in outer loop
+            let next = peer.segments.pop_front().unwrap();
+
+            // split next
+            let overlap_size = segment.data.len() - overlap_offset;
+            if overlap_size >= next.data.len() {
+                // subsequent segment starts after and is smaller, so drop it
+                drop(next);
+                continue;
+            }
+            // otherwise, split next into left and right, drop left and accept right
+            let mut left = next;
+            let right = left.split_off(overlap_size);
+            // to accept right, merge it into segment
+            segment.data.extend_from_slice(&right.data);
+        } else {
+            // trace!("no overlap, break");
+            break;
         }
     }
 }
