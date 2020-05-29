@@ -14,7 +14,7 @@ The main objectives are:
 - reconstruct network data progressively for network layers (Layer 2, 3, etc.) correctly, dealing
   with common problems safely (fragmentation, missing data, encapsulation, etc.)
 - allow developing plugins easily, focusing only on the interesting content
-- allow plugins to interact with data at different network level (Layer 2, 3, etc.)
+- allow plugins to interact with data at different network level (Layer 2, 3, application, etc.)
 - use Rust features like thread safety (to exploit parallelism), memory safety, zero-copy, etc.
 
 ## Architecture
@@ -26,6 +26,8 @@ PAL is split into several components:
   management. It also provides some plugins.
 - `pcap-analyzer`: the main executable to run plugins on pcap files
 - `pcap-rewrite`: a tool to rewrite a pcap file format and link type to another
+- `test-analyzer`: a similar tool to `pcap-analyzer`, with more debug plugins and verbosity (for ex. for debugging
+  plugins)
 - `explugin-example`: an example of plugin developed in a separate crate
 
 ## Building pcap-analyzer
@@ -50,14 +52,21 @@ pcap-analyzer -c config.toml file.pcap
 
 The `-p` option can be used to restrict the list of plugins to load.
 
-Logging is done using the `log` cargo crate. However, in release mode, only messages with a severity
-of `warn` or more are displayed. The `RUST_LOG` environment variable can be used to set the log
-level.
+Concurrency level is set using the `-j` argument. Default is to 1 (no multithreading).
+Threading is useful when having many flows, so if the input file is small, or if it does not contain
+many flows, it is best to leave it to 1.
+Use the value `0` to set the number of threads to the number of virtual CPUs.
 
-To debug a plugin, use the debug build:
+Logging is done using the `log` cargo crate, and will to the log file defined
+in configuration (`pcap-analyzer.log` by default).
+Note that in release mode, only messages with a severity of `warn` or more are displayed.
+
+To get more debug info, use the `test-analyzer` tool. It provides the exact same features, but will
+be more verbose, and will output logs to stderr. The `PCAP_ANALYZER_LOG` environment variable can be
+used to set the log level (and set concurrency to 1):
 
 ```
-RUST_LOG=pcap_analyzer,libpcap_analyzer=Debug,libpcap_tools=Debug,rusticata=Debug cargo run -p pcap-analyzer -- file.pcap
+PCAP_ANALYZER_LOG=debug test-analyzer cargo run -p test-analyzer -- -j 1 -c conf/pcap-analyzer.conf file.pcap
 ```
 
 ## Plugins
