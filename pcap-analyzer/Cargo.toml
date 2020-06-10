@@ -25,7 +25,7 @@ libpcap-analyzer = { version="0.1.0", path="../libpcap-analyzer" }
 libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 lz4 = "1.23"
-simplelog = { version="0.7.4", default-features = false }
+simplelog = { version="0.8.0", default-features = false }
 xz2 = "0.1"
 
 [dependencies.clap]
