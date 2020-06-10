@@ -48,6 +48,8 @@ pub struct Rusticata {
     flow_probes: FnvHashMap<FlowID, Vec<ProbeDef>>,
     flow_parsers: FnvHashMap<FlowID, Box<dyn RParser>>,
     flow_bypass: FnvHashSet<FlowID>,
+
+    flow_parsers_archive: Vec<(FlowID, Box<dyn RParser>)>,
 }
 
 default_plugin_builder!(Rusticata, RusticataBuilder);
@@ -127,61 +129,70 @@ impl Plugin for Rusticata {
             if d.is_empty() {
                 return PluginResult::None;
             }
-            let parser = {
+            let parser: &mut dyn RParser = {
                 // check if we already have a parser
                 if let Some(parser) = self.flow_parsers.get_mut(&flow_id) {
+                    parser.as_mut()
+                } else if let Some(parser) = self.try_probe(d, flow_id, pinfo) {
                     parser
                 } else {
-                    // no parser, try to probe protocol
-                    let l4_info = L4Info {
-                        src_port: pinfo.five_tuple.src_port,
-                        dst_port: pinfo.five_tuple.dst_port,
-                        l4_proto: pinfo.l4_type,
-                    };
-                    let maybe_s = self.probe(d, flow_id, &l4_info);
-                    if let Some(parser_name) = maybe_s {
-                        debug!("Protocol recognized as {}", parser_name);
-                        // warn!("Protocol recognized as {} (5t: {})", parser_name, pinfo.five_tuple);
-                        if let Some(builder) = self.builder_map.get((&parser_name) as &str) {
-                            self.flow_parsers.insert(flow_id, builder.build());
-                            self.flow_parsers.get_mut(&flow_id).unwrap()
-                        } else {
-                            warn!("Could not build parser for proto {}", parser_name);
-                            self.flow_bypass.insert(flow_id);
-                            return PluginResult::None;
-                        }
-                    } else {
-                        // proto not recognized
-                        trace!("Parser not recognized");
-                        return PluginResult::None;
-                    }
+                    return PluginResult::None;
                 }
             };
             let direction = if pinfo.to_server {
-                STREAM_TOSERVER
+                Direction::ToServer
             } else {
-                STREAM_TOCLIENT
+                Direction::ToClient
             };
-            let res = parser.parse(d, direction);
-            if res == R_STATUS_FAIL {
-                warn!(
-                    "rusticata: parser failed (idx={}) (5t: {})",
-                    pinfo.pcap_index, pinfo.five_tuple
-                );
-                // remove or disable parser for flow?
-                let _ = self.flow_parsers.remove(&flow_id);
-                // XXX add to bypass?
+            let res = parser.parse_l4(d, direction);
+            if res != ParseResult::Ok {
+                // remove current parser for this flow
+                self.archive_parser(flow_id);
+            }
+            match res {
+                ParseResult::Ok => (),
+                ParseResult::Stop => {
+                    // add to bypass? This means no other L7 parser will receive data
+                    self.flow_bypass.insert(flow_id);
+                }
+                ParseResult::ProtocolChanged => {
+                    // recurse to call probing function
+                    // TODO risk of infinite loop?
+                    info!("Protocol change for flow 0x{:x}", flow_id);
+                    return self.handle_layer_transport(_packet, pinfo);
+                }
+                ParseResult::Error => {
+                    warn!(
+                        "rusticata: parser failed (idx={}) (5t: {})",
+                        pinfo.pcap_index, pinfo.five_tuple
+                    );
+                }
+                ParseResult::Fatal => {
+                    warn!(
+                        "rusticata: parser fatal error (idx={}) (5t: {})",
+                        pinfo.pcap_index, pinfo.five_tuple
+                    );
+                    self.flow_bypass.insert(flow_id);
+                }
             }
         }
         PluginResult::None
     }
 
     fn flow_destroyed(&mut self, flow: &Flow) {
-        self.flow_probes.remove(&flow.flow_id);
-        self.flow_bypass.remove(&flow.flow_id);
+        let flow_id = flow.flow_id;
+        self.flow_probes.remove(&flow_id);
+        self.flow_bypass.remove(&flow_id);
+        self.archive_parser(flow_id)
     }
 
     fn post_process(&mut self) {
+        for (flow_id, parser) in &self.flow_parsers_archive {
+            info!("Flow: 0x{:x}", flow_id);
+            for key in parser.keys() {
+                info!("  [{}] => {:?}", key, parser.get(key));
+            }
+        }
         for (flow_id, parser) in self.flow_parsers.iter() {
             info!("Flow: 0x{:x}", flow_id);
             for key in parser.keys() {
@@ -231,5 +242,46 @@ impl Rusticata {
             self.flow_probes.insert(flow_id, unsure_probes);
         }
         None
+    }
+
+    fn try_probe(
+        &mut self,
+        data: &[u8],
+        flow_id: FlowID,
+        pinfo: &PacketInfo,
+    ) -> Option<&mut dyn RParser> {
+        let l4_info = L4Info {
+            src_port: pinfo.five_tuple.src_port,
+            dst_port: pinfo.five_tuple.dst_port,
+            l4_proto: pinfo.l4_type,
+        };
+        let maybe_s = self.probe(data, flow_id, &l4_info);
+        if let Some(parser_name) = maybe_s {
+            debug!("Protocol recognized as {}", parser_name);
+            // warn!("Protocol recognized as {} (5t: {})", parser_name, pinfo.five_tuple);
+            if let Some(builder) = self.builder_map.get((&parser_name) as &str) {
+                self.flow_parsers.insert(flow_id, builder.build());
+                match self.flow_parsers.get_mut(&flow_id) {
+                    Some(p) => Some(p.as_mut()),
+                    None => None,
+                }
+            // self.flow_parsers.get_mut(&flow_id).map(|p| p.as_mut())
+            // Some(self.flow_parsers.get_mut(&flow_id).unwrap().as_mut())
+            } else {
+                warn!("Could not build parser for proto {}", parser_name);
+                self.flow_bypass.insert(flow_id);
+                None
+            }
+        } else {
+            // proto not recognized
+            trace!("Parser not recognized");
+            None
+        }
+    }
+
+    fn archive_parser(&mut self, flow_id: FlowID) {
+        if let Some(parser) = self.flow_parsers.remove(&flow_id) {
+            self.flow_parsers_archive.push((flow_id, parser))
+        }
     }
 }

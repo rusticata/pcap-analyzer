@@ -2,8 +2,8 @@ use crate::packet_info::PacketInfo;
 use crate::plugin::{Plugin, PluginResult, PLUGIN_L4};
 use crate::{output, plugin_builder};
 use libpcap_tools::{FiveTuple, Packet};
-use rusticata::*;
 use rusticata::tls::*;
+use rusticata::*;
 use serde_json::{self, json};
 use std::collections::HashMap;
 use tls_parser::TlsVersion;
@@ -103,7 +103,8 @@ impl<'a> TlsStats<'a> {
             })
             .collect();
         let json_ar = json!(conversations);
-        let file = output::create_file(&self.output_dir, "tls-stats-conversations.json").expect("Cannot create output file");
+        let file = output::create_file(&self.output_dir, "tls-stats-conversations.json")
+            .expect("Cannot create output file");
         serde_json::to_writer(file, &json_ar).unwrap();
         //
         // SSL/TLS ports
@@ -113,7 +114,8 @@ impl<'a> TlsStats<'a> {
             *count_ref += 1;
         }
         let js = json!(m);
-        let file = output::create_file(&self.output_dir, "tls-stats-tls-ports.json").expect("Cannot create output file");
+        let file = output::create_file(&self.output_dir, "tls-stats-tls-ports.json")
+            .expect("Cannot create output file");
         serde_json::to_writer(file, &js).unwrap();
         //
         // SSL record version
@@ -122,11 +124,13 @@ impl<'a> TlsStats<'a> {
             let count_ref = m.entry(stats.parser.ssl_record_version.0).or_insert(0);
             *count_ref += 1;
         }
-        let m2 : HashMap<_, _> = m.iter().map(|(k,v)| {
-            (TlsVersion(*k).to_string(), v)
-        }).collect();
+        let m2: HashMap<_, _> = m
+            .iter()
+            .map(|(k, v)| (TlsVersion(*k).to_string(), v))
+            .collect();
         let js = json!(m2);
-        let file = output::create_file(&self.output_dir, "tls-stats-ssl-record-version.json").expect("Cannot create output file");
+        let file = output::create_file(&self.output_dir, "tls-stats-ssl-record-version.json")
+            .expect("Cannot create output file");
         serde_json::to_writer(file, &js).unwrap();
         //
         // Client-Hello version
@@ -135,11 +139,13 @@ impl<'a> TlsStats<'a> {
             let count_ref = m.entry(stats.parser.client_version.0).or_insert(0);
             *count_ref += 1;
         }
-        let m2 : HashMap<_, _> = m.iter().map(|(k,v)| {
-            (TlsVersion(*k).to_string(), v)
-        }).collect();
+        let m2: HashMap<_, _> = m
+            .iter()
+            .map(|(k, v)| (TlsVersion(*k).to_string(), v))
+            .collect();
         let js = json!(m2);
-        let file = output::create_file(&self.output_dir, "tls-stats-client-hello-version.json").expect("Cannot create output file");
+        let file = output::create_file(&self.output_dir, "tls-stats-client-hello-version.json")
+            .expect("Cannot create output file");
         serde_json::to_writer(file, &js).unwrap();
         //
         // Ciphers
@@ -153,7 +159,8 @@ impl<'a> TlsStats<'a> {
             *count_ref += 1;
         }
         let js = json!(m);
-        let file = output::create_file(&self.output_dir, "tls-stats-ciphers.json").expect("Cannot create output file");
+        let file = output::create_file(&self.output_dir, "tls-stats-ciphers.json")
+            .expect("Cannot create output file");
         serde_json::to_writer(file, &js).unwrap();
     }
 }
@@ -172,24 +179,27 @@ impl<'a> Stats<'a> {
             return;
         }
         let direction = if pdata.to_server {
-            STREAM_TOSERVER
+            Direction::ToServer
         } else {
-            STREAM_TOCLIENT
+            Direction::ToClient
         };
         // XXX parse only handshake messages ? we can't filter 0x16 (because fragmentation)
         let status = self.parser.parse_tcp_level(data, direction);
-        if status & R_STATUS_EVENTS != 0 {
-            // XXX ignore events for now
-            self.parser.events.clear();
-        }
-        if status & R_STATUS_FAIL != 0 {
-            // error, stop parsing of future packets
-            debug!(
-                "error while parsing tls (idx={}). Activating bypass for future packets {}",
-                pdata.pcap_index, pdata.five_tuple
-            );
-            self.bypass = true;
-            return;
+        // if status & R_STATUS_EVENTS != 0 {
+        //     // XXX ignore events for now
+        //     self.parser.events.clear();
+        // }
+        match status {
+            ParseResult::Error | ParseResult::Fatal => {
+                // error, stop parsing of future packets
+                debug!(
+                    "error while parsing tls (idx={}). Activating bypass for future packets {}",
+                    pdata.pcap_index, pdata.five_tuple
+                );
+                self.bypass = true;
+                return;
+            }
+            _ => (),
         }
     }
 }
