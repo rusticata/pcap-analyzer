@@ -107,9 +107,9 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             ctx.interfaces.push(if_info);
             ctx.section_num_packets = 0;
             let data = reader.data();
-            ctx.hasher_ripemd160.input(&data[..sz]);
-            ctx.hasher_sha1.input(&data[..sz]);
-            ctx.hasher_sha256.input(&data[..sz]);
+            ctx.hasher_ripemd160.update(&data[..sz]);
+            ctx.hasher_sha1.update(&data[..sz]);
+            ctx.hasher_sha256.update(&data[..sz]);
             ctx.file_bytes += sz;
             reader.consume(sz);
         }
@@ -117,9 +117,9 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             println!("Type: Pcap-NG");
             pretty_print_shb(shb);
             let data = reader.data();
-            ctx.hasher_ripemd160.input(&data[..sz]);
-            ctx.hasher_sha1.input(&data[..sz]);
-            ctx.hasher_sha256.input(&data[..sz]);
+            ctx.hasher_ripemd160.update(&data[..sz]);
+            ctx.hasher_sha1.update(&data[..sz]);
+            ctx.hasher_sha256.update(&data[..sz]);
             ctx.file_bytes += sz;
             reader.consume(sz);
         }
@@ -145,9 +145,9 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
                 ctx.file_bytes += sz;
                 handle_pcapblockowned(&block, &mut ctx);
                 let data = reader.data();
-                ctx.hasher_ripemd160.input(&data[..sz]);
-                ctx.hasher_sha1.input(&data[..sz]);
-                ctx.hasher_sha256.input(&data[..sz]);
+                ctx.hasher_ripemd160.update(&data[..sz]);
+                ctx.hasher_sha1.update(&data[..sz]);
+                ctx.hasher_sha256.update(&data[..sz]);
                 reader.consume(sz);
             }
             Err(PcapError::Eof) => break,
@@ -166,13 +166,13 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
         }
     }
 
-    println!("{:<20}: {:x}", "SHA256", ctx.hasher_sha256.result_reset());
+    println!("{:<20}: {:x}", "SHA256", ctx.hasher_sha256.finalize_reset());
     println!(
         "{:<20}: {:x}",
         "RIPEMD160",
-        ctx.hasher_ripemd160.result_reset()
+        ctx.hasher_ripemd160.finalize_reset()
     );
-    println!("{:<20}: {:x}", "SHA1", ctx.hasher_sha1.result_reset());
+    println!("{:<20}: {:x}", "SHA1", ctx.hasher_sha1.finalize_reset());
 
     let cap_duration = ctx.last_packet_ts - ctx.first_packet_ts;
     println!(
