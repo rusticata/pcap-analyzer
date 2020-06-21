@@ -168,6 +168,15 @@ impl OspfLog {
                     );
                 }
             }
+            OspfLinkStateAdvertisement::OpaqueLinkLocalScope(_lsa) => {
+                debug!("    Opaque LinkLocalScope");
+            }
+            OspfLinkStateAdvertisement::OpaqueAreaLocalScope(_lsa) => {
+                debug!("    Opaque AreaLocalScope");
+            }
+            OspfLinkStateAdvertisement::OpaqueASWideScope(_lsa) => {
+                debug!("    Opaque ASWideScope");
+            }
         }
     }
 
