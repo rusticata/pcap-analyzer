@@ -27,5 +27,5 @@ thiserror = "1.0"
 toml="0.5"
 
 [dependencies.pcap-parser]
-version = "0.9"
+version = "0.9.3"
 features = ["data"]

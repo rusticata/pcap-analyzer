@@ -88,7 +88,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             println!("Version: {}.{}", hdr.version_major, hdr.version_minor);
             println!(
                 "Byte Ordering: {}",
-                if hdr.magic_number == 0xa1b2_c3d4 {
+                if hdr.magic_number >> 16 == 0xa1b2 {
                     "Native"
                 } else {
                     "Reverse"
@@ -96,11 +96,16 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             );
             println!("Captured length: {}", hdr.snaplen);
             println!("Linktype: {}", hdr.network);
+            let precision = if hdr.is_nanosecond_precision() {
+                9
+            } else {
+                6
+            };
             let if_info = InterfaceInfo {
                 if_index: 0,
                 link_type: hdr.network,
                 if_tsoffset: 0,
-                if_tsresol: 6,
+                if_tsresol: precision,
                 snaplen: hdr.snaplen,
                 ..InterfaceInfo::default()
             };
@@ -283,11 +288,16 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
         PcapBlockOwned::LegacyHeader(ref hdr) => {
             eprintln!("Unexpected legacy header block");
             end_of_section(ctx);
+            let precision = if hdr.is_nanosecond_precision() {
+                9
+            } else {
+                6
+            };
             let if_info = InterfaceInfo {
                 if_index: 0,
                 link_type: hdr.network,
                 if_tsoffset: 0,
-                if_tsresol: 6,
+                if_tsresol: precision,
                 snaplen: hdr.snaplen,
                 ..InterfaceInfo::default()
             };
@@ -296,8 +306,13 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
         PcapBlockOwned::Legacy(ref b) => {
             let if_info = &mut ctx.interfaces[0];
             if_info.num_packets += 1;
-            assert!(b.ts_usec < 1_000_000);
-            let ts = Duration::new(b.ts_sec as u64, b.ts_usec * 1000);
+            let ts = if if_info.if_tsresol == 6 {
+                assert!(b.ts_usec < 1_000_000);
+                Duration::new(b.ts_sec as u64, b.ts_usec * 1000)
+            } else {
+                assert!(b.ts_usec < 1_000_000_000);
+                Duration::new(b.ts_sec as u64, b.ts_usec)
+            };
             update_time(ts, ctx);
             ctx.packet_index += 1;
             let data_len = b.caplen as usize;

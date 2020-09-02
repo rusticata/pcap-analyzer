@@ -33,5 +33,5 @@ version = "2"
 default-features = false
 
 [dependencies.pcap-parser]
-version = "0.9"
+version = "0.9.3"
 features = ["data", "serialize"]

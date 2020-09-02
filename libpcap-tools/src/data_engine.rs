@@ -152,10 +152,11 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                 }
             }
             PcapBlockOwned::LegacyHeader(ref hdr) => {
+                let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
                 let if_info = InterfaceInfo {
                     link_type: hdr.network,
                     if_tsoffset: 0,
-                    if_tsresol: 6,
+                    if_tsresol: precision,
                     snaplen: hdr.snaplen,
                 };
                 self.interfaces.push(if_info);
@@ -169,9 +170,14 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                 let blen = b.caplen as usize;
                 let data = pcap_parser::data::get_packetdata(b.data, if_info.link_type, blen)
                     .ok_or(Error::Generic("Parsing PacketData failed (Legacy Packet)"))?;
+                let ts = if if_info.if_tsresol == 6 {
+                    Duration::new(b.ts_sec, b.ts_usec)
+                } else {
+                    Duration::new(b.ts_sec, b.ts_usec / 1000)
+                };
                 Packet {
                     interface: 0,
-                    ts: Duration::new(b.ts_sec, b.ts_usec),
+                    ts,
                     link_type: if_info.link_type,
                     data,
                     origlen: b.origlen,
