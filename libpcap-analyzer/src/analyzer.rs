@@ -59,6 +59,7 @@ pub struct Analyzer {
     ipv6_defrag: Box<dyn DefragEngine>,
     pub(crate) tcp_defrag: TcpStreamReassembly,
 
+    defrag_count: usize,
     do_checksums: bool,
 }
 
@@ -71,6 +72,7 @@ impl Analyzer {
             ipv4_defrag: Box::new(IPDefragEngine::new()),
             ipv6_defrag: Box::new(IPDefragEngine::new()),
             tcp_defrag: TcpStreamReassembly::default(),
+            defrag_count: 0,
             do_checksums,
         }
     }
@@ -629,7 +631,11 @@ fn handle_l4_tcp(
     // check if TCP streams did timeout or expire
     // TODO do the check only every nth packet/second?
     //    warn!("now: {:?}", now);
-    analyzer.tcp_defrag.check_expired_connections(now);
+    analyzer.defrag_count += 1;
+    if analyzer.defrag_count > 1000 {
+        analyzer.tcp_defrag.check_expired_connections(now);
+        analyzer.defrag_count = 0;
+    }
 
     // handle_l4_common(
     //     packet, ctx, data, l3_info, src_port, dst_port, l4_payload, analyzer,
