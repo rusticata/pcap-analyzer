@@ -686,8 +686,6 @@ fn send_peer_segments(peer: &mut TcpPeer, rel_ack: Wrapping<u32>) -> Option<Vec<
         return None;
     }
 
-    trace!("Peer: {:?}", peer); // TODO to remove
-
     // check consistency of segment ACK numbers + order and/or missing fragments and/or overlap
 
     let mut acked = Vec::new();
@@ -833,6 +831,7 @@ fn handle_overlap_first_last(peer: &mut TcpPeer, segment: &mut TcpSegment) {
     }
 }
 
+// handle overlapping segments, using a linux-like policy
 // Linux favors an original segment, EXCEPT when the subsequent begins before the original,
 //or the subsequent segment begins the same and ends after the original segment.
 #[allow(dead_code)]
@@ -841,8 +840,8 @@ fn handle_overlap_linux(peer: &mut TcpPeer, segment: &mut TcpSegment) {
     while let Some(next) = peer.segments.front() {
         if let Some(overlap_offset) = segment.overlap_offset(&next) {
             warn!(
-                "segments overlaps next candidate (offset={})",
-                overlap_offset
+                "segment idx={} overlaps next candidate idx={} (at offset={})",
+                segment.pcap_index, next.pcap_index, overlap_offset
             );
             // we will modify the subsequent segment (next)
             // safety: element presence was tested in outer loop
