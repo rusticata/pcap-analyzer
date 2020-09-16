@@ -13,7 +13,8 @@ use crate::tcp_reassembly::{finalize_tcp_streams, TcpStreamError, TcpStreamReass
 use crate::vxlan::*;
 use libpcap_tools::*;
 
-use pcap_parser::data::PacketData;
+use pcap_parser::data::{get_packetdata_raw, PacketData};
+use pcap_parser::Linktype;
 use std::cmp::min;
 use std::net::IpAddr;
 use std::ops::DerefMut;
@@ -1129,7 +1130,16 @@ impl PcapAnalyzer for Analyzer {
                 handle_l3(packet, &ctx, data, EtherType(ethertype), self)
             }
             PacketData::L4(_, _) => unimplemented!(), // XXX
-            PacketData::Unsupported(_) => {
+            PacketData::Unsupported(raw) => {
+                // fixups
+                if packet.link_type == Linktype(12) {
+                    // defined as DLT_RAW in libpcap/dlt.h
+                    if let Some(PacketData::L3(ethertype, packet_data)) =
+                        get_packetdata_raw(raw, packet.caplen as usize)
+                    {
+                        return handle_l3(packet, &ctx, packet_data, EtherType(ethertype), self);
+                    }
+                }
                 warn!("Unsupported data format (unknown linktype ?)");
                 Err(Error::Generic("Unsupported data format"))
             }
