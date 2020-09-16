@@ -1,5 +1,6 @@
 use crate::erspan::ErspanPacket;
 use crate::flow_map::FlowMap;
+use crate::geneve::*;
 use crate::ip_defrag::{DefragEngine, Fragment, IPDefragEngine};
 use crate::layers::LinkLayerType;
 use crate::mpls::*;
@@ -147,6 +148,8 @@ pub(crate) fn handle_l3(
 
     // see https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
     match ethertype {
+        // Transparent Ethernet Bridging (RFC 1701)
+        EtherType(0x6558) => handle_l2(packet, ctx, data, analyzer),
         EtherTypes::Ipv4 => handle_l3_ipv4(packet, ctx, data, ethertype, analyzer),
         EtherTypes::Ipv6 => handle_l3_ipv6(packet, ctx, data, ethertype, analyzer),
         EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, data, ethertype, analyzer),
@@ -664,6 +667,12 @@ fn handle_l4_udp(
         return handle_l4_vxlan(packet, ctx, data, l3_info, udp.payload(), analyzer);
     }
 
+    // if sport/dport == 6081, this could be GENEVE
+    // XXX l4 plugins will not be called
+    if src_port == 6081 || dst_port == 6081 {
+        return handle_l4_geneve(packet, ctx, data, l3_info, udp.payload(), analyzer);
+    }
+
     handle_l4_common(
         packet, ctx, data, l3_info, src_port, dst_port, l4_payload, analyzer,
     )
@@ -729,6 +738,35 @@ fn handle_l4_icmpv6(
     handle_l4_common(
         packet, ctx, data, l3_info, src_port, dst_port, l4_payload, analyzer,
     )
+}
+
+// Geneve: Generic Network Virtualization Encapsulation
+// https://tools.ietf.org/html/draft-ietf-nvo3-geneve-16
+fn handle_l4_geneve(
+    packet: &Packet,
+    ctx: &ParseContext,
+    _data: &[u8],
+    _l3_info: &L3Info,
+    l4_data: &[u8],
+    analyzer: &mut Analyzer,
+) -> Result<(), Error> {
+    trace!("handle_l4_geneve (idx={})", ctx.pcap_index);
+    let geneve = GenevePacket::new(l4_data).ok_or("Could not build GENEVE packet from data")?;
+    let payload = geneve.payload();
+    let next_proto = geneve.get_protocol_type();
+
+    trace!(
+        "    Geneve: proto=0x{:x} VNI=0x{:x}",
+        next_proto,
+        geneve.get_virtual_network_identifier()
+    );
+    // ignore geneve options
+
+    if next_proto == 0x6558 {
+        handle_l2(packet, ctx, payload, analyzer)
+    } else {
+        handle_l3(packet, ctx, payload, EtherType(next_proto), analyzer)
+    }
 }
 
 fn handle_l4_gre(
