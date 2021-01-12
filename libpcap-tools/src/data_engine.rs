@@ -59,6 +59,10 @@ impl<A: PcapAnalyzer> PcapDataEngine<A> {
         let engine = BlockEngine::new(data_analyzer, config);
         PcapDataEngine { engine }
     }
+
+    pub fn data_analyzer(&self) -> &A {
+        &self.engine.analyzer().data_analyzer
+    }
 }
 
 impl<A: PcapAnalyzer> PcapDataAnalyzer<A> {

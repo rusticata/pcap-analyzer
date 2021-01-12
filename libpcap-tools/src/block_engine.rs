@@ -32,6 +32,10 @@ impl<A: BlockAnalyzer> BlockEngine<A> {
         BlockEngine { analyzer, capacity }
     }
 
+    pub fn analyzer(&self) -> &A {
+        &self.analyzer
+    }
+
     /// Main function: given a reader, read all pcap data and call analyzer for each Packet
     pub fn run(&mut self, reader: &mut dyn Read) -> Result<(), Error> {
         let mut reader = pcap_parser::create_reader(self.capacity, reader)?;
