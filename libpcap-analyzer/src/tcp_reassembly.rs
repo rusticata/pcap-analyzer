@@ -118,7 +118,7 @@ impl Default for TcpStreamReassembly {
     fn default() -> Self {
         TcpStreamReassembly {
             m: HashMap::new(),
-            timeout: Duration::new(120, 0),
+            timeout: Duration::new(14400, 0),
         }
     }
 }
