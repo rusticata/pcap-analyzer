@@ -67,6 +67,7 @@ fn open_file(name: &str) -> Result<Box<dyn io::Read>, io::Error> {
     Ok(input_reader)
 }
 
+#[allow(clippy::field_reassign_with_default)]
 pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Error> {
     println!("File name: {}", name);
 

@@ -69,8 +69,8 @@ impl<W: Write> Writer for PcapNGWriter<W> {
                     Block::SimplePacket(_) | Block::EnhancedPacket(_) => Ok(0),
                     // other blocks are copied
                     _ => {
-                        let v = b.to_vec_raw().or_else(|_| {
-                            Err(Error::new(ErrorKind::Other, "Block serialization failed"))
+                        let v = b.to_vec_raw().map_err(|_| {
+                            Error::new(ErrorKind::Other, "Block serialization failed")
                         })?;
                         self.w.write(&v)
                     }
