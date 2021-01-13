@@ -1,8 +1,8 @@
-# PAL (Pcap Analysis Library)
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE-MIT)
 [![Apache License 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE-APACHE)
-[![Build Status](https://travis-ci.org/rusticata/pcap-analyzer.svg?branch=master)](https://travis-ci.org/rusticata/pcap-analyzer)
+[![Github CI](https://github.com/rusticata/pcap-analyzer/workflows/Continuous%20integration/badge.svg)](https://github.com/rusticata/pcap-analyzer/actions)
+
+# PAL (Pcap Analysis Library)
 
 PAL (Pcap Analysis Library) is a framework and a set of tools for Pcap file analysis, written in
 Rust.
