@@ -11,6 +11,7 @@ use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
 use simplelog::{LevelFilter, SimpleLogger};
 use std::fs::File;
 use std::io;
+use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -74,6 +75,12 @@ fn main() -> Result<(), io::Error> {
                 .required(true)
                 .index(1),
         )
+        .arg(
+            Arg::with_name("skip")
+                .help("Skip given number of packets")
+                .long("skip")
+                .takes_value(true),
+        )
         .get_matches();
 
     let log_level = env_get_log_level();
@@ -89,6 +96,13 @@ fn main() -> Result<(), io::Error> {
         load_config(&mut config, filename)?;
     }
     let input_filename = matches.value_of("INPUT").unwrap();
+
+    let skip = matches.value_of("skip").unwrap_or("0");
+    let skip = skip.parse::<u32>().map_err(|_| Error::new(
+        ErrorKind::Other,
+        "Invalid value for 'skip' argument",
+    ))?;
+    config.set("skip_index", skip);
 
     // override config options from command-line arguments
     if let Some(jobs) = matches.value_of("jobs") {

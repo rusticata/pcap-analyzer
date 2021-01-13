@@ -85,6 +85,12 @@ fn main() -> io::Result<()> {
                 .required(true)
                 .index(1),
         )
+        .arg(
+            Arg::with_name("skip")
+                .help("Skip given number of packets")
+                .long("skip")
+                .takes_value(true),
+        )
         .get_matches();
 
     // create plugin factory with all available plugins
@@ -112,6 +118,13 @@ fn main() -> io::Result<()> {
     if let Some(dir) = matches.value_of("outdir") {
         config.set("output_dir", dir);
     }
+
+    let skip = matches.value_of("skip").unwrap_or("0");
+    let skip = skip.parse::<u32>().map_err(|_| Error::new(
+        ErrorKind::Other,
+        "Invalid value for 'skip' argument",
+    ))?;
+    config.set("skip_index", skip);
 
     // Open log file
     let log_file = config.get("log_file").unwrap_or("pcap-analyzer.log");

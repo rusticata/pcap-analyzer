@@ -63,11 +63,16 @@ pub struct Analyzer {
 
     defrag_count: usize,
     do_checksums: bool,
+    skip_index: usize,
 }
 
 impl Analyzer {
     pub fn new(registry: Arc<PluginRegistry>, config: &Config) -> Analyzer {
         let do_checksums = config.get_bool("do_checksums").unwrap_or(true);
+        let skip_index = config.get_usize("skip_index").unwrap_or(0);
+        if skip_index > 0 {
+            debug!("Will skip to index {}", skip_index);
+        }
         Analyzer {
             registry,
             flows: FlowMap::default(),
@@ -76,6 +81,7 @@ impl Analyzer {
             tcp_defrag: TcpStreamReassembly::default(),
             defrag_count: 0,
             do_checksums,
+            skip_index,
         }
     }
 
@@ -1124,6 +1130,9 @@ impl PcapAnalyzer for Analyzer {
     /// Dispatch function: given a packet, use link type to get the real data, and
     /// call the matching handling function (some pcap blocks encode ethernet, or IPv4 etc.)
     fn handle_packet(&mut self, packet: &Packet, ctx: &ParseContext) -> Result<(), Error> {
+        if ctx.pcap_index < self.skip_index {
+            return Ok(());
+        }
         match packet.data {
             PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
             PacketData::L3(ethertype, data) => {
