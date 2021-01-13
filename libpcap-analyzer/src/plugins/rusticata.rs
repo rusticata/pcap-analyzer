@@ -100,7 +100,7 @@ impl Plugin for Rusticata {
         add_parser!(udp "kerberos_udp", UdpProbeOrder::Kerberos, KerberosUDPBuilder {}, builder_map, probes_l4);
         add_parser!(udp "ntp", UdpProbeOrder::Ntp, NTPBuilder {}, builder_map, probes_l4);
         add_parser!(udp "openvpn_udp", UdpProbeOrder::OpenVpn, OpenVPNUDPBuilder {}, builder_map, probes_l4);
-        // add_parser!(udp "radius", UdpProbeOrder::Radius, RadiusBuilder {}, builder_map, probes_l4);
+        add_parser!(udp "radius", UdpProbeOrder::Radius, RadiusBuilder {}, builder_map, probes_l4);
         add_parser!(udp "snmpv1", UdpProbeOrder::Snmpv1, SNMPv1Builder {}, builder_map, probes_l4);
         add_parser!(udp "snmpv2c", UdpProbeOrder::Snmpv2c, SNMPv2cBuilder {}, builder_map, probes_l4);
         add_parser!(udp "snmpv3", UdpProbeOrder::Snmpv3, SNMPv3Builder {}, builder_map, probes_l4);
