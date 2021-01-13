@@ -106,10 +106,10 @@ fn main() -> Result<(), io::Error> {
 
     // override config options from command-line arguments
     if let Some(jobs) = matches.value_of("jobs") {
-        let j = jobs.parse::<u32>().or_else(|_| Err(io::Error::new(
+        let j = jobs.parse::<u32>().map_err(|_| io::Error::new(
             io::ErrorKind::Other,
             "Invalid value for 'jobs' argument",
-        )))?;
+        ))?;
         config.set("num_threads", j);
     }
 

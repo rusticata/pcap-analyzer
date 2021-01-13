@@ -151,7 +151,7 @@ impl PluginRegistry {
 
     pub fn run_plugins<F, P>(&self, mut predicate: P, mut f: F)
     where
-        F: FnMut(&mut dyn Plugin) -> (),
+        F: FnMut(&mut dyn Plugin),
         P: FnMut(&dyn Plugin) -> bool,
     {
         self.plugins_all.iter().for_each(|p| {

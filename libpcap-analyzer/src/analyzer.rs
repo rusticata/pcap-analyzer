@@ -279,16 +279,16 @@ fn handle_l3_ipv4(
 }
 
 fn is_ipv6_opt(opt: IpNextHeaderProtocol) -> bool {
-    match opt {
+    matches!(
+        opt,
         IpNextHeaderProtocols::Hopopt
-        | IpNextHeaderProtocols::Ipv6Opts
-        | IpNextHeaderProtocols::Ipv6Route
-        | IpNextHeaderProtocols::Ipv6Frag
-        | IpNextHeaderProtocols::Esp
-        | IpNextHeaderProtocols::Ah
-        | IpNextHeaderProtocols::MobilityHeader => true,
-        _ => false,
-    }
+            | IpNextHeaderProtocols::Ipv6Opts
+            | IpNextHeaderProtocols::Ipv6Route
+            | IpNextHeaderProtocols::Ipv6Frag
+            | IpNextHeaderProtocols::Esp
+            | IpNextHeaderProtocols::Ah
+            | IpNextHeaderProtocols::MobilityHeader
+    )
 }
 
 fn handle_l3_ipv6(

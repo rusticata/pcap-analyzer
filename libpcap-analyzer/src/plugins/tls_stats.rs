@@ -197,7 +197,6 @@ impl<'a> Stats<'a> {
                     pdata.pcap_index, pdata.five_tuple
                 );
                 self.bypass = true;
-                return;
             }
             _ => (),
         }
