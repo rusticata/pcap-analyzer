@@ -25,6 +25,7 @@ enum TcpProbeOrder {
 #[allow(dead_code)]
 enum UdpProbeOrder {
     Dhcp,
+    Dtls,
     Dns,
     Ikev2,
     Ikev2Natt,
@@ -93,6 +94,7 @@ impl Plugin for Rusticata {
         // UDP
         add_parser!(udp "dhcp", UdpProbeOrder::Dhcp, DHCPBuilder {}, builder_map, probes_l4);
         add_parser!(udp "dns_udp", UdpProbeOrder::Dns, DnsUDPBuilder {}, builder_map, probes_l4);
+        add_parser!(udp "dtls", UdpProbeOrder::Dtls, DTLSBuilder {}, builder_map, probes_l4);
         add_parser!(udp "ikev2", UdpProbeOrder::Ikev2, IPsecBuilder {}, builder_map, probes_l4);
         add_parser!(udp "ikev2_natt", UdpProbeOrder::Ikev2Natt, IPsecNatTBuilder {}, builder_map, probes_l4);
         add_parser!(udp "kerberos_udp", UdpProbeOrder::Kerberos, KerberosUDPBuilder {}, builder_map, probes_l4);
