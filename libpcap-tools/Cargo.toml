@@ -21,11 +21,11 @@ maintenance                       = { status     = "actively-developed" }
 
 [dependencies]
 log = "0.4"
-nom = "5.0"
+nom = "6.0"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
 toml="0.5"
 
 [dependencies.pcap-parser]
-version = "0.9.3"
+version = "0.10.0"
 features = ["data"]
