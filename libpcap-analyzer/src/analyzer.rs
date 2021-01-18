@@ -157,20 +157,18 @@ pub(crate) fn handle_l3(
     match ethertype {
         // Transparent Ethernet Bridging (RFC 1701)
         EtherType(0x6558) => handle_l2(packet, ctx, data, analyzer),
-        EtherTypes::Ipv4 => handle_l3_ipv4(packet, ctx, data, ethertype, analyzer),
-        EtherTypes::Ipv6 => handle_l3_ipv6(packet, ctx, data, ethertype, analyzer),
-        EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, data, ethertype, analyzer),
+        EtherTypes::Ipv4 => handle_l3_ipv4(packet, ctx, data, analyzer),
+        EtherTypes::Ipv6 => handle_l3_ipv6(packet, ctx, data, analyzer),
+        EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, data, analyzer),
         // ignore ARP packets
         EtherTypes::Arp => Ok(()),
         // 0x880b: PPP (rfc7042)
-        EtherType(0x880b) => handle_l3_ppp(packet, ctx, data, ethertype, analyzer),
+        EtherType(0x880b) => handle_l3_ppp(packet, ctx, data, analyzer),
         // 0x8847: MPLS (RFC5332)
         // 0x8848: MPLS with upstream-assigned label (RFC5332)
-        EtherTypes::Mpls | EtherTypes::MplsMcast => {
-            handle_l3_mpls(packet, ctx, data, ethertype, analyzer)
-        }
-        EtherType(0x88be) => handle_l3_erspan(packet, ctx, data, ethertype, analyzer),
-        EtherTypes::PppoeSession => handle_l3_pppoesession(packet, ctx, data, ethertype, analyzer),
+        EtherTypes::Mpls | EtherTypes::MplsMcast => handle_l3_mpls(packet, ctx, data, analyzer),
+        EtherType(0x88be) => handle_l3_erspan(packet, ctx, data, analyzer),
+        EtherTypes::PppoeSession => handle_l3_pppoesession(packet, ctx, data, analyzer),
 
         e => {
             warn!(
@@ -186,7 +184,6 @@ fn handle_l3_ipv4(
     packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
-    ethertype: EtherType,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_ipv4 (idx={})", ctx.pcap_index);
@@ -207,12 +204,12 @@ fn handle_l3_ipv4(
         }
     };
 
+    let l4_proto = ipv4.get_next_level_protocol().0;
     let t3 = ThreeTuple {
-        proto: ethertype.0,
         src: IpAddr::V4(ipv4.get_source()),
         dst: IpAddr::V4(ipv4.get_destination()),
+        l4_proto,
     };
-    let l4_proto = ipv4.get_next_level_protocol().0;
 
     if analyzer.do_checksums {
         let cksum = ::pnet_packet::ipv4::checksum(&ipv4);
@@ -269,7 +266,7 @@ fn handle_l3_ipv4(
     // TODO check if   ip_len - ipv4.get_options_raw().len() - 20 > payload.len()
     // if yes, capture may be truncated
 
-    run_plugins_v2_network(packet, ctx, payload, &t3, l4_proto, analyzer)?;
+    run_plugins_v2_network(packet, ctx, payload, &t3, analyzer)?;
 
     let l3_info = L3Info {
         three_tuple: t3,
@@ -295,7 +292,6 @@ fn handle_l3_ipv6(
     packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
-    ethertype: EtherType,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
@@ -357,12 +353,12 @@ fn handle_l3_ipv6(
     }
 
     let t3 = ThreeTuple {
-        proto: ethertype.0,
         src: IpAddr::V6(ipv6.get_source()),
         dst: IpAddr::V6(ipv6.get_destination()),
+        l4_proto: l4_proto.0,
     };
 
-    run_plugins_v2_network(packet, ctx, payload, &t3, l4_proto.0, analyzer)?;
+    run_plugins_v2_network(packet, ctx, payload, &t3, analyzer)?;
 
     if l4_proto == IpNextHeaderProtocols::Ipv6NoNxt {
         // usually the case for IPv6 mobility
@@ -395,7 +391,6 @@ fn handle_l3_vlan_801q(
     packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
-    _ethertype: EtherType,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_vlan_801q (idx={})", ctx.pcap_index);
@@ -410,7 +405,6 @@ fn handle_l3_erspan(
     packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
-    _ethertype: EtherType,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_erspan (idx={})", ctx.pcap_index);
@@ -427,7 +421,6 @@ fn handle_l3_mpls(
     packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
-    _ethertype: EtherType,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l2_mpls (idx={})", ctx.pcap_index);
@@ -445,8 +438,8 @@ fn handle_l3_mpls(
     }
     let first_nibble = payload[0] >> 4;
     match first_nibble {
-        4 => handle_l3_ipv4(packet, ctx, payload, EtherTypes::Ipv4, analyzer),
-        6 => handle_l3_ipv6(packet, ctx, payload, EtherTypes::Ipv6, analyzer),
+        4 => handle_l3_ipv4(packet, ctx, payload, analyzer),
+        6 => handle_l3_ipv6(packet, ctx, payload, analyzer),
         _ => handle_l2(packet, ctx, payload, analyzer),
     }
     // store top label / decoder association?
@@ -456,7 +449,6 @@ fn handle_l3_pppoesession(
     packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
-    ethertype: EtherType,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_pppoesession (idx={})", ctx.pcap_index);
@@ -469,14 +461,13 @@ fn handle_l3_pppoesession(
         session.get_code(),
     );
     let ppp_data = session.payload();
-    handle_l3_ppp(packet, ctx, ppp_data, ethertype, analyzer)
+    handle_l3_ppp(packet, ctx, ppp_data, analyzer)
 }
 
 fn handle_l3_ppp(
     packet: &Packet,
     ctx: &ParseContext,
     data: &[u8],
-    ethertype: EtherType,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_ppp (idx={})", ctx.pcap_index);
@@ -485,8 +476,8 @@ fn handle_l3_ppp(
     let payload = ppp.payload();
     trace!("    ppp: protocol=0x{:02x}", proto.0,);
     match proto {
-        PppProtocolTypes::Ipv4 => handle_l3_ipv4(packet, ctx, payload, ethertype, analyzer),
-        PppProtocolTypes::Ipv6 => handle_l3_ipv6(packet, ctx, payload, ethertype, analyzer),
+        PppProtocolTypes::Ipv4 => handle_l3_ipv4(packet, ctx, payload, analyzer),
+        PppProtocolTypes::Ipv6 => handle_l3_ipv6(packet, ctx, payload, analyzer),
         _ => {
             warn!("Unsupported PPP protocol 0x{:02x}", proto.0);
             Ok(())
@@ -532,8 +523,7 @@ fn handle_l4_tcp(
     let dst_port = tcp.get_destination();
 
     // XXX begin copy/paste of handle_l4_common
-    let five_tuple =
-        FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port, l3_info.l4_proto);
+    let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
     trace!("5-t: {}", five_tuple);
     let now = packet.ts;
 
@@ -615,7 +605,7 @@ fn handle_l4_tcp(
             let packet_info = PacketInfo {
                 five_tuple: &t5,
                 to_server: !to_server,
-                l3_type: l3_info.three_tuple.proto,
+                l3_type: l3_info.three_tuple.l3_proto(),
                 l4_data: &[], // reassembled, so no L4 data
                 l4_type: t5.proto,
                 l4_payload: Some(l4_payload),
@@ -899,7 +889,7 @@ fn handle_l4_generic(
     trace!(
         "handle_l4_generic (idx={}, l4_proto={})",
         ctx.pcap_index,
-        l3_info.three_tuple.proto
+        l3_info.three_tuple.l4_proto
     );
     // in generic function, we don't know how to get l4_payload
     let l4_payload = None;
@@ -922,8 +912,7 @@ fn handle_l4_common(
     l4_payload: Option<&[u8]>,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
-    let five_tuple =
-        FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port, l3_info.l4_proto);
+    let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
     trace!("5-t: {}", five_tuple);
     let now = packet.ts;
 
@@ -960,7 +949,7 @@ fn handle_l4_common(
     let pinfo = PacketInfo {
         five_tuple: &five_tuple,
         to_server,
-        l3_type: l3_info.three_tuple.proto,
+        l3_type: l3_info.three_tuple.l3_proto(),
         l4_data,
         l4_type: five_tuple.proto,
         l4_payload,
@@ -1087,13 +1076,11 @@ fn run_plugins_v2_network<'a>(
     ctx: &ParseContext,
     l3_payload: &'a [u8],
     three_tuple: &ThreeTuple,
-    l4_proto: u8,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
-    let cb =
-        move |p: &mut dyn Plugin| p.handle_layer_network(packet, l3_payload, three_tuple, l4_proto);
+    let cb = move |p: &mut dyn Plugin| p.handle_layer_network(packet, l3_payload, three_tuple);
     let layer = 3;
-    let layer_filter = three_tuple.proto;
+    let layer_filter = three_tuple.l3_proto();
     run_plugins_v2(packet, ctx, layer, layer_filter, cb, analyzer)
 }
 

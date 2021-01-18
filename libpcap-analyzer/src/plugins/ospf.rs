@@ -278,10 +278,9 @@ impl Plugin for OspfLog {
         &'s mut self,
         packet: &'s Packet,
         payload: &'i [u8],
-        _t3: &'s ThreeTuple,
-        l4_proto: u8,
+        t3: &'s ThreeTuple,
     ) -> PluginResult<'i> {
-        if l4_proto != 89 || payload.is_empty()
+        if t3.l4_proto != 89 || payload.is_empty()
         /* OSPFIGP */
         {
             return PluginResult::None;

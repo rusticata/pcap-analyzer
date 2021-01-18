@@ -43,7 +43,6 @@ impl Plugin for BasicStats {
         _packet: &'s Packet,
         data: &'i [u8],
         t3: &'s ThreeTuple,
-        _l4_proto: u8,
     ) -> PluginResult<'i> {
         // info!("BasicStats::handle_l3 (len {})", data.len());
         let entry = self.l3_conversations.entry(t3.clone()).or_insert_with(Stats::default);

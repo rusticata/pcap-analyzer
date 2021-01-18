@@ -4,8 +4,7 @@ use std::fmt;
 use std::net::{IpAddr, Ipv4Addr};
 
 /// Network 5-tuple: layer 4 protocol (e.g TCP or UDP), source and destination IP/ports
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-#[derive(Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize)]
 pub struct FiveTuple {
     /// Layer 4 protocol (e.g TCP, UDP, ICMP)
     pub proto: u8,
@@ -36,10 +35,10 @@ pub trait ToFiveTuple {
 }
 
 impl FiveTuple {
-    /// Creates a `FiveTuple` from a `ThreeTuple`, the source/destination ports, and the layer 4 protocol
-    pub fn from_three_tuple(t3: &ThreeTuple, src_port: u16, dst_port: u16, proto: u8) -> Self {
+    /// Creates a `FiveTuple` from a `ThreeTuple`, the source/destination ports
+    pub fn from_three_tuple(t3: &ThreeTuple, src_port: u16, dst_port: u16) -> Self {
         FiveTuple {
-            proto,
+            proto: t3.l4_proto,
             src: t3.src,
             dst: t3.dst,
             src_port,

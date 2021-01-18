@@ -24,11 +24,10 @@ impl Plugin for HexDump {
         _packet: &'s Packet,
         data: &'i [u8],
         t3: &'s ThreeTuple,
-        l4_proto: u8,
     ) -> PluginResult<'i> {
         info!("HexDump::handle_l3 (len {})", data.len());
         debug!("    3t: {}", t3);
-        debug!("    l4_proto: {:x}", l4_proto);
+        debug!("    l4_proto: {:x}", t3.l4_proto);
         debug!("    l3_data:\n{}", data.to_hex(16));
         PluginResult::None
     }

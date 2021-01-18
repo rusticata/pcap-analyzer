@@ -109,14 +109,13 @@ pub trait Plugin: Sync + Send {
     /// Callback function when layer 3 data is available
     /// `packet` is the initial layer 3 packet information
     /// `payload` is the layer 3 payload. It can be different from packet.data if defragmentation occured
-    /// `ethertype` is the type of `data` as declared in ethernet frame
+    /// `t3` is the three-tuple of the connection
     /// `PLUGIN_L3` must be added to `plugin_type()` return
     fn handle_layer_network<'s, 'i>(
         &'s mut self,
         _packet: &'s Packet,
         _payload: &'i [u8],
         _t3: &'s ThreeTuple,
-        _l4_proto: u8,
     ) -> PluginResult<'i> {
         PluginResult::None
     }
