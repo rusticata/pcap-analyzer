@@ -392,7 +392,7 @@ impl TcpStream {
         tcp: &TcpPacket,
         to_server: bool,
         pcap_index: usize,
-    ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
+    ) -> Option<Vec<TcpSegment>> {
         let (mut origin, destination) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
@@ -415,7 +415,7 @@ impl TcpStream {
                     pcap_index
                 );
                 // ignore segment
-                return Ok(None);
+                return None;
             }
             None
         };
@@ -436,7 +436,7 @@ impl TcpStream {
                 destination.segments.len()
             );
             origin.status = TcpStatus::Closed; // XXX except if ACK ?
-            return Ok(ret);
+            return ret;
         }
 
         // queue segment (even if FIN, to get correct seq numbers)
@@ -521,10 +521,10 @@ impl TcpStream {
         // TODO what now?
 
         if origin.segments.is_empty() {
-            return Ok(ret);
+            return ret;
         }
 
-        Ok(ret)
+        ret
     }
 
     // force expiration (for ex after timeout) of this stream
@@ -944,12 +944,12 @@ impl TcpStreamReassembly {
                 // check for close request
                 if tcp.get_flags() & (TcpFlags::FIN | TcpFlags::RST) != 0 {
                     trace!("Requesting end of connection");
-                    stream.handle_closing_connection(tcp, to_server, pcap_index)
+                    Ok(stream.handle_closing_connection(tcp, to_server, pcap_index))
                 } else {
                     stream.handle_established_connection(tcp, to_server, pcap_index)
                 }
             }
-            _ => stream.handle_closing_connection(tcp, to_server, pcap_index),
+            _ => Ok(stream.handle_closing_connection(tcp, to_server, pcap_index)),
         }
     }
     pub(crate) fn check_expired_connections(&mut self, now: Duration) {
