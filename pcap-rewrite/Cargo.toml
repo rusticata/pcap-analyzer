@@ -24,7 +24,7 @@ libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 pnet_packet = "0.27"
-simplelog = { version="0.8.0", default-features = false }
+simplelog = { version="0.9", default-features = false }
 xz2 = "0.1"
 
 [dependencies.clap]
