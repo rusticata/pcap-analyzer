@@ -1140,7 +1140,7 @@ impl PcapAnalyzer for Analyzer {
                     "Unsupported data format (unknown linktype {}) idx={}",
                     packet.link_type, ctx.pcap_index
                 );
-                Err(Error::Generic("Unsupported data format"))
+                Ok(())
             }
         }
     }
