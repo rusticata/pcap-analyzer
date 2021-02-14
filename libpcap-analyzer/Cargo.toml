@@ -35,6 +35,9 @@ base64 = { version="0.13", optional=true }
 crossbeam-channel = "0.5"
 fasthash = "0.4"
 fnv = "1.0"
+# fix funty dependency to fix build failure in bitvec
+# (see https://github.com/bitvecto-rs/bitvec/issues/105)
+funty = "=1.1.0"
 indexmap = { version="1.1", features=["serde-1"] }
 lazy_static = "1.2"
 libpcap-tools = { path="../libpcap-tools" }
