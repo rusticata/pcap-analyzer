@@ -15,6 +15,7 @@ enum TcpProbeOrder {
     Dns,
     Tls,
     Http,
+    Ldap,
     Ssh,
     Kerberos,
     OpenVpn,
@@ -30,6 +31,7 @@ enum UdpProbeOrder {
     Ikev2,
     Ikev2Natt,
     Kerberos,
+    Ldap,
     Ntp,
     OpenVpn,
     Radius,
@@ -88,6 +90,7 @@ impl Plugin for Rusticata {
         add_parser!(tcp "dns_tcp", TcpProbeOrder::Dns, DnsTCPBuilder {}, builder_map, probes_l4);
         add_parser!(tcp "http", TcpProbeOrder::Http, HTTPBuilder {}, builder_map, probes_l4);
         add_parser!(tcp "kerberos_tcp", TcpProbeOrder::Kerberos, KerberosTCPBuilder {}, builder_map, probes_l4);
+        add_parser!(tcp "ldap_tcp", TcpProbeOrder::Ldap, LDAPBuilder {}, builder_map, probes_l4);
         add_parser!(udp "openvpn_tcp", TcpProbeOrder::OpenVpn, OpenVPNTCPBuilder {}, builder_map, probes_l4);
         add_parser!(tcp "ssh", TcpProbeOrder::Ssh, SSHBuilder {}, builder_map, probes_l4);
         add_parser!(tcp "tls", TcpProbeOrder::Tls, TLSBuilder {}, builder_map, probes_l4);
@@ -98,6 +101,7 @@ impl Plugin for Rusticata {
         add_parser!(udp "ikev2", UdpProbeOrder::Ikev2, IPsecBuilder {}, builder_map, probes_l4);
         add_parser!(udp "ikev2_natt", UdpProbeOrder::Ikev2Natt, IPsecNatTBuilder {}, builder_map, probes_l4);
         add_parser!(udp "kerberos_udp", UdpProbeOrder::Kerberos, KerberosUDPBuilder {}, builder_map, probes_l4);
+        add_parser!(udp "ldap_udp", UdpProbeOrder::Ldap, LDAPBuilder {}, builder_map, probes_l4);
         add_parser!(udp "ntp", UdpProbeOrder::Ntp, NTPBuilder {}, builder_map, probes_l4);
         add_parser!(udp "openvpn_udp", UdpProbeOrder::OpenVpn, OpenVPNUDPBuilder {}, builder_map, probes_l4);
         add_parser!(udp "radius", UdpProbeOrder::Radius, RadiusBuilder {}, builder_map, probes_l4);
