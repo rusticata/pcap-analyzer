@@ -3,10 +3,6 @@
 #[macro_use]
 extern crate log;
 
-extern crate nom;
-extern crate pcap_parser;
-extern crate rand;
-
 mod flow_map;
 mod layers;
 mod packet_info;

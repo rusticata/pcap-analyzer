@@ -1,5 +1,4 @@
-use nom::error::ErrorKind;
-use nom::Err;
+use pcap_parser::nom::{error::ErrorKind, Err};
 use pcap_parser::PcapError;
 use std::convert::From;
 use std::io;

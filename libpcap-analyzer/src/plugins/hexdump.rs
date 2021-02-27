@@ -3,7 +3,7 @@
 use crate::default_plugin_builder;
 use crate::packet_info::PacketInfo;
 use crate::plugin::{Plugin, PluginResult, PLUGIN_L3, PLUGIN_L4};
-use nom::HexDisplay;
+use libpcap_tools::pcap_parser::nom::HexDisplay;
 use libpcap_tools::{Packet, ThreeTuple};
 
 #[derive(Default)]

@@ -43,7 +43,6 @@ lazy_static = "1.2"
 libpcap-tools = { path="../libpcap-tools" }
 log = "0.4"
 multimap = "0.8"
-nom = "6.0"
 num_cpus = "1.10"
 ospf-parser = { version="0.3", optional=true }
 pnet_base = "0.27"
@@ -60,7 +59,3 @@ tls-parser = { version="0.10", optional=true }
 # path = "../../rusticata"
 git = "https://github.com/rusticata/rusticata.git"
 optional = true
-
-[dependencies.pcap-parser]
-version = "0.10"
-features = ["data"]
