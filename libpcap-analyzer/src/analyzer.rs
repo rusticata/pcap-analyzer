@@ -85,6 +85,11 @@ impl Analyzer {
         }
     }
 
+    /// Get a reference to plugin registry
+    pub fn registry(&self) -> &PluginRegistry {
+        &self.registry
+    }
+
     #[inline]
     fn handle_l2(&mut self, packet: &Packet, ctx: &ParseContext, data: &[u8]) -> Result<(), Error> {
         handle_l2(packet, ctx, data, self)
