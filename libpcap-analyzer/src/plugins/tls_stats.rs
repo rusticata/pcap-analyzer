@@ -156,8 +156,7 @@ impl<'a> TlsStats<'a> {
             *count_ref += 1;
         }
         map.insert("tls-stats-ciphers".into(), json!(m));
-        let js = Value::Object(map);
-        js
+        Value::Object(map)
     }
 }
 
