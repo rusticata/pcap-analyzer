@@ -7,6 +7,7 @@ use indexmap::IndexMap;
 use libpcap_tools::{FiveTuple, FlowID, Packet, ThreeTuple};
 use serde::Serialize;
 use serde_json::{json, Value};
+use std::any::Any;
 
 #[derive(Default, Serialize)]
 struct Stats {
@@ -22,17 +23,9 @@ pub struct BasicStats {
 
     l3_conversations: IndexMap<ThreeTuple, Stats>,
     l4_conversations: IndexMap<FiveTuple, Stats>,
-
-    output_dir: String,
 }
 
-plugin_builder!(BasicStats, BasicStatsBuilder, |config| {
-    let output_dir = output::get_output_dir(config).to_owned();
-    BasicStats {
-        output_dir,
-        ..Default::default()
-    }
-});
+plugin_builder!(BasicStats, BasicStatsBuilder);
 
 impl Plugin for BasicStats {
     fn name(&self) -> &'static str { "BasicStats" }
@@ -68,31 +61,72 @@ impl Plugin for BasicStats {
     }
 
     fn post_process(&mut self) {
+        let results = self.get_results_json();
+        info!("BasicStats: total packets {}", results["total_l3_packets"]);
+        info!("BasicStats: total bytes (L3) {}", results["total_l3"]);
+        info!("BasicStats: total bytes (L4) {}", results["total_l4"]);
+        info!("Conversions (L3):");
+        if let Some(l3) = results["l3"].as_array() {
+            for m in l3 {
+                info!(
+                    "  {} -> {} [{}]: {} bytes, {} packets",
+                    m["src"].as_str().unwrap(),
+                    m["dst"].as_str().unwrap(),
+                    m["l4_proto"],
+                    m["num_bytes"],
+                    m["num_packets"]
+                );
+            }
+        }
+        let print_l4 = |m: &Value| info!(
+            "  {}:{} -> {}:{} [{}]: {} bytes, {} packets",
+            m["src"].as_str().unwrap(),
+            m["src_port"],
+            m["dst"].as_str().unwrap(),
+            m["dst_port"],
+            m["proto"],
+            m["num_bytes"],
+            m["num_packets"]
+        );
+        if let Some(l4) = results["l4"].as_array() {
+            info!("Conversions (L4/TCP):");
+            for m in l4.iter().filter(|entry| entry["proto"] == json!(6)) {
+                print_l4(m);
+            }
+            info!("Conversions (L4/UDP):");
+            for m in l4.iter().filter(|entry| entry["proto"] == json!(17)) {
+                print_l4(m);
+            }
+            info!("Conversions (L4/other):");
+            for m in l4.iter().filter(|entry| entry["proto"] != json!(6) && entry["proto"] != json!(17)) {
+                print_l4(m);
+            }
+        }
+    }
+
+    fn get_results(&mut self) -> Option<Box<dyn Any>> {
+        let v = self.get_results_json();
+        Some(Box::new(v))
+    }
+
+    fn save_results(&mut self, path: &str) -> Result<(), &'static str> {
+        let results = self.get_results_json();
+        // save data to file
+        let file = output::create_file(path, "basic-stats.json")
+            .or(Err("Cannot create output file"))?;
+        serde_json::to_writer(file, &results).or(Err("Cannot save results to file"))?;
+        Ok(())
+    }
+}
+
+impl BasicStats {
+    fn get_results_json(&mut self) -> Value {
         self.l3_conversations.sort_keys();
         self.l4_conversations.sort_keys();
-        info!("BasicStats: total packets {}", self.total_packets);
-        info!("BasicStats: total bytes (L3) {}", self.total_bytes_l3);
         let total_l4 = self.l4_conversations
             .iter()
             .map(|(_,stats)| stats.num_bytes)
             .sum::<usize>();
-        info!("BasicStats: total bytes (L4) {}", total_l4);
-        info!("Conversions (L3):");
-        for (t3,stats) in self.l3_conversations.iter() {
-            info!("  {}: {} bytes, {} packets", t3, stats.num_bytes, stats.num_packets);
-        }
-        info!("Conversions (L4/TCP):");
-        for (t5,stats) in self.l4_conversations.iter().filter(|(t5,_)| t5.proto == 6) {
-            info!("  {}: {} bytes, {} packets", t5, stats.num_bytes, stats.num_packets);
-        }
-        info!("Conversions (L4/UDP):");
-        for (t5,stats) in self.l4_conversations.iter().filter(|(t5,_)| t5.proto == 17) {
-            info!("  {}: {} bytes, {} packets", t5, stats.num_bytes, stats.num_packets);
-        }
-        info!("Conversions (L4/other):");
-        for (t5,stats) in self.l4_conversations.iter().filter(|(t5,_)| t5.proto != 6 && t5.proto != 17) {
-            info!("  {}: {} bytes, {} packets", t5, stats.num_bytes, stats.num_packets);
-        }
         let l3 : Vec<_> = self.l3_conversations.iter()
             .map(|(t3,s)| {
                 if let Value::Object(mut m) = json!(t3) {
@@ -125,7 +159,6 @@ impl Plugin for BasicStats {
             "total_l4": total_l4,
             "l4": l4,
         });
-        let file = output::create_file(&self.output_dir, "basic-stats.json").expect("Cannot create output file");
-        serde_json::to_writer(file, &js).unwrap();
+        js
     }
 }

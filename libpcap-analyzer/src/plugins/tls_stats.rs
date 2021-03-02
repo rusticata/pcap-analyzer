@@ -4,7 +4,8 @@ use crate::{output, plugin_builder};
 use libpcap_tools::{FiveTuple, Packet};
 use rusticata::tls::*;
 use rusticata::*;
-use serde_json::{self, json};
+use serde_json::{self, json, Value};
+use std::any::Any;
 use std::collections::HashMap;
 use tls_parser::TlsVersion;
 
@@ -19,18 +20,11 @@ struct Stats<'a> {
 /// incomplete (alert during handshake) or that the handshake was not seen.
 #[derive(Default)]
 pub struct TlsStats<'a> {
-    output_dir: String,
     tls_conversations: HashMap<FiveTuple, Stats<'a>>,
 }
 
 // plugin_builder!(TlsStats, TlsStatsBuilder);
-plugin_builder!(TlsStats, TlsStatsBuilder, |config| {
-    let output_dir = output::get_output_dir(config).to_owned();
-    TlsStats {
-        output_dir,
-        tls_conversations: HashMap::default(),
-    }
-});
+plugin_builder!(TlsStats, TlsStatsBuilder);
 
 impl<'a> Plugin for TlsStats<'a> {
     fn name(&self) -> &'static str {
@@ -73,13 +67,28 @@ impl<'a> Plugin for TlsStats<'a> {
         }
         PluginResult::None
     }
-    fn post_process(&mut self) {
-        self.to_json();
+
+    fn get_results(&mut self) -> Option<Box<dyn Any>> {
+        let v = self.get_results_json();
+        Some(Box::new(v))
+    }
+
+    fn save_results(&mut self, path: &str) -> Result<(), &'static str> {
+        let results = self.get_results_json();
+        // save data to file
+        for (name, stats) in results.as_object().unwrap() {
+            let filename = format!("{}.json", name);
+            let file = output::create_file(path, &filename)
+                .or(Err("Cannot create output file"))?;
+            serde_json::to_writer(file, stats).or(Err("Cannot save results to file"))?;
+        }
+        Ok(())
     }
 }
 
 impl<'a> TlsStats<'a> {
-    fn to_json(&self) {
+    fn get_results_json(&mut self) -> Value {
+        let mut map = serde_json::Map::new();
         //
         // SSL/TLS conversations
         let conversations: Vec<_> = self
@@ -102,10 +111,7 @@ impl<'a> TlsStats<'a> {
                 js
             })
             .collect();
-        let json_ar = json!(conversations);
-        let file = output::create_file(&self.output_dir, "tls-stats-conversations.json")
-            .expect("Cannot create output file");
-        serde_json::to_writer(file, &json_ar).unwrap();
+        map.insert("tls-stats-conversations".into(), json!(conversations));
         //
         // SSL/TLS ports
         let mut m = HashMap::new();
@@ -113,10 +119,7 @@ impl<'a> TlsStats<'a> {
             let count_ref = m.entry(t5.dst_port).or_insert(0);
             *count_ref += 1;
         }
-        let js = json!(m);
-        let file = output::create_file(&self.output_dir, "tls-stats-tls-ports.json")
-            .expect("Cannot create output file");
-        serde_json::to_writer(file, &js).unwrap();
+        map.insert("tls-stats-tls-ports".into(), json!(m));
         //
         // SSL record version
         let mut m = HashMap::new();
@@ -128,10 +131,7 @@ impl<'a> TlsStats<'a> {
             .iter()
             .map(|(k, v)| (TlsVersion(*k).to_string(), v))
             .collect();
-        let js = json!(m2);
-        let file = output::create_file(&self.output_dir, "tls-stats-ssl-record-version.json")
-            .expect("Cannot create output file");
-        serde_json::to_writer(file, &js).unwrap();
+        map.insert("tls-stats-ssl-record-version".into(), json!(m2));
         //
         // Client-Hello version
         let mut m = HashMap::new();
@@ -143,10 +143,7 @@ impl<'a> TlsStats<'a> {
             .iter()
             .map(|(k, v)| (TlsVersion(*k).to_string(), v))
             .collect();
-        let js = json!(m2);
-        let file = output::create_file(&self.output_dir, "tls-stats-client-hello-version.json")
-            .expect("Cannot create output file");
-        serde_json::to_writer(file, &js).unwrap();
+        map.insert("tls-stats-client-hello-version".into(), json!(m2));
         //
         // Ciphers
         let mut m = HashMap::new();
@@ -158,10 +155,9 @@ impl<'a> TlsStats<'a> {
             let count_ref = m.entry(cipher).or_insert(0);
             *count_ref += 1;
         }
-        let js = json!(m);
-        let file = output::create_file(&self.output_dir, "tls-stats-ciphers.json")
-            .expect("Cannot create output file");
-        serde_json::to_writer(file, &js).unwrap();
+        map.insert("tls-stats-ciphers".into(), json!(m));
+        let js = Value::Object(map);
+        js
     }
 }
 

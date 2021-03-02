@@ -1,8 +1,8 @@
 use crate::analyzer::L3Info;
-use crate::plugin_registry::PluginRegistry;
-
 use crate::packet_info::PacketInfo;
+use crate::plugin_registry::PluginRegistry;
 use libpcap_tools::{Config, FiveTuple, Flow, Packet, ThreeTuple};
+use std::any::Any;
 
 /// Result struct manipulated by all plugins
 ///
@@ -38,7 +38,11 @@ pub trait PluginBuilder: Sync + Send {
     fn name(&self) -> &'static str;
     /// Builder function: instantiates zero or more plugins from configuration.
     /// All created plugins must be registered to `registry`
-    fn build(&self, registry: &mut PluginRegistry, config: &Config) -> Result<(), PluginBuilderError>;
+    fn build(
+        &self,
+        registry: &mut PluginRegistry,
+        config: &Config,
+    ) -> Result<(), PluginBuilderError>;
 }
 
 /// Indicates the plugin does not register any callback function
@@ -137,6 +141,16 @@ pub trait Plugin: Sync + Send {
     /// Callback function when a flow is destroyed
     /// `PLUGIN_FLOW_DEL` must be added to `plugin_type()` return
     fn flow_destroyed(&mut self, _flow: &Flow) {}
+
+    /// Get results, if present
+    fn get_results(&mut self) -> Option<Box<dyn Any>> {
+        None
+    }
+
+    /// Save results to specified directory
+    fn save_results(&mut self, _path: &str) -> Result<(), &'static str> {
+        Ok(())
+    }
 }
 
 /// Derives a plugin builder
@@ -157,7 +171,11 @@ macro_rules! plugin_builder {
             fn name(&self) -> &'static str {
                 stringify!($builder_name)
             }
-            fn build(&self, registry: &mut $crate::PluginRegistry, config: &libpcap_tools::Config) -> Result<(), $crate::PluginBuilderError> {
+            fn build(
+                &self,
+                registry: &mut $crate::PluginRegistry,
+                config: &libpcap_tools::Config,
+            ) -> Result<(), $crate::PluginBuilderError> {
                 let plugin = $build_fn(config);
                 let protos = plugin.plugin_type();
                 let safe_p = $crate::build_safeplugin!(plugin);

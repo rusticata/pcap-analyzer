@@ -12,13 +12,13 @@ use indexmap::IndexMap;
 use libpcap_tools::{FiveTuple, Packet};
 use serde_json::json;
 use sha1::Sha1;
+use std::any::Any;
 use std::net::IpAddr;
 
 #[derive(Default)]
 pub struct CommunityID {
     seed: u16,
     ids: IndexMap<FlowID, String>,
-    output_dir: String,
 }
 
 pub struct CommunityIDBuilder;
@@ -27,11 +27,9 @@ impl crate::plugin::PluginBuilder for CommunityIDBuilder {
     fn name(&self) -> &'static str { "CommunityIDBuilder" }
     fn build(&self, registry:&mut PluginRegistry, config:&Config) -> Result<(), PluginBuilderError> {
         let seed = config.get_usize("plugin.community_id.seed").unwrap_or(0) as u16;
-        let output_dir = output::get_output_dir(config).to_owned();
         let plugin = CommunityID{
             seed,
             ids:IndexMap::new(),
-            output_dir
         };
         let safe_p = build_safeplugin!(plugin);
         let id = registry.add_plugin(safe_p);
@@ -114,13 +112,33 @@ impl Plugin for CommunityID {
     }
 
     fn post_process(&mut self) {
-        self.ids.sort_keys();
+        let results = self.get_results_json();
         info!("Community IDs:");
-        for (t5, id) in self.ids.iter() {
-            info!("    {}: {}", t5, id);
+        if let Some(map) = results.as_object() {
+            for (k, v) in map {
+                info!("    {}: {}", k, v.as_str().unwrap());
+            }
         }
-        let js = json!({"community_ids:": self.ids});
-        let file = output::create_file(&self.output_dir, "community-ids.json").expect("Cannot create output file");
-        serde_json::to_writer(file, &js).unwrap();
+    }
+
+    fn get_results(&mut self) -> Option<Box<dyn Any>> {
+        let v = self.get_results_json();
+        Some(Box::new(v))
+    }
+
+    fn save_results(&mut self, path: &str) -> Result<(), &'static str> {
+        let results = self.get_results_json();
+        // save data to file
+        let file = output::create_file(path, "community-ids.json")
+            .or(Err("Cannot create output file"))?;
+        serde_json::to_writer(file, &results).or(Err("Cannot save results to file"))?;
+        Ok(())
+    }
+}
+
+impl CommunityID {
+    fn get_results_json(&mut self) -> serde_json::Value {
+        self.ids.sort_keys();
+        json!(self.ids)
     }
 }

@@ -132,7 +132,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
         _ => {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                "Neither a pcap nor pcap-ng header found",
+                "Neither a pcap nor pcap-ng header was found",
             ))
         }
     }

@@ -64,6 +64,7 @@ pub struct Analyzer {
     defrag_count: usize,
     do_checksums: bool,
     skip_index: usize,
+    output_dir: Option<String>,
 }
 
 impl Analyzer {
@@ -73,6 +74,7 @@ impl Analyzer {
         if skip_index > 0 {
             debug!("Will skip to index {}", skip_index);
         }
+        let output_dir = config.get("output_dir").map(|s| s.to_owned());
         Analyzer {
             registry,
             flows: FlowMap::default(),
@@ -82,6 +84,7 @@ impl Analyzer {
             defrag_count: 0,
             do_checksums,
             skip_index,
+            output_dir,
         }
     }
 
@@ -1172,6 +1175,18 @@ impl PcapAnalyzer for Analyzer {
             self.flows.clear();
 
             self.registry.run_plugins(|_| true, |p| p.post_process());
+
+            if let Some(output_dir) = &self.output_dir {
+                self.registry.run_plugins(
+                    |_| true,
+                    |p| {
+                        let res = p.save_results(&output_dir);
+                        if let Err(e) = res {
+                            warn!("error while saving results for {}: {}", p.name(), e);
+                        }
+                    },
+                );
+            }
         };
     }
 }
