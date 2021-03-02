@@ -149,6 +149,7 @@ impl PluginRegistry {
     //     }
     // }
 
+    /// Run function `F` on all known plugins (registered or not) matching `P`
     pub fn run_plugins<F, P>(&self, mut predicate: P, mut f: F)
     where
         F: FnMut(&mut dyn Plugin),
@@ -200,8 +201,18 @@ impl PluginRegistry {
         self.plugins.get_vec(&plugin_info)
     }
 
-    /// Return an iterator on all known plugins
-    pub fn iter_plugins(&self) -> impl Iterator<Item = (&PluginInfo, &SafePlugin)> {
+    /// Return an iterator on registered plugins
+    ///
+    /// The same plugin instance can be present multiple times, if registered with different `PluginInfo`
+    /// (for ex. layer filters).
+    pub fn iter_registered_plugins(&self) -> impl Iterator<Item = (&PluginInfo, &SafePlugin)> {
         self.plugins.iter()
+    }
+
+    /// Return an iterator on all known plugins
+    ///
+    /// Known plugins are plugins present in the registry (registered or not for layers)
+    pub fn iter_plugins(&self) -> impl Iterator<Item = &SafePlugin> {
+        self.plugins_all.iter()
     }
 }
