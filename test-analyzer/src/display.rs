@@ -61,6 +61,26 @@ pub fn display_json_communityid(any: Box<dyn Any>) {
     }
 }
 
+pub fn display_json_flowsinfo(any: Box<dyn Any>) {
+    let results = any.downcast::<Value>().expect("Plugin result is not JSON");
+    info!("Flows:");
+    if let Some(map) = results.as_object() {
+        for (k, v) in map {
+            info!("  Flow {}:", &k);
+            info!(
+                "    five-tuple: {}:{} -> {}:{} [{}]",
+                v["src"].as_str().unwrap(),
+                v["src_port"],
+                v["dst"].as_str().unwrap(),
+                v["dst_port"],
+                v["proto"],
+            );
+            info!("    first_seen: {}", v["first_seen"].as_str().unwrap());
+            info!("    last_seen: {}", v["last_seen"].as_str().unwrap());
+        }
+    }
+}
+
 pub fn display_json_rusticata(any: Box<dyn Any>) {
     let results = any.downcast::<Value>().expect("Plugin result is not JSON");
     info!("Rusticata:");

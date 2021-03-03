@@ -194,6 +194,7 @@ fn show_results(analyzer: &Analyzer) {
             match p.name() {
                 "BasicStats" => display_json_basicstats(res),
                 "CommunityID" => display_json_communityid(res),
+                "FlowsInfo" => display_json_flowsinfo(res),
                 "Rusticata" => display_json_rusticata(res),
                 "TlsStats" => display_json_tlsstats(res),
                 _ => display_generic(p, res),

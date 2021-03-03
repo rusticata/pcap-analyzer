@@ -10,6 +10,7 @@ mod basic_stats;
 mod community_id;
 #[cfg(feature = "plugin_examples")]
 mod examples;
+mod flows;
 #[cfg(feature = "plugins_debug")]
 mod hexdump;
 #[cfg(feature = "plugin_ospf")]
@@ -89,6 +90,7 @@ impl Default for PluginsFactory {
         v.push(Box::new(basic_stats::BasicStatsBuilder));
         #[cfg(feature = "plugin_community_id")]
         v.push(Box::new(community_id::CommunityIDBuilder));
+        v.push(Box::new(flows::FlowsInfoBuilder));
         #[cfg(feature = "plugins_debug")]
         v.push(Box::new(hexdump::HexDumpBuilder));
         #[cfg(feature = "plugin_tls_stats")]
