@@ -111,16 +111,6 @@ impl Plugin for CommunityID {
         PluginResult::None
     }
 
-    fn post_process(&mut self) {
-        let results = self.get_results_json();
-        info!("Community IDs:");
-        if let Some(map) = results.as_object() {
-            for (k, v) in map {
-                info!("    {}: {}", k, v.as_str().unwrap());
-            }
-        }
-    }
-
     fn get_results(&mut self) -> Option<Box<dyn Any>> {
         let v = self.get_results_json();
         Some(Box::new(v))

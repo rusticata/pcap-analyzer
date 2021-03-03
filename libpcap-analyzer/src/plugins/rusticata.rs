@@ -4,7 +4,12 @@ use crate::plugin::{Plugin, PluginResult, PLUGIN_FLOW_DEL, PLUGIN_L4};
 use fnv::{FnvHashMap, FnvHashSet};
 use libpcap_tools::{Flow, FlowID, Packet};
 use rusticata::prologue::*;
+use serde_json::{Map, Value};
+use std::any::Any;
 use std::collections::HashMap;
+
+mod to_json_ext;
+use to_json_ext::ToJsonExt;
 
 const PROBE_TCP: u32 = 0x0600_0000;
 const PROBE_UDP: u32 = 0x1100_0000;
@@ -193,18 +198,17 @@ impl Plugin for Rusticata {
     }
 
     fn post_process(&mut self) {
-        for (flow_id, parser) in &self.flow_parsers_archive {
-            info!("Flow: 0x{:x}", flow_id);
-            for key in parser.keys() {
-                info!("  [{}] => {:?}", key, parser.get(key));
-            }
+        // move all parsers to archive
+        self.flow_probes.clear();
+        self.flow_bypass.clear();
+        for (flow_id, parser) in self.flow_parsers.drain() {
+            self.flow_parsers_archive.push((flow_id, parser));
         }
-        for (flow_id, parser) in self.flow_parsers.iter() {
-            info!("Flow: 0x{:x}", flow_id);
-            for key in parser.keys() {
-                info!("  [{}] => {:?}", key, parser.get(key));
-            }
-        }
+    }
+
+    fn get_results(&mut self) -> Option<Box<dyn Any>> {
+        let v = self.get_results_json();
+        Some(Box::new(v))
     }
 }
 
@@ -289,5 +293,21 @@ impl Rusticata {
         if let Some(parser) = self.flow_parsers.remove(&flow_id) {
             self.flow_parsers_archive.push((flow_id, parser))
         }
+    }
+
+    fn get_results_json(&mut self) -> Value {
+        let mut archived_parsers: Map<_, _> = self
+            .flow_parsers_archive
+            .iter()
+            .map(|(flow_id, parser)| (flow_id.to_string(), parser.to_json_value()))
+            .collect();
+        let mut active_parsers: Map<_, _> = self
+            .flow_parsers
+            .iter()
+            .map(|(flow_id, parser)| (flow_id.to_string(), parser.to_json_value()))
+            .collect();
+        // merge results and return
+        archived_parsers.append(&mut active_parsers);
+        Value::Object(archived_parsers)
     }
 }

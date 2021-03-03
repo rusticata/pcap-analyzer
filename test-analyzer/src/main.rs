@@ -18,6 +18,9 @@ use std::sync::Arc;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
+mod display;
+use display::*;
+
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
     let path = Path::new(&filename);
@@ -166,15 +169,36 @@ fn main() -> Result<(), io::Error> {
     };
 
     let num_threads = config.get_usize("num_threads").unwrap_or(1);
-    let mut engine = if num_threads == 1 {
+    if num_threads == 1 {
         let analyzer = Analyzer::new(Arc::new(registry), &config);
-        Box::new(PcapDataEngine::new(analyzer, &config)) as Box<dyn PcapEngine>
+        let mut engine = PcapDataEngine::new(analyzer, &config);
+        engine.run(&mut input_reader).expect("run analyzer");
+        show_results(engine.data_analyzer());
     } else {
         let analyzer = ThreadedAnalyzer::new(registry, &config);
-        Box::new(PcapDataEngine::new(analyzer, &config)) as Box<dyn PcapEngine>
-    };
-    engine.run(&mut input_reader).expect("run analyzer");
+        let mut engine = PcapDataEngine::new(analyzer, &config);
+        engine.run(&mut input_reader).expect("run analyzer");
+        let threaded_data_analyzer = engine.data_analyzer();
+        show_results(threaded_data_analyzer.inner_analyzer());
+    }
 
     info!("test-analyzer: done");
     Ok(())
+}
+
+fn show_results(analyzer: &Analyzer) {
+    analyzer.registry().run_plugins(|_| true, |p| {
+        let res = p.get_results();
+        // dbg!(&res);
+        if let Some(res) = res {
+            match p.name() {
+                "BasicStats" => display_json_basicstats(res),
+                "CommunityID" => display_json_communityid(res),
+                "Rusticata" => display_json_rusticata(res),
+                "TlsStats" => display_json_tlsstats(res),
+                _ => display_generic(p, res),
+            }
+        } else {
+            info!("{}: <no value>", p.name());
+        }    })
 }

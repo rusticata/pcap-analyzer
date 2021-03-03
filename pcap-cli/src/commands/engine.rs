@@ -52,12 +52,6 @@ impl Command for EngineCmd {
                 );
                 CommandResult::Ok
             }
-            // "get-flows" => {
-            //     for flow in analyzer.flows().values() {
-            //         println!("Flow: {:?}", flow);
-            //     }
-            //     CommandResult::Ok
-            // }
             "set" => {
                 unimplemented!();
                 // CommandResult::Ok

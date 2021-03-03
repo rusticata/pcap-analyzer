@@ -75,6 +75,10 @@ impl<'a> ThreadedAnalyzer<'a> {
         }
     }
 
+    pub fn inner_analyzer(&self) -> &Analyzer {
+        &self.analyzer
+    }
+
     fn wait_for_empty_jobs(&self) {
         trace!("waiting for threads to finish processing");
         for job in self.local_jobs.iter() {

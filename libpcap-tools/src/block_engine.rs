@@ -10,7 +10,11 @@ pub trait BlockAnalyzer {
         Ok(())
     }
     /// Callback function for every block of the pcap/pcapng file
-    fn handle_block(&mut self, _block: &PcapBlockOwned, _block_ctx: &ParseBlockContext) -> Result<(), Error>;
+    fn handle_block(
+        &mut self,
+        _block: &PcapBlockOwned,
+        _block_ctx: &ParseBlockContext,
+    ) -> Result<(), Error>;
 
     /// Teardown function, called after reading pcap data (optional)
     fn teardown(&mut self) {}

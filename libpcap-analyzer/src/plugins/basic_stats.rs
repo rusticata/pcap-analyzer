@@ -60,50 +60,6 @@ impl Plugin for BasicStats {
         PluginResult::None
     }
 
-    fn post_process(&mut self) {
-        let results = self.get_results_json();
-        info!("BasicStats: total packets {}", results["total_l3_packets"]);
-        info!("BasicStats: total bytes (L3) {}", results["total_l3"]);
-        info!("BasicStats: total bytes (L4) {}", results["total_l4"]);
-        info!("Conversions (L3):");
-        if let Some(l3) = results["l3"].as_array() {
-            for m in l3 {
-                info!(
-                    "  {} -> {} [{}]: {} bytes, {} packets",
-                    m["src"].as_str().unwrap(),
-                    m["dst"].as_str().unwrap(),
-                    m["l4_proto"],
-                    m["num_bytes"],
-                    m["num_packets"]
-                );
-            }
-        }
-        let print_l4 = |m: &Value| info!(
-            "  {}:{} -> {}:{} [{}]: {} bytes, {} packets",
-            m["src"].as_str().unwrap(),
-            m["src_port"],
-            m["dst"].as_str().unwrap(),
-            m["dst_port"],
-            m["proto"],
-            m["num_bytes"],
-            m["num_packets"]
-        );
-        if let Some(l4) = results["l4"].as_array() {
-            info!("Conversions (L4/TCP):");
-            for m in l4.iter().filter(|entry| entry["proto"] == json!(6)) {
-                print_l4(m);
-            }
-            info!("Conversions (L4/UDP):");
-            for m in l4.iter().filter(|entry| entry["proto"] == json!(17)) {
-                print_l4(m);
-            }
-            info!("Conversions (L4/other):");
-            for m in l4.iter().filter(|entry| entry["proto"] != json!(6) && entry["proto"] != json!(17)) {
-                print_l4(m);
-            }
-        }
-    }
-
     fn get_results(&mut self) -> Option<Box<dyn Any>> {
         let v = self.get_results_json();
         Some(Box::new(v))
