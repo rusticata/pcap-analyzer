@@ -146,6 +146,41 @@ pub(crate) fn handle_l2(
                 }
             }
             let ethertype = eth.get_ethertype();
+            // detect if 802.3 or Ethernet II framing (https://en.wikipedia.org/wiki/Ethernet_frame#Ethernet_II)
+            match ethertype.0 {
+                0..=1500 => {
+                    // IEEE 802.3 frame
+                    // field is not an ethertype, but a length
+                    // next layer is a 802.2 LLC Header
+                    // [DSAP] [SSAP] [Control]
+                    // is SSAP is 0xAA, then this is a SNAP frame
+                    // see also https://www.cisco.com/c/en/us/support/docs/ibm-technologies/logical-link-control-llc/12247-45.html
+                    // and https://arxiv.org/pdf/1610.00635.pdf
+                    let payload = eth.payload();
+                    if payload.len() < 3 {
+                        warn!("Incomplete 802.3 frame (idx={})", ctx.pcap_index);
+                        return Ok(());
+                    }
+                    // if payload[1] == 0xAA {
+                    //     unimplemented!("802.3 with SNAP frame not implemented yet");
+                    // }
+                    //
+                    // LSAP values: https://en.wikipedia.org/wiki/IEEE_802.2#LSAP_values
+                    // value 6 is internet protocol
+                    // match payload[0] {
+                    //     _ => (),
+                    // }
+                    trace!("IEEE 802.3 frame, ignoring");
+                    return Ok(());
+                }
+                1501..=1536 => {
+                    warn!(
+                        "Undefined value in ethernet type/length field (idx={})",
+                        ctx.pcap_index
+                    );
+                }
+                _ => (),
+            }
             let payload = eth.payload();
             trace!("    ethertype: 0x{:x}", ethertype.0);
             run_plugins_v2_link(packet, ctx, LinkLayerType::Ethernet, payload, analyzer)?;
