@@ -26,6 +26,14 @@ impl Default for FlowMap {
 }
 
 impl FlowMap {
+    /// Use provided seed for the random number generator (flow IDs)
+    ///
+    /// This option is intended for use in testing
+    pub fn with_rng_seed(self, seed: u64) -> Self {
+        let trng = <ChaChaRng as SeedableRng>::seed_from_u64(seed);
+        FlowMap { trng, ..self }
+    }
+
     pub fn lookup_flow(&self, five_t: &FiveTuple) -> Option<FlowID> {
         self.flows_id.get(&five_t).copied()
     }

@@ -97,6 +97,14 @@ impl Analyzer {
     fn handle_l2(&mut self, packet: &Packet, ctx: &ParseContext, data: &[u8]) -> Result<(), Error> {
         handle_l2(packet, ctx, data, self)
     }
+
+    /// Use deterministic values for random numbers (for ex. flow IDs)
+    ///
+    /// This option is intended for use in testing
+    pub fn with_deterministic_rng(mut self) -> Self {
+        self.flows = self.flows.with_rng_seed(0);
+        self
+    }
 }
 
 pub(crate) fn handle_l2(
