@@ -132,16 +132,16 @@ pub(crate) fn handle_l2(
             if dest.is_multicast() {
                 match &data[..6] {
                     [0x01, 0x00, 0x0c, 0xcc, 0xcc, 0xcc] => {
-                        info!("Cisco CDP/VTP/UDLD - ignoring");
+                        debug!("Cisco CDP/VTP/UDLD - ignoring");
                         // the 'ethertype' field is used for length
                         return Ok(());
                     }
                     [0x01, 0x00, 0x0c, 0xcd, 0xcd, 0xd0] => {
-                        info!("Cisco Multicast address - ignoring");
+                        debug!("Cisco Multicast address - ignoring");
                         return Ok(());
                     }
                     _ => {
-                        info!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
+                        trace!("Ethernet broadcast (unknown type) (idx={})", ctx.pcap_index);
                     }
                 }
             }
@@ -553,7 +553,7 @@ fn handle_l3_common(
         IpNextHeaderProtocols::Ipv4 => handle_l3(packet, ctx, data, EtherTypes::Ipv4, analyzer),
         IpNextHeaderProtocols::Ipv6 => handle_l3(packet, ctx, data, EtherTypes::Ipv6, analyzer),
         p => {
-            warn!("Unsupported L4 proto {}", p);
+            warn!("Unsupported L4 proto {} (idx={})", p, ctx.pcap_index);
             handle_l4_generic(packet, ctx, data, &l3_info, analyzer)
         }
     }
