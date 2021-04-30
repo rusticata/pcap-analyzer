@@ -85,12 +85,13 @@ impl PluginsFactory {
 impl Default for PluginsFactory {
     /// Create a new plugin factory, with all default plugins
     fn default() -> Self {
-        let mut v: Vec<Box<dyn PluginBuilder>> = Vec::new();
+        let mut v: Vec<Box<dyn PluginBuilder>> = vec![
+            Box::new(basic_stats::BasicStatsBuilder),
+            Box::new(flows::FlowsInfoBuilder),
+            ];
 
-        v.push(Box::new(basic_stats::BasicStatsBuilder));
         #[cfg(feature = "plugin_community_id")]
         v.push(Box::new(community_id::CommunityIDBuilder));
-        v.push(Box::new(flows::FlowsInfoBuilder));
         #[cfg(feature = "plugins_debug")]
         v.push(Box::new(hexdump::HexDumpBuilder));
         #[cfg(feature = "plugin_tls_stats")]
