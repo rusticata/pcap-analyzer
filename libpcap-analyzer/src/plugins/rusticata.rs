@@ -145,7 +145,7 @@ impl Plugin for Rusticata {
                 if let Some(parser) = self.flow_parsers.get_mut(&flow_id) {
                     parser.as_mut()
                 } else if let Some(parser) = self.try_probe(d, flow_id, pinfo) {
-                    parser
+                    parser.as_mut()
                 } else {
                     return PluginResult::None;
                 }
@@ -259,7 +259,7 @@ impl Rusticata {
         data: &[u8],
         flow_id: FlowID,
         pinfo: &PacketInfo,
-    ) -> Option<&mut dyn RParser> {
+    ) -> Option<&mut Box<dyn RParser>> {
         let l4_info = L4Info {
             src_port: pinfo.five_tuple.src_port,
             dst_port: pinfo.five_tuple.dst_port,
@@ -271,12 +271,7 @@ impl Rusticata {
             // warn!("Protocol recognized as {} (5t: {})", parser_name, pinfo.five_tuple);
             if let Some(builder) = self.builder_map.get((&parser_name) as &str) {
                 self.flow_parsers.insert(flow_id, builder.build());
-                match self.flow_parsers.get_mut(&flow_id) {
-                    Some(p) => Some(p.as_mut()),
-                    None => None,
-                }
-            // self.flow_parsers.get_mut(&flow_id).map(|p| p.as_mut())
-            // Some(self.flow_parsers.get_mut(&flow_id).unwrap().as_mut())
+                self.flow_parsers.get_mut(&flow_id)
             } else {
                 warn!("Could not build parser for proto {}", parser_name);
                 self.flow_bypass.insert(flow_id);
