@@ -4,6 +4,7 @@ use std::hash::{Hash, Hasher};
 use crate::five_tuple::FiveTuple;
 
 /// Unique `Flow` identifier
+#[allow(clippy::upper_case_acronyms)]
 pub type FlowID = u64;
 
 /// Network flow information
