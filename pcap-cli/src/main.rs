@@ -84,7 +84,7 @@ fn main() {
                     continue;
                 }
                 // println!("Line: {}", line);
-                match commands::dispatch(&line, &mut ctx) {
+                match commands::dispatch(line, &mut ctx) {
                     CommandResult::Ok => (),
                     CommandResult::Error { errmsg, fatal } => {
                         if let Some(e) = errmsg {

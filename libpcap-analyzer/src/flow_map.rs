@@ -35,7 +35,7 @@ impl FlowMap {
     }
 
     pub fn lookup_flow(&self, five_t: &FiveTuple) -> Option<FlowID> {
-        self.flows_id.get(&five_t).copied()
+        self.flows_id.get(five_t).copied()
     }
 
     /// Return the number of flows

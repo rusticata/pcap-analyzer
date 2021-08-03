@@ -42,13 +42,13 @@ impl<'a> ThreadedAnalyzer<'a> {
             .map_or_else(num_cpus::get, |n| if n == 0 { num_cpus::get() } else { n });
         let barrier = Arc::new(Barrier::new(n_workers + 1));
         let registry = Arc::new(registry);
-        let analyzer = Analyzer::new(registry.clone(), &config);
+        let analyzer = Analyzer::new(registry.clone(), config);
 
         let mut workers = Vec::new();
         let mut local_jobs = Vec::new();
         for idx in 0..n_workers {
             let n = format!("worker {}", idx);
-            let a = Analyzer::new(registry.clone(), &config);
+            let a = Analyzer::new(registry.clone(), config);
             let (sender, receiver) = unbounded();
             // NOTE: remove job queue from lifetime management, it must be made 'static
             // to be sent to threads
@@ -89,9 +89,9 @@ impl<'a> ThreadedAnalyzer<'a> {
 
     fn dispatch(&mut self, packet: Packet<'static>, ctx: &ParseContext) -> Result<(), Error> {
         match packet.data {
-            PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
+            PacketData::L2(data) => self.handle_l2(packet, ctx, data),
             PacketData::L3(ethertype, data) => {
-                extern_dispatch_l3(&self.local_jobs, packet, &ctx, data, EtherType(ethertype))
+                extern_dispatch_l3(&self.local_jobs, packet, ctx, data, EtherType(ethertype))
             }
             PacketData::L4(_, _) => {
                 warn!("Unsupported packet data layer 4");
@@ -148,7 +148,7 @@ impl<'a> ThreadedAnalyzer<'a> {
                     payload,
                     &mut self.analyzer,
                 )?;
-                extern_dispatch_l3(&self.local_jobs, packet, &ctx, payload, ethertype)
+                extern_dispatch_l3(&self.local_jobs, packet, ctx, payload, ethertype)
             }
             None => {
                 // packet too small to be ethernet
@@ -169,7 +169,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
         // NOTE: remove packet from lifetime management, it must be made 'static
         // to be sent to threads
         let packet: Packet<'static> = unsafe { ::std::mem::transmute(packet.clone()) };
-        self.dispatch(packet, &ctx)?;
+        self.dispatch(packet, ctx)?;
         Ok(())
     }
 

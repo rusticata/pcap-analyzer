@@ -184,7 +184,7 @@ pub(crate) fn handle_l2(
             let payload = eth.payload();
             trace!("    ethertype: 0x{:x}", ethertype.0);
             run_plugins_v2_link(packet, ctx, LinkLayerType::Ethernet, payload, analyzer)?;
-            handle_l3(&packet, &ctx, payload, ethertype, analyzer)
+            handle_l3(packet, ctx, payload, ethertype, analyzer)
         }
         None => {
             // packet too small to be ethernet
@@ -449,7 +449,7 @@ fn handle_l3_vlan_801q(
     let next_ethertype = vlan.get_ethertype();
     trace!("    802.1q: VLAN id={}", vlan.get_vlan_identifier());
 
-    handle_l3(&packet, &ctx, vlan.payload(), next_ethertype, analyzer)
+    handle_l3(packet, ctx, vlan.payload(), next_ethertype, analyzer)
 }
 
 fn handle_l3_erspan(
@@ -544,17 +544,17 @@ fn handle_l3_common(
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     match IpNextHeaderProtocol(l3_info.l4_proto) {
-        IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, &l3_info, analyzer),
-        IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, &l3_info, analyzer),
-        IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, &l3_info, analyzer),
-        IpNextHeaderProtocols::Icmpv6 => handle_l4_icmpv6(packet, ctx, data, &l3_info, analyzer),
-        IpNextHeaderProtocols::Esp => handle_l4_generic(packet, ctx, data, &l3_info, analyzer),
-        IpNextHeaderProtocols::Gre => handle_l4_gre(packet, ctx, data, &l3_info, analyzer),
+        IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, l3_info, analyzer),
+        IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, l3_info, analyzer),
+        IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, l3_info, analyzer),
+        IpNextHeaderProtocols::Icmpv6 => handle_l4_icmpv6(packet, ctx, data, l3_info, analyzer),
+        IpNextHeaderProtocols::Esp => handle_l4_generic(packet, ctx, data, l3_info, analyzer),
+        IpNextHeaderProtocols::Gre => handle_l4_gre(packet, ctx, data, l3_info, analyzer),
         IpNextHeaderProtocols::Ipv4 => handle_l3(packet, ctx, data, EtherTypes::Ipv4, analyzer),
         IpNextHeaderProtocols::Ipv6 => handle_l3(packet, ctx, data, EtherTypes::Ipv6, analyzer),
         p => {
             warn!("Unsupported L4 proto {} (idx={})", p, ctx.pcap_index);
-            handle_l4_generic(packet, ctx, data, &l3_info, analyzer)
+            handle_l4_generic(packet, ctx, data, l3_info, analyzer)
         }
     }
 }
@@ -664,7 +664,7 @@ fn handle_l4_tcp(
                 pcap_index,
             };
             // let start = ::std::time::Instant::now();
-            run_plugins_v2_transport(&dummy_packet, &ctx, &packet_info, analyzer)?;
+            run_plugins_v2_transport(&dummy_packet, ctx, &packet_info, analyzer)?;
             // let elapsed = start.elapsed();
             // debug!("Time to run l4 plugins: {}.{}", elapsed.as_secs(), elapsed.as_millis());
         }
@@ -920,12 +920,12 @@ fn handle_l4_ipv6frag(
     };
 
     match l4_proto {
-        IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, &l3_info, analyzer),
-        IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, &l3_info, analyzer),
-        IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, &l3_info, analyzer),
+        IpNextHeaderProtocols::Tcp => handle_l4_tcp(packet, ctx, data, l3_info, analyzer),
+        IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, l3_info, analyzer),
+        IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, l3_info, analyzer),
         _ => {
             warn!("IPv6Fragment: Unsupported L4 proto {}", l4_proto);
-            handle_l4_generic(packet, ctx, data, &l3_info, analyzer)
+            handle_l4_generic(packet, ctx, data, l3_info, analyzer)
         }
     }
 }
@@ -1075,7 +1075,7 @@ where
             PluginResult::L2(e, payload) => {
                 handle_l3(packet, ctx, payload, EtherType(e), analyzer)?
             }
-            PluginResult::L3(l3, payload) => handle_l3_common(packet, ctx, payload, &l3, analyzer)?,
+            PluginResult::L3(l3, payload) => handle_l3_common(packet, ctx, payload, l3, analyzer)?,
             PluginResult::L4(t5, payload) => {
                 let l3_info = L3Info::default(); // XXX
                 handle_l4_common(
@@ -1172,9 +1172,9 @@ impl PcapAnalyzer for Analyzer {
             return Ok(());
         }
         match packet.data {
-            PacketData::L2(data) => self.handle_l2(packet, &ctx, data),
+            PacketData::L2(data) => self.handle_l2(packet, ctx, data),
             PacketData::L3(ethertype, data) => {
-                handle_l3(packet, &ctx, data, EtherType(ethertype), self)
+                handle_l3(packet, ctx, data, EtherType(ethertype), self)
             }
             PacketData::L4(_, _) => unimplemented!(), // XXX
             PacketData::Unsupported(raw) => {
@@ -1184,7 +1184,7 @@ impl PcapAnalyzer for Analyzer {
                     if let Some(PacketData::L3(ethertype, packet_data)) =
                         get_packetdata_raw(raw, packet.caplen as usize)
                     {
-                        return handle_l3(packet, &ctx, packet_data, EtherType(ethertype), self);
+                        return handle_l3(packet, ctx, packet_data, EtherType(ethertype), self);
                     }
                 }
                 warn!(
@@ -1223,7 +1223,7 @@ impl PcapAnalyzer for Analyzer {
                 self.registry.run_plugins(
                     |_| true,
                     |p| {
-                        let res = p.save_results(&output_dir);
+                        let res = p.save_results(output_dir);
                         if let Err(e) = res {
                             warn!("error while saving results for {}: {}", p.name(), e);
                         }

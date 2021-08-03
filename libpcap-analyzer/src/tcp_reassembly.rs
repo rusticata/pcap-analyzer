@@ -764,7 +764,7 @@ const FIRST_WINS: bool = false;
 fn handle_overlap_first_last(peer: &mut TcpPeer, segment: &mut TcpSegment) {
     // loop while segment has overlap
     while let Some(next) = peer.segments.front() {
-        if let Some(overlap_offset) = segment.overlap_offset(&next) {
+        if let Some(overlap_offset) = segment.overlap_offset(next) {
             let next_pcap_index = next.pcap_index;
             warn!(
                 "segments overlaps next candidate (offset={})",
@@ -838,7 +838,7 @@ fn handle_overlap_first_last(peer: &mut TcpPeer, segment: &mut TcpSegment) {
 fn handle_overlap_linux(peer: &mut TcpPeer, segment: &mut TcpSegment) {
     // loop while segment has overlap
     while let Some(next) = peer.segments.front() {
-        if let Some(overlap_offset) = segment.overlap_offset(&next) {
+        if let Some(overlap_offset) = segment.overlap_offset(next) {
             warn!(
                 "segment idx={} overlaps next candidate idx={} (at offset={})",
                 segment.pcap_index, next.pcap_index, overlap_offset
@@ -938,7 +938,7 @@ impl TcpStreamReassembly {
 
         match origin.status {
             TcpStatus::Closed | TcpStatus::Listen | TcpStatus::SynSent | TcpStatus::SynRcv => {
-                stream.handle_new_connection(&tcp, to_server, pcap_index)
+                stream.handle_new_connection(tcp, to_server, pcap_index)
             }
             TcpStatus::Established => {
                 // check for close request

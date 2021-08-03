@@ -93,7 +93,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
         block: &PcapBlockOwned,
         block_ctx: &ParseBlockContext,
     ) -> Result<(), Error> {
-        self.data_analyzer.handle_block(block, &block_ctx)?;
+        self.data_analyzer.handle_block(block, block_ctx)?;
         let packet = match block {
             PcapBlockOwned::NG(Block::SectionHeader(_)) => {
                 // reset section-related variables

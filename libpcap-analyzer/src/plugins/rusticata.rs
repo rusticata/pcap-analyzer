@@ -224,7 +224,7 @@ impl Rusticata {
         let filter = (l4_info.l4_proto as u32) << 24;
         for (prio, (name, probe)) in probes.iter().filter(|(id, _)| id & filter != 0) {
             // debug!("trying probe {}", name);
-            match probe(i, &l4_info) {
+            match probe(i, l4_info) {
                 ProbeResult::Certain | ProbeResult::Reverse => {
                     trace!("probe {} MATCHED", name);
                     let proto = (*name).to_string();

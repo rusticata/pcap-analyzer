@@ -105,7 +105,7 @@ impl Plugin for CommunityID {
         pinfo: &PacketInfo,
     ) -> PluginResult<'i> {
         if let Some(flow) = pinfo.flow {
-            let hash = hash_community_id(&pinfo.five_tuple, pinfo.l4_type, self.seed);
+            let hash = hash_community_id(pinfo.five_tuple, pinfo.l4_type, self.seed);
             self.ids.insert(flow.flow_id, hash);
         }
         PluginResult::None

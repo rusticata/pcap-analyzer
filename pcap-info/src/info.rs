@@ -428,7 +428,7 @@ fn pretty_print_interface(if_info: &InterfaceInfo) {
     println!("    Number of stat entries: {}", if_info.num_stats);
     for (opt_code, opt_value) in &if_info.options {
         print!("    ");
-        pretty_print_idb_option(*opt_code, &opt_value);
+        pretty_print_idb_option(*opt_code, opt_value);
     }
 }
 

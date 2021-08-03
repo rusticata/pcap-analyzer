@@ -49,7 +49,7 @@ impl PluginsFactory {
         let mut registry = PluginRegistry::new();
 
         for b in &self.list {
-            b.build(&mut registry, &config)?;
+            b.build(&mut registry, config)?;
         };
 
         Ok(registry)
@@ -64,7 +64,7 @@ impl PluginsFactory {
 
         for b in &self.list {
             if predicate(b.name()) {
-                b.build(&mut registry, &config)?;
+                b.build(&mut registry, config)?;
             }
         };
 

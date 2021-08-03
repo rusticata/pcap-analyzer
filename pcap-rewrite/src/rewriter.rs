@@ -127,7 +127,7 @@ impl PcapAnalyzer for Rewriter {
             link_type,
             data.len()
         );
-        let written = self.writer.write_packet(&packet, data)?;
+        let written = self.writer.write_packet(packet, data)?;
         self.stats.num_packets += 1;
         self.stats.num_bytes += written as u64;
 
