@@ -11,7 +11,7 @@ pub enum Error {
     #[error("I/O error: {0}")]
     IoError(#[from] io::Error),
     #[error("Pcap parser error {0:?}")]
-    Pcap(#[from] PcapError),
+    Pcap(#[from] PcapError<&'static [u8]>),
     #[error("Generic error {0}")]
     Generic(&'static str),
 }
@@ -28,11 +28,11 @@ impl From<ErrorKind> for Error {
     }
 }
 
-impl From<Err<PcapError>> for Error {
-    fn from(err: Err<PcapError>) -> Self {
+impl<'a> From<Err<PcapError<&'a [u8]>>> for Error {
+    fn from(err: Err<PcapError<&'a [u8]>>) -> Self {
         match err {
             Err::Incomplete(_) => Error::Pcap(PcapError::Incomplete),
-            Err::Error(e) | Err::Failure(e) => Error::Pcap(e),
+            Err::Error(e) | Err::Failure(e) => Error::Pcap(e.to_owned_vec()),
         }
     }
 }

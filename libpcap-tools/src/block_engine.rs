@@ -59,7 +59,15 @@ impl<A: BlockAnalyzer> BlockEngine<A> {
                 Err(PcapError::Eof) => break,
                 Err(PcapError::Incomplete) => {
                     if last_incomplete_index == ctx.block_index {
-                        warn!("Could not read complete data block.");
+                        warn!(
+                            "Could not read complete data block (block_index={})",
+                            ctx.block_index
+                        );
+                        warn!(
+                            "  Buffer: consumed={} position={}",
+                            reader.consumed(),
+                            reader.position()
+                        );
                         warn!("Hint: the reader buffer size may be too small, or the input file may be truncated.");
                         break;
                     }
@@ -67,10 +75,19 @@ impl<A: BlockAnalyzer> BlockEngine<A> {
                     // refill the buffer
                     debug!("need refill");
                     self.analyzer.before_refill();
-                    reader.refill()?;
+                    reader.refill().map_err(|e| e.to_owned_vec())?;
                     continue;
                 }
-                Err(e) => panic!("error while reading: {:?}", e),
+                Err(e) => {
+                    let e = e.to_owned_vec();
+                    error!("error while reading: {:?}", e);
+                    error!(
+                        "  Buffer: consumed={} position={}",
+                        reader.consumed(),
+                        reader.position()
+                    );
+                    return Err(Error::Pcap(e));
+                }
             }
         }
 

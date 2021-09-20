@@ -41,7 +41,7 @@ libpcap-tools = { path="../libpcap-tools" }
 log = "0.4"
 multimap = "0.8"
 num_cpus = "1.10"
-ospf-parser = { version="0.3", optional=true }
+ospf-parser = { version="0.5", optional=true }
 pnet_base = "0.28"
 pnet_macros_support = "0.28"
 pnet_packet = "0.28"
@@ -50,7 +50,7 @@ rand_chacha = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha1 = { version="0.6", features=["std"], optional=true }
-tls-parser = { version="0.10", optional=true }
+tls-parser = { version="0.11", optional=true }
 
 [dependencies.rusticata]
 # path = "../../rusticata"
