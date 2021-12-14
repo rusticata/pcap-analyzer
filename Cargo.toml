@@ -16,3 +16,7 @@ lto = true
 codegen-units = 1
 incremental = false
 # panic = 'abort'
+
+[patch.crates-io]
+pcap-parser = { git="https://github.com/rusticata/pcap-parser" }
+# pcap-parser = { path="../pcap-parser" }
