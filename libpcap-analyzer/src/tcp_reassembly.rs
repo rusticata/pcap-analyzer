@@ -205,7 +205,7 @@ impl TcpStream {
                             data: tcp.payload().to_vec(), // XXX data cloned here
                             pcap_index,
                         };
-                        queue_segment(&mut src, segment);
+                        queue_segment(src, segment);
 
                         return Ok(None);
                     }
@@ -242,7 +242,7 @@ impl TcpStream {
                         data: tcp.payload().to_vec(), // XXX data cloned here
                         pcap_index,
                     };
-                    queue_segment(&mut src, segment);
+                    queue_segment(src, segment);
                 }
             }
             // Server -- SYN+ACK --> Client
@@ -306,7 +306,7 @@ impl TcpStream {
                         data: tcp.payload().to_vec(), // XXX data cloned here
                         pcap_index,
                     };
-                    queue_segment(&mut src, segment);
+                    queue_segment(src, segment);
                 }
             }
             TcpStatus::SynRcv => {
@@ -333,7 +333,7 @@ impl TcpStream {
         to_server: bool,
         pcap_index: usize,
     ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
-        let (mut origin, destination) = if to_server {
+        let (origin, destination) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
             (&mut self.server, &mut self.client)
@@ -367,7 +367,7 @@ impl TcpStream {
             data: tcp.payload().to_vec(), // XXX data cloned here
             pcap_index,
         };
-        queue_segment(&mut origin, segment);
+        queue_segment(origin, segment);
 
         // trace!("Destination: {:?}", destination); // TODO to remove
 
@@ -449,7 +449,7 @@ impl TcpStream {
             data: tcp.payload().to_vec(), // XXX data cloned here
             pcap_index,
         };
-        queue_segment(&mut origin, segment);
+        queue_segment(origin, segment);
 
         // if tcp_flags & TcpFlags::FIN != 0 {
         //     warn!("origin next seq was {}", origin.next_rel_seq.0);

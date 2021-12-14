@@ -97,11 +97,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             );
             println!("Captured length: {}", hdr.snaplen);
             println!("Linktype: {}", hdr.network);
-            let precision = if hdr.is_nanosecond_precision() {
-                9
-            } else {
-                6
-            };
+            let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
             let if_info = InterfaceInfo {
                 if_index: 0,
                 link_type: hdr.network,
@@ -289,11 +285,7 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
         PcapBlockOwned::LegacyHeader(ref hdr) => {
             eprintln!("Unexpected legacy header block");
             end_of_section(ctx);
-            let precision = if hdr.is_nanosecond_precision() {
-                9
-            } else {
-                6
-            };
+            let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
             let if_info = InterfaceInfo {
                 if_index: 0,
                 link_type: hdr.network,

@@ -108,7 +108,7 @@ impl PcapAnalyzer for Rewriter {
             FResult::Error(e) => panic!("Filter fatal error: {}", e),
         };
         // convert data
-        let data = convert_layer(&data, self.output_layer).map_err(|e| Error::Generic(e))?;
+        let data = convert_layer(&data, self.output_layer).map_err(Error::Generic)?;
         // truncate it to new snaplen
         let data = {
             if self.snaplen > 0 && data.len() > self.snaplen {
