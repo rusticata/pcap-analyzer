@@ -12,8 +12,8 @@ use std::time::Duration;
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
+use blake2::Blake2s256;
 use digest::Digest;
-use ripemd160::Ripemd160;
 use sha1::Sha1;
 use sha2::Sha256;
 
@@ -45,7 +45,7 @@ struct Context {
     interfaces: Vec<InterfaceInfo>,
     section_num_packets: usize,
     // hashes
-    hasher_ripemd160: Ripemd160,
+    hasher_blake2: Blake2s256,
     hasher_sha1: Sha1,
     hasher_sha256: Sha256,
 }
@@ -109,7 +109,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             ctx.interfaces.push(if_info);
             ctx.section_num_packets = 0;
             let data = reader.data();
-            ctx.hasher_ripemd160.update(&data[..sz]);
+            ctx.hasher_blake2.update(&data[..sz]);
             ctx.hasher_sha1.update(&data[..sz]);
             ctx.hasher_sha256.update(&data[..sz]);
             ctx.file_bytes += sz;
@@ -119,7 +119,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             println!("Type: Pcap-NG");
             pretty_print_shb(shb);
             let data = reader.data();
-            ctx.hasher_ripemd160.update(&data[..sz]);
+            ctx.hasher_blake2.update(&data[..sz]);
             ctx.hasher_sha1.update(&data[..sz]);
             ctx.hasher_sha256.update(&data[..sz]);
             ctx.file_bytes += sz;
@@ -147,7 +147,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
                 ctx.file_bytes += sz;
                 handle_pcapblockowned(&block, &mut ctx);
                 let data = reader.data();
-                ctx.hasher_ripemd160.update(&data[..sz]);
+                ctx.hasher_blake2.update(&data[..sz]);
                 ctx.hasher_sha1.update(&data[..sz]);
                 ctx.hasher_sha256.update(&data[..sz]);
                 reader.consume(sz);
@@ -171,8 +171,8 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
     println!("{:<20}: {:x}", "SHA256", ctx.hasher_sha256.finalize_reset());
     println!(
         "{:<20}: {:x}",
-        "RIPEMD160",
-        ctx.hasher_ripemd160.finalize_reset()
+        "BLAKE2S256",
+        ctx.hasher_blake2.finalize_reset()
     );
     println!("{:<20}: {:x}", "SHA1", ctx.hasher_sha1.finalize_reset());
 
