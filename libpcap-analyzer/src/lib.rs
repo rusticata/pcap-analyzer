@@ -9,6 +9,7 @@ mod layers;
 mod packet_info;
 pub use flow_map::FlowMap;
 pub use layers::*;
+pub use packet_info::*;
 
 mod plugin;
 #[macro_use] mod plugin_registry;
