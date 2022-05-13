@@ -139,7 +139,7 @@ impl PcapAnalyzer for Rewriter {
         // debug!("snaplen: {}", snaplen);
 
         if self.run_pre_analysis {
-            // TODO: run these plugins
+            // run pre-analysis plugins
             for p in self.filters.iter_mut() {
                 if let Err(e) = p.pre_analyze(packet) {
                     panic!("Pre-analysis plugin returned fatal error {}", e);
