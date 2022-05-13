@@ -63,6 +63,10 @@ impl<A: PcapAnalyzer> PcapDataEngine<A> {
     pub fn data_analyzer(&self) -> &A {
         &self.engine.analyzer().data_analyzer
     }
+
+    pub fn data_analyzer_mut(&mut self) -> &mut A {
+        &mut self.engine.analyzer_mut().data_analyzer
+    }
 }
 
 impl<A: PcapAnalyzer> PcapDataAnalyzer<A> {
