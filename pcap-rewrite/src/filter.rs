@@ -1,3 +1,4 @@
+use libpcap_tools::Packet;
 use pcap_parser::data::PacketData;
 
 /// Intermediate result for a Filter
@@ -12,6 +13,20 @@ pub enum FResult<O, E> {
 
 pub trait Filter {
     fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String>;
+
+    /// Does this filter plugin require a first pass to pre-analyze data? (default: `false`)
+    fn require_pre_analysis(&self) -> bool {
+        false
+    }
+
+    /// Pre-analysis function
+    ///
+    /// Any error raised in this function is fatal
+    ///
+    /// Note: packet content can be accessed in `packet.data`
+    fn pre_analyze(&mut self, _packet: &Packet) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 pub fn apply_filters<'d>(

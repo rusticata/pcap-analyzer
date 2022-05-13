@@ -2,7 +2,7 @@ use crate::filter::*;
 use crate::pcap::*;
 use crate::pcapng::*;
 use crate::traits::Writer;
-use libpcap_tools::{ParseBlockContext, Error, Packet, ParseContext, PcapAnalyzer};
+use libpcap_tools::{Error, Packet, ParseBlockContext, ParseContext, PcapAnalyzer};
 use pcap_parser::data::*;
 use pcap_parser::Linktype;
 use pcap_parser::{Block, PcapBlockOwned};
@@ -27,24 +27,57 @@ pub struct Rewriter {
     writer: Box<dyn Writer>,
     filters: Vec<Box<dyn Filter>>,
     stats: Stats,
+    run_pre_analysis: bool,
 }
 
 impl Rewriter {
-    pub fn new(w: Box<dyn Write>, output_format: FileFormat) -> Self {
+    pub fn new(
+        output: Box<dyn Write>,
+        output_format: FileFormat,
+        filters: Vec<Box<dyn Filter>>,
+    ) -> Self {
         let output_linktype = Linktype::RAW;
         let output_layer = get_linktype_layer(output_linktype);
         let writer: Box<dyn Writer> = match output_format {
-            FileFormat::Pcap => Box::new(PcapWriter::new(w)),
-            FileFormat::PcapNG => Box::new(PcapNGWriter::new(w)),
+            FileFormat::Pcap => Box::new(PcapWriter::new(output)),
+            FileFormat::PcapNG => Box::new(PcapNGWriter::new(output)),
         };
         Rewriter {
             snaplen: 65535, // XXX
             output_linktype,
             output_layer,
             writer,
-            filters: Vec::new(),
+            filters,
             stats: Stats::default(),
+            run_pre_analysis: false,
         }
+    }
+
+    /// Return true if one of the plugins or more require a pre-analysis pass
+    pub fn require_pre_analysis(&self) -> bool {
+        self.filters
+            .iter()
+            .fold(false, |acc, filter| acc | filter.require_pre_analysis())
+    }
+
+    /// Set the rewriter's run pre analysis.
+    pub fn set_run_pre_analysis(&mut self, run_pre_analysis: bool) {
+        self.run_pre_analysis = run_pre_analysis;
+    }
+
+    /// Add a filter to the list
+    pub fn push_filter(&mut self, f: Box<dyn Filter>) {
+        self.filters.push(f);
+    }
+
+    /// Return an iterator over the filters
+    pub fn filters(&self) -> impl Iterator<Item = &Box<dyn Filter>> {
+        self.filters.iter()
+    }
+
+    /// Return a mutable iterator over the filters
+    pub fn filters_mut(&mut self) -> impl Iterator<Item = &mut Box<dyn Filter>> {
+        self.filters.iter_mut()
     }
 }
 
@@ -78,7 +111,11 @@ impl PcapAnalyzer for Rewriter {
         Ok(())
     }
 
-    fn handle_block(&mut self, block: &PcapBlockOwned, _block_ctx: &ParseBlockContext)  -> Result<(), Error> {
+    fn handle_block(
+        &mut self,
+        block: &PcapBlockOwned,
+        _block_ctx: &ParseBlockContext,
+    ) -> Result<(), Error> {
         // handle specific pcapng blocks
         if let PcapBlockOwned::NG(b) = block {
             match b {
@@ -99,6 +136,17 @@ impl PcapAnalyzer for Rewriter {
         let link_type = packet.link_type;
         // let snaplen = if_info.snaplen;
         // debug!("snaplen: {}", snaplen);
+
+        if self.run_pre_analysis {
+            // TODO: run these plugins
+            for p in self.filters.iter_mut() {
+                if let Err(e) = p.pre_analyze(packet) {
+                    panic!("Pre-analysis plugin returned fatal error {}", e);
+                }
+            }
+            return Ok(());
+        }
+
         // apply filters
         let data = match apply_filters(&self.filters, packet.data.clone()) {
             FResult::Ok(d) => d,
@@ -135,6 +183,11 @@ impl PcapAnalyzer for Rewriter {
     }
 
     fn teardown(&mut self) {
+        if self.run_pre_analysis {
+            info!("Pre-analysis done.");
+            self.run_pre_analysis = false;
+            return;
+        }
         info!("Done.");
         info!("Stats: {:?}", self.stats);
     }

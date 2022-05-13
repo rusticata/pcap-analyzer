@@ -4,6 +4,11 @@ use pnet_packet::ipv4::Ipv4Packet;
 use pnet_packet::ipv6::Ipv6Packet;
 use std::net::IpAddr;
 
+/// Sample plugin to select packets matching only this source IP address
+///
+/// Examples:
+///   `-f 'Source:10.9.0.2'` to select packets maching this source
+///   `-f 'Source:!10.9.0.2'` to select packets not maching this source
 pub struct SourceFilter {
     ip: IpAddr,
     exclude: bool,
@@ -38,5 +43,20 @@ impl Filter for SourceFilter {
                 FResult::Error("Cannot filter source, unsupported data".to_owned())
             }
         }
+    }
+}
+
+impl SourceFilter {
+    pub(crate) fn new(args: &[&str]) -> Self {
+        assert!(!args.is_empty());
+        let (exclude, ip_str) = if args[0].starts_with('!') {
+            (true, &args[0][1..])
+        } else {
+            (false, args[0])
+        };
+        let ip = ip_str
+            .parse()
+            .expect("Source: argument is not a valid IP address");
+        SourceFilter { ip, exclude }
     }
 }

@@ -12,9 +12,9 @@ extern crate flate2;
 extern crate pcap_parser;
 extern crate xz2;
 
-use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::{fs::File, io::Read};
 
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
@@ -42,10 +42,14 @@ fn main() -> io::Result<()> {
         .author("Pierre Chifflier")
         .about("Tool for rewriting pcap files")
         .arg(
-            Arg::with_name("plugins")
-                .help("Plugins to load (default: none)")
-                .short("p")
-                .long("plugins")
+            Arg::with_name("filters")
+                .help(
+                    "Filters to load (default: none)
+Arguments can be specified using : after the filter name.
+Example: -f Source:192.168.1.1",
+                )
+                .short("f")
+                .long("filters")
                 .takes_value(true),
         )
         .arg(
@@ -97,7 +101,53 @@ fn main() -> io::Result<()> {
         None => FileFormat::Pcap,
     };
 
-    let mut input_reader = if input_filename == "-" {
+    let mut filters: Vec<Box<dyn filter::Filter>> = Vec::new();
+    let filter_names: Vec<&str> = matches.values_of("filters").unwrap_or_default().collect();
+    for name in &filter_names {
+        eprintln!("adding filter: {}", name);
+        let args: Vec<_> = name.split(':').collect();
+        match args[0] {
+            "Source" => {
+                eprintln!("adding source filter");
+                let f = common_filters::SourceFilter::new(&args[1..]);
+                filters.push(Box::new(f));
+            }
+            "" => (),
+            _ => (),
+        }
+    }
+
+    let mut input_reader = get_reader(input_filename)?;
+    let path = Path::new(&output_filename);
+    let outfile = File::create(path)?;
+
+    // let block_analyzer = BlockRewriter::new(outfile);
+    // let mut engine = BlockEngine::new(block_analyzer, &config);
+
+    let rewriter = Rewriter::new(Box::new(outfile), output_format, filters);
+    let mut engine = PcapDataEngine::new(rewriter, &config);
+
+    if engine.data_analyzer().require_pre_analysis() {
+        // check that we are not using stdin
+        if input_filename == "-" {
+            error!("Plugins with pre-analysis pass cannot be run on stdin");
+            ::std::process::exit(1);
+        }
+        info!("Running pre-analysis pass");
+        engine.data_analyzer_mut().set_run_pre_analysis(true);
+        engine.run(&mut input_reader).expect("run analyzer");
+        // reset reader
+        input_reader = get_reader(input_filename)?;
+    }
+
+    info!("Rewriting file (output format: {:?})", output_format);
+    engine.run(&mut input_reader).expect("run analyzer");
+
+    Ok(())
+}
+
+fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
+    let input_reader = if input_filename == "-" {
         Box::new(io::stdin())
     } else {
         let path = Path::new(&input_filename);
@@ -110,18 +160,5 @@ fn main() -> io::Result<()> {
             Box::new(file) as Box<dyn io::Read>
         }
     };
-    let path = Path::new(&output_filename);
-    let outfile = File::create(path)?;
-
-    // let block_analyzer = BlockRewriter::new(outfile);
-    // let mut engine = BlockEngine::new(block_analyzer, &config);
-
-    let rewriter = Rewriter::new(Box::new(outfile), output_format);
-    let mut engine = PcapDataEngine::new(rewriter, &config);
-
-    info!("Rewriting file (output format: {:?})", output_format);
-
-    engine.run(&mut input_reader).expect("run analyzer");
-
-    Ok(())
+    Ok(input_reader)
 }
