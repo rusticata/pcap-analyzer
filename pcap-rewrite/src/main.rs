@@ -107,12 +107,16 @@ Example: -f Source:192.168.1.1",
         eprintln!("adding filter: {}", name);
         let args: Vec<_> = name.split(':').collect();
         match args[0] {
+            "IP" => {
+                eprintln!("adding IP filter");
+                let f = common_filters::IPFilter::new(&args[1..]);
+                filters.push(Box::new(f));
+            }
             "Source" => {
                 eprintln!("adding source filter");
                 let f = common_filters::SourceFilter::new(&args[1..]);
                 filters.push(Box::new(f));
             }
-            "" => (),
             _ => (),
         }
     }
