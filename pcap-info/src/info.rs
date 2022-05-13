@@ -322,12 +322,9 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
                     ctx.block_index
                 );
             }
-            let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(
-                epb.ts_high,
-                epb.ts_low,
-                if_info.if_tsoffset,
-                if_info.if_tsresol,
-            );
+            let unit = if_info.ts_unit;
+            let (ts_sec, ts_frac) =
+                pcap_parser::build_ts(epb.ts_high, epb.ts_low, if_info.if_tsoffset, unit);
             let ts_frac = ts_frac as u64;
             if ts_frac > unit {
                 println!(

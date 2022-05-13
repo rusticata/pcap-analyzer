@@ -109,12 +109,9 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                 self.ctx.pcap_index += 1;
                 assert!((epb.if_id as usize) < self.interfaces.len());
                 let if_info = &self.interfaces[epb.if_id as usize];
-                let (ts_sec, ts_frac, unit) = pcap_parser::build_ts(
-                    epb.ts_high,
-                    epb.ts_low,
-                    if_info.if_tsoffset,
-                    if_info.if_tsresol,
-                );
+                let unit = if_info.ts_unit;
+                let (ts_sec, ts_frac) =
+                    pcap_parser::build_ts(epb.ts_high, epb.ts_low, if_info.if_tsoffset, unit);
                 let unit = unit as u32; // XXX lossy cast
                 let ts_usec = if unit != MICROS_PER_SEC {
                     ts_frac / ((unit / MICROS_PER_SEC) as u32)
@@ -157,10 +154,16 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
             }
             PcapBlockOwned::LegacyHeader(ref hdr) => {
                 let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
+                let ts_unit = if hdr.is_nanosecond_precision() {
+                    1_000_000_000
+                } else {
+                    1_000_000
+                };
                 let if_info = InterfaceInfo {
                     link_type: hdr.network,
                     if_tsoffset: 0,
                     if_tsresol: precision,
+                    ts_unit,
                     snaplen: hdr.snaplen,
                 };
                 self.interfaces.push(if_info);
