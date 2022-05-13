@@ -30,6 +30,7 @@ pub struct Rewriter {
     run_pre_analysis: bool,
 }
 
+#[allow(dead_code)]
 impl Rewriter {
     pub fn new(
         output: Box<dyn Write>,
