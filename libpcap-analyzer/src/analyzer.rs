@@ -302,7 +302,7 @@ fn handle_l3_ipv4(
         }
         Fragment::Complete(ref v) => {
             warn!("IPv4 defrag done, using defrag buffer len={}", v.len());
-            &v
+            v
         }
         Fragment::Incomplete => {
             debug!("IPv4 defragmentation incomplete");
@@ -907,7 +907,7 @@ fn handle_l4_ipv6frag(
                 "IPv6Fragment defrag done, using defrag buffer len={}",
                 v.len()
             );
-            &v
+            v
         }
         Fragment::Incomplete => {
             trace!("IPv6Fragment defragmentation incomplete");
