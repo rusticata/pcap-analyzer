@@ -1,5 +1,5 @@
 use crate::interface::{pcapng_build_interface, InterfaceInfo};
-use chrono::{TimeZone, Utc};
+use smart_default::SmartDefault;
 use std::cmp::min;
 use std::convert::TryInto;
 use std::fs::{self, File};
@@ -7,7 +7,7 @@ use std::io::{self, Error, ErrorKind};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::Path;
 use std::str;
-use std::time::Duration;
+use time::{Duration, OffsetDateTime, UtcOffset};
 
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
@@ -27,15 +27,15 @@ pub struct Options {
     pub check_file: bool,
 }
 
-#[derive(Default)]
+#[derive(SmartDefault)]
 struct Context {
     file_bytes: usize,
     data_bytes: usize,
     block_index: usize,
     packet_index: usize,
-    first_packet_ts: Duration,
-    last_packet_ts: Duration,
-    previous_packet_ts: Duration,
+    first_packet_ts: (i64, i64),
+    last_packet_ts: (i64, i64),
+    previous_packet_ts: (i64, i64),
     strict_time_order: bool,
     num_ipv4_resolved: usize,
     num_ipv6_resolved: usize,
@@ -176,29 +176,35 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
     );
     println!("{:<20}: {:x}", "SHA1", ctx.hasher_sha1.finalize_reset());
 
-    let cap_duration = ctx.last_packet_ts - ctx.first_packet_ts;
+    let local_offset = UtcOffset::current_local_offset().expect("time: could not get local offset");
+    let first_ts = OffsetDateTime::from_unix_timestamp(ctx.first_packet_ts.0).unwrap()
+        + Duration::nanoseconds(ctx.first_packet_ts.1);
+    let last_ts = OffsetDateTime::from_unix_timestamp(ctx.last_packet_ts.0).unwrap()
+        + Duration::nanoseconds(ctx.last_packet_ts.1);
+    let cap_duration = last_ts - first_ts;
     println!(
         "{:<20}: {}.{:.6} seconds",
         "Capture duration",
-        cap_duration.as_secs(),
-        cap_duration.subsec_micros()
+        cap_duration.as_seconds_f32(),
+        cap_duration.subsec_microseconds()
     );
-    let dt = Utc.timestamp(
-        ctx.first_packet_ts.as_secs() as i64,
-        ctx.first_packet_ts.subsec_nanos(),
+    // println!("{:<20}: {}", "Capture duration", cap_duration);
+    println!(
+        "{:<20}: {}",
+        "First packet time",
+        first_ts.to_offset(local_offset)
     );
-    println!("{:<20}: {}", "First packet time", dt);
-    let dt = Utc.timestamp(
-        ctx.last_packet_ts.as_secs() as i64,
-        ctx.last_packet_ts.subsec_nanos(),
+    println!(
+        "{:<20}: {}",
+        "Last packet time",
+        last_ts.to_offset(local_offset)
     );
-    println!("{:<20}: {}", "Last packet time", dt);
     println!("{:<20}: {}", "Strict time order", ctx.strict_time_order);
     println!("{:<20}: {}", "Number of blocks", ctx.block_index);
     println!("{:<20}: {}", "Number of packets", ctx.packet_index);
     println!("{:<20}: {} bytes", "File size", ctx.file_bytes);
     println!("{:<20}: {} bytes", "Data size", ctx.data_bytes);
-    let bit_rate = ctx.data_bytes as f64 / cap_duration.as_secs_f64();
+    let bit_rate = ctx.data_bytes as f64 / cap_duration.as_seconds_f64();
     println!("{:<20}: {:.0} bytes/s", "Data byte rate", bit_rate);
     println!("{:<20}: {:.0} kbps/s", "Data bit rate", bit_rate * 0.008);
     println!(
@@ -209,7 +215,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
     println!(
         "{:<20}: {:.0} packets/s",
         "Average packet rate",
-        ctx.packet_index as f64 / cap_duration.as_secs_f64()
+        ctx.packet_index as f64 / cap_duration.as_seconds_f64()
     );
     if ctx.num_ipv4_resolved > 0 {
         println!(
@@ -242,23 +248,24 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
     Ok(rc)
 }
 
-fn update_time(ts: Duration, ctx: &mut Context) {
-    if ctx.first_packet_ts == Duration::default() {
-        ctx.first_packet_ts = ts;
+fn update_time(ts_sec: i64, ts_nanosec: i64, ctx: &mut Context) {
+    let dt = (ts_sec, ts_nanosec);
+    if ctx.first_packet_ts == (0, 0) {
+        ctx.first_packet_ts = (ts_sec, ts_nanosec);
     }
-    if ts < ctx.previous_packet_ts {
+    if dt < ctx.previous_packet_ts {
         println!("** unordered file");
         ctx.strict_time_order = false;
     }
-    if ts < ctx.first_packet_ts {
+    if dt < ctx.first_packet_ts {
         println!("** unordered file (before first packet)");
         ctx.strict_time_order = false;
-        ctx.first_packet_ts = ts;
+        ctx.first_packet_ts = (ts_sec, ts_nanosec);
     }
-    if ts > ctx.last_packet_ts {
-        ctx.last_packet_ts = ts;
+    if dt > ctx.last_packet_ts {
+        ctx.last_packet_ts = (ts_sec, ts_nanosec);
     }
-    ctx.previous_packet_ts = ts;
+    ctx.previous_packet_ts = (ts_sec, ts_nanosec);
 }
 
 fn end_of_section(ctx: &mut Context) {
@@ -299,14 +306,16 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
         PcapBlockOwned::Legacy(ref b) => {
             let if_info = &mut ctx.interfaces[0];
             if_info.num_packets += 1;
-            let ts = if if_info.if_tsresol == 6 {
+            let dt = if if_info.if_tsresol == 6 {
                 assert!(b.ts_usec < 1_000_000);
-                Duration::new(b.ts_sec as u64, b.ts_usec * 1000)
+                (b.ts_sec as i64, (b.ts_usec as i64) * 1000)
             } else {
                 assert!(b.ts_usec < 1_000_000_000);
-                Duration::new(b.ts_sec as u64, b.ts_usec)
+                (b.ts_sec as i64, b.ts_usec as i64)
             };
-            update_time(ts, ctx);
+            // add time offset if present
+            let tz = if_info.if_tsoffset as i64;
+            update_time(dt.0 + tz, dt.1, ctx);
             ctx.packet_index += 1;
             let data_len = b.caplen as usize;
             assert!(data_len <= b.data.len());
@@ -338,8 +347,10 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
                 _ => (ts_frac * NANOS_PER_SEC) / unit,
             };
             assert!(ts_nanosec < NANOS_PER_SEC);
-            let ts = Duration::new(ts_sec as u64, ts_nanosec as u32);
-            update_time(ts, ctx);
+            let dt = (ts_sec as i64, ts_nanosec as i64);
+            // add time offset if present
+            let tz = if_info.if_tsoffset as i64;
+            update_time(dt.0 + tz, dt.1, ctx);
             ctx.packet_index += 1;
             let data_len = epb.caplen as usize;
             assert!(data_len <= epb.data.len());

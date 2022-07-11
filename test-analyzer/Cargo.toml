@@ -15,5 +15,5 @@ libpcap-tools = { path="../libpcap-tools" }
 log = { version = "0.4", features = ["max_level_trace", "release_max_level_warn"] }
 lz4 = "1.23"
 serde_json = "1.0"
-simplelog = { version="0.11", default-features = false }
+simplelog = { version="0.12", default-features = false }
 xz2 = "0.1"

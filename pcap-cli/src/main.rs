@@ -28,9 +28,11 @@ fn main() {
     let log_level = LevelFilter::Debug;
     fern::Dispatch::new()
         .format(|out, message, record| {
+            let now = time::OffsetDateTime::now_local().unwrap();
+            let format = time::format_description::parse("[hour]:[minute]:[second]").unwrap();
             out.finish(format_args!(
                 "{} [{}] [{}] {}",
-                chrono::Local::now().format("%H:%M:%S"),
+                now.format(&format).unwrap(),
                 record.level(),
                 record.target(),
                 message
