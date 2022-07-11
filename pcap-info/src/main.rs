@@ -17,7 +17,7 @@ fn main() -> Result<(), io::Error> {
         .arg(
             Arg::with_name("no-check")
                 .help("Do not check file")
-                .short("n")
+                .short('n')
                 .long("no-check"),
         )
         .arg(

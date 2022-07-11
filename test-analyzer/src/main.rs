@@ -54,21 +54,21 @@ fn main() -> Result<(), io::Error> {
         .arg(
             Arg::with_name("config")
                 .help("Configuration file")
-                .short("c")
+                .short('c')
                 .long("config")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("jobs")
                 .help("Number of concurrent jobs to run (default: 1)")
-                .short("j")
+                .short('j')
                 .long("jobs")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("plugins")
                 .help("Plugins to load (default: all)")
-                .short("p")
+                .short('p')
                 .long("plugins")
                 .takes_value(true),
         )

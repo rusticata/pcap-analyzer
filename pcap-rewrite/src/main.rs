@@ -48,7 +48,7 @@ fn main() -> io::Result<()> {
 Arguments can be specified using : after the filter name.
 Example: -f Source:192.168.1.1",
                 )
-                .short("f")
+                .short('f')
                 .long("filters")
                 .multiple(true)
                 .number_of_values(1)
@@ -57,14 +57,14 @@ Example: -f Source:192.168.1.1",
         .arg(
             Arg::with_name("config")
                 .help("Configuration file")
-                .short("c")
+                .short('c')
                 .long("config")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("output-format")
                 .help("Output format (default: pcap)")
-                .short("of")
+                .short('o')
                 .long("output-format")
                 .takes_value(true),
         )

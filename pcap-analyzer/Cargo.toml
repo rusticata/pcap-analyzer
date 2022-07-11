@@ -20,6 +20,7 @@ is-it-maintained-open-issues      = { repository = "rusticata/pcap-analyzer" }
 maintenance                       = { status     = "actively-developed" }
 
 [dependencies]
+clap = { version = "3.2", features = ["cargo", "derive"] }
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 libpcap-analyzer = { version="0.1.0", path="../libpcap-analyzer" }
 libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
@@ -27,7 +28,3 @@ log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"
 lz4 = "1.23"
 simplelog = { version="0.11", default-features = false }
 xz2 = "0.1"
-
-[dependencies.clap]
-version = "2"
-default-features = false

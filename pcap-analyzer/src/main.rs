@@ -37,13 +37,13 @@ fn main() -> io::Result<()> {
         .arg(
             Arg::with_name("verbose")
                 .help("Be verbose")
-                .short("v")
+                .short('v')
                 .long("verbose"),
         )
         .arg(
             Arg::with_name("jobs")
                 .help("Number of concurrent jobs to run (default: 1)")
-                .short("j")
+                .short('j')
                 .long("jobs")
                 .takes_value(true),
         )
@@ -55,27 +55,27 @@ fn main() -> io::Result<()> {
         .arg(
             Arg::with_name("list-plugins")
                 .help("List instanciated plugins and exit")
-                .short("l")
+                .short('l')
                 .long("list-plugins")
         )
         .arg(
             Arg::with_name("plugins")
                 .help("Plugins to load (default: all)")
-                .short("p")
+                .short('p')
                 .long("plugins")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("config")
                 .help("Configuration file")
-                .short("c")
+                .short('c')
                 .long("config")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("outdir")
                 .help("Plugins output directory")
-                .short("o")
+                .short('o')
                 .long("outdir")
                 .takes_value(true),
         )

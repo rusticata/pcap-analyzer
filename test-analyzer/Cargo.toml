@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "3.2", features = ["cargo", "derive"] }
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 explugin-example = { path="../explugin-example" }
 libpcap-analyzer = { path="../libpcap-analyzer" }
@@ -16,7 +17,3 @@ lz4 = "1.23"
 serde_json = "1.0"
 simplelog = { version="0.11", default-features = false }
 xz2 = "0.1"
-
-[dependencies.clap]
-version = "2"
-default-features = false
