@@ -1,7 +1,9 @@
 use crate::filter::*;
 use pcap_parser::data::{PacketData, ETHERTYPE_IPV4, ETHERTYPE_IPV6};
+use pnet_packet::ethernet::EthernetPacket;
 use pnet_packet::ipv4::Ipv4Packet;
 use pnet_packet::ipv6::Ipv6Packet;
+use pnet_packet::Packet;
 use std::net::IpAddr;
 
 /// Common filter to select packets matching this IP address either as source or destination
@@ -17,7 +19,17 @@ pub struct IPFilter {
 impl Filter for IPFilter {
     fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
         match i {
-            PacketData::L2(_) => FResult::Ok(i),
+            PacketData::L2(data) => {
+                let p = match EthernetPacket::new(data) {
+                    Some(p) => p,
+                    None => return FResult::Error("Cannot build ethernet data".to_owned()),
+                };
+                if self.match_l3(p.get_ethertype().0, p.payload()) {
+                    FResult::Ok(i)
+                } else {
+                    FResult::Drop
+                }
+            }
             PacketData::L3(ethertype, data) => {
                 let matched = {
                     if ethertype == ETHERTYPE_IPV4 {
@@ -63,6 +75,23 @@ impl IPFilter {
             .expect("IP: argument is not a valid IP address");
         IPFilter { ip, exclude }
     }
+
+    fn match_l3(&self, ethertype: u16, data: &[u8]) -> bool {
+        let matched = {
+            if ethertype == ETHERTYPE_IPV4 {
+                Ipv4Packet::new(data)
+                    .map(|ipv4| ipv4.get_source() == self.ip || ipv4.get_destination() == self.ip)
+                    .unwrap_or(false)
+            } else if ethertype == ETHERTYPE_IPV6 {
+                Ipv6Packet::new(data)
+                    .map(|ipv6| ipv6.get_source() == self.ip || ipv6.get_destination() == self.ip)
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        };
+        matched ^ self.exclude
+    }
 }
 
 /// Common filter to select packets matching only this source IP address
@@ -78,22 +107,19 @@ pub struct SourceFilter {
 impl Filter for SourceFilter {
     fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
         match i {
-            PacketData::L2(_) => FResult::Ok(i),
-            PacketData::L3(ethertype, data) => {
-                let matched = {
-                    if ethertype == ETHERTYPE_IPV4 {
-                        Ipv4Packet::new(data)
-                            .map(|ipv4| ipv4.get_source() == self.ip)
-                            .unwrap_or(false)
-                    } else if ethertype == ETHERTYPE_IPV6 {
-                        Ipv6Packet::new(data)
-                            .map(|ipv6| ipv6.get_source() == self.ip)
-                            .unwrap_or(false)
-                    } else {
-                        false
-                    }
+            PacketData::L2(data) => {
+                let p = match EthernetPacket::new(data) {
+                    Some(p) => p,
+                    None => return FResult::Error("Cannot build ethernet data".to_owned()),
                 };
-                if matched ^ self.exclude {
+                if self.match_l3(p.get_ethertype().0, p.payload()) {
+                    FResult::Ok(i)
+                } else {
+                    FResult::Drop
+                }
+            }
+            PacketData::L3(ethertype, data) => {
+                if self.match_l3(ethertype, data) {
                     FResult::Ok(i)
                 } else {
                     FResult::Drop
@@ -119,5 +145,22 @@ impl SourceFilter {
             .parse()
             .expect("Source: argument is not a valid IP address");
         SourceFilter { ip, exclude }
+    }
+
+    fn match_l3(&self, ethertype: u16, data: &[u8]) -> bool {
+        let matched = {
+            if ethertype == ETHERTYPE_IPV4 {
+                Ipv4Packet::new(data)
+                    .map(|ipv4| ipv4.get_source() == self.ip)
+                    .unwrap_or(false)
+            } else if ethertype == ETHERTYPE_IPV6 {
+                Ipv6Packet::new(data)
+                    .map(|ipv6| ipv6.get_source() == self.ip)
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        };
+        matched ^ self.exclude
     }
 }
