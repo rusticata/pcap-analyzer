@@ -108,7 +108,9 @@ fn get_linktype_layer(l: Linktype) -> usize {
 
 impl PcapAnalyzer for Rewriter {
     fn init(&mut self) -> Result<(), Error> {
-        self.writer.init_file(self.snaplen, self.output_linktype)?;
+        if !self.run_pre_analysis {
+            self.writer.init_file(self.snaplen, self.output_linktype)?;
+        }
         Ok(())
     }
 
