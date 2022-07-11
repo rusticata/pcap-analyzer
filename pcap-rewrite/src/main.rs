@@ -107,7 +107,7 @@ Example: -f Source:192.168.1.1",
     let filter_names: Vec<&str> = matches.values_of("filters").unwrap_or_default().collect();
     for name in &filter_names {
         eprintln!("adding filter: {}", name);
-        let args: Vec<_> = name.split(':').collect();
+        let args: Vec<_> = name.splitn(2, ':').collect();
         match args[0] {
             "IP" => {
                 eprintln!("adding IP filter");
