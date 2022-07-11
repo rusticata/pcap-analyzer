@@ -23,7 +23,7 @@ maintenance                       = { status     = "actively-developed" }
 default = ["release"]
 release = ["plugin_community_id", "plugin_ospf", "plugin_rusticata", "plugin_tls_stats"]
 all = ["release", "plugins_debug", "plugin_examples"]
-plugin_community_id = ["sha1", "base64"]
+plugin_community_id = ["sha1", "base16ct", "base64ct"]
 plugins_debug = []
 plugin_examples = []
 plugin_ospf = ["ospf-parser"]
@@ -31,7 +31,8 @@ plugin_rusticata = ["rusticata"]
 plugin_tls_stats = ["rusticata","tls-parser"]
 
 [dependencies]
-base64 = { version="0.13", optional=true }
+base16ct = { version="0.1", features=["alloc"], optional=true }
+base64ct = { version="1.5", features=["alloc"], optional=true }
 crossbeam-channel = "0.5"
 fasthash = "0.4"
 fnv = "1.0"
@@ -49,7 +50,7 @@ rand="0.8"
 rand_chacha = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sha1 = { version="0.6", features=["std"], optional=true }
+sha1 = { version="0.10", features=["std"], optional=true }
 tls-parser = { version="0.11", optional=true }
 
 [dependencies.rusticata]

@@ -8,10 +8,11 @@ use libpcap_tools::{Config, FlowID};
 use crate::plugin::{Plugin, PluginBuilderError, PluginResult};
 use crate::packet_info::PacketInfo;
 use crate::plugin::PLUGIN_L4;
+use base64ct::{Base64, Encoding};
 use indexmap::IndexMap;
 use libpcap_tools::{FiveTuple, Packet};
 use serde_json::json;
-use sha1::Sha1;
+use sha1::{Sha1, Digest};
 use std::any::Any;
 use std::net::IpAddr;
 
@@ -83,10 +84,11 @@ fn hash_community_id(five_tuple: &FiveTuple, l4_type: u8, seed: u16) -> String {
         }
         _ => (),
     }
+    let hash = m.finalize();
     let digest = if do_base64 {
-        base64::encode(&m.digest().bytes())
+        Base64::encode_string(&hash)
     } else {
-        m.hexdigest()
+        base16ct::lower::encode_string(&hash)
     };
     format!("{}:{}", community_id_version, digest)
 }
