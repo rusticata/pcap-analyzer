@@ -21,6 +21,9 @@ jobs:
           override: true
       - name: Cargo update
         run: cargo update
+      - name: Cargo update (fix for MSRV)
+        run: cargo update -p time@0.3.11 --precise 0.3.9
+        if: matrix.rust == '1.56.0'
       - uses: actions-rs/cargo@v1
         with:
           command: check
