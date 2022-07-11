@@ -50,6 +50,8 @@ Example: -f Source:192.168.1.1",
                 )
                 .short("f")
                 .long("filters")
+                .multiple(true)
+                .number_of_values(1)
                 .takes_value(true),
         )
         .arg(
