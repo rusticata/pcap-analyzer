@@ -3,11 +3,11 @@ use crate::plugin::{Plugin, PluginResult, PLUGIN_L4};
 use crate::{output, plugin_builder};
 use libpcap_tools::{FiveTuple, Packet};
 use rusticata::tls::*;
+use rusticata::tls_parser::TlsVersion;
 use rusticata::*;
 use serde_json::{self, json, Value};
 use std::any::Any;
 use std::collections::HashMap;
-use tls_parser::TlsVersion;
 
 struct Stats<'a> {
     parser: TlsParser<'a>,
@@ -78,8 +78,7 @@ impl<'a> Plugin for TlsStats<'a> {
         // save data to file
         for (name, stats) in results.as_object().unwrap() {
             let filename = format!("{}.json", name);
-            let file = output::create_file(path, &filename)
-                .or(Err("Cannot create output file"))?;
+            let file = output::create_file(path, &filename).or(Err("Cannot create output file"))?;
             serde_json::to_writer(file, stats).or(Err("Cannot save results to file"))?;
         }
         Ok(())
