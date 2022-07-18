@@ -16,7 +16,7 @@ fn main() {
     println!("pcap-cli {}", crate_version!());
 
     // Create an Editor with the default configuration options.
-    let mut repl = Editor::<()>::new();
+    let mut repl = Editor::<()>::new().expect("could not create repl editor");
     // Load a file with the history of commands
     // If the file does not exists, it creates one.
     if repl.load_history("history.txt").is_err() {
