@@ -32,7 +32,10 @@ use crate::rewriter::*;
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
     let path = Path::new(&filename);
-    let file = File::open(path)?;
+    let file = File::open(path).map_err(|e| {
+        error!("Could not open config file '{filename}'");
+        e
+    })?;
     config.load_config(file)
 }
 
@@ -157,7 +160,10 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
         Box::new(io::stdin())
     } else {
         let path = Path::new(&input_filename);
-        let file = File::open(path)?;
+        let file = File::open(path).map_err(|e| {
+            error!("Could not open input file '{input_filename}'");
+            e
+        })?;
         if input_filename.ends_with(".gz") {
             Box::new(GzDecoder::new(file))
         } else if input_filename.ends_with(".xz") {

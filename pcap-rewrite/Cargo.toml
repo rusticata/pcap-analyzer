@@ -31,3 +31,6 @@ xz2 = "0.1"
 [dependencies.pcap-parser]
 version = "0.14"
 features = ["data", "serialize"]
+
+[dev-dependencies]
+assert_cmd = "2.0"
