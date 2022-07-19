@@ -1,13 +1,12 @@
 #![warn(clippy::all)]
 
+use pcap_info::*;
+
 extern crate clap;
 use clap::{crate_version, App, Arg};
 
 use std::io;
 use std::process;
-
-mod info;
-mod interface;
 
 fn main() -> Result<(), io::Error> {
     let matches = App::new("Pcap information tool")
@@ -29,11 +28,11 @@ fn main() -> Result<(), io::Error> {
         .get_matches();
 
     let input_filename = matches.value_of("INPUT").unwrap();
-    let options = info::Options {
+    let options = Options {
         check_file: !matches.is_present("no-check"),
     };
 
-    let rc = info::process_file(input_filename, &options)?;
+    let rc = pcap_info(input_filename, &options)?;
 
     process::exit(rc);
 }
