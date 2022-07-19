@@ -1,13 +1,12 @@
 use crate::interface::{pcapng_build_interface, InterfaceInfo};
+use digest::generic_array::GenericArray;
 use smart_default::SmartDefault;
 use std::cmp::min;
-use std::convert::TryInto;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{self, Error, ErrorKind};
-use std::net::{Ipv4Addr, Ipv6Addr};
 use std::path::Path;
 use std::str;
-use time::{Duration, OffsetDateTime, UtcOffset};
+use time::{Duration, OffsetDateTime};
 
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
@@ -27,27 +26,85 @@ pub struct Options {
     pub check_file: bool,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum FileType {
+    Pcap,
+    PcapNG,
+}
+
 #[derive(SmartDefault)]
-struct Context {
-    file_bytes: usize,
-    data_bytes: usize,
-    block_index: usize,
-    packet_index: usize,
+pub struct PcapInfo {
+    is_pcapng: bool,
+    pub version_major: u16,
+    pub version_minor: u16,
+
+    pub native_endian: bool,
+
+    pub file_bytes: usize,
+    pub data_bytes: usize,
+    pub block_index: usize,
+    pub packet_index: usize,
     first_packet_ts: (i64, i64),
     last_packet_ts: (i64, i64),
     previous_packet_ts: (i64, i64),
-    strict_time_order: bool,
-    num_ipv4_resolved: usize,
-    num_ipv6_resolved: usize,
-    num_secrets_blocks: usize,
-    num_custom_blocks: usize,
+    pub strict_time_order: bool,
+    pub num_ipv4_resolved: usize,
+    pub num_ipv6_resolved: usize,
+    pub num_secrets_blocks: usize,
+    pub num_custom_blocks: usize,
     // section-related variables
-    interfaces: Vec<InterfaceInfo>,
+    pub interfaces: Vec<InterfaceInfo>,
     section_num_packets: usize,
     // hashes
     hasher_blake2: Blake2s256,
     hasher_sha1: Sha1,
     hasher_sha256: Sha256,
+}
+
+impl PcapInfo {
+    #[inline]
+    pub const fn file_type(&self) -> FileType {
+        if self.is_pcapng {
+            FileType::PcapNG
+        } else {
+            FileType::Pcap
+        }
+    }
+
+    pub fn first_packet(&self) -> Option<OffsetDateTime> {
+        OffsetDateTime::from_unix_timestamp(self.first_packet_ts.0)
+            .ok()
+            .map(|t| t + Duration::nanoseconds(self.first_packet_ts.1))
+    }
+
+    pub fn last_packet(&self) -> Option<OffsetDateTime> {
+        OffsetDateTime::from_unix_timestamp(self.last_packet_ts.0)
+            .ok()
+            .map(|t| t + Duration::nanoseconds(self.last_packet_ts.1))
+    }
+
+    pub fn capture_duration(&self) -> Duration {
+        let first_ts = OffsetDateTime::from_unix_timestamp(self.first_packet_ts.0).unwrap()
+            + Duration::nanoseconds(self.first_packet_ts.1);
+        let last_ts = OffsetDateTime::from_unix_timestamp(self.last_packet_ts.0).unwrap()
+            + Duration::nanoseconds(self.last_packet_ts.1);
+        last_ts - first_ts
+    }
+
+    pub fn sha1(&self) -> GenericArray<u8, digest::typenum::U20> {
+        let mut hash = self.hasher_sha1.clone();
+        hash.finalize_reset()
+    }
+
+    pub fn sha256(&self) -> GenericArray<u8, digest::typenum::U32> {
+        let mut hash = self.hasher_sha256.clone();
+        hash.finalize_reset()
+    }
+
+    pub fn blakes256(&self) -> GenericArray<u8, digest::typenum::U32> {
+        let mut hash = self.hasher_blake2.clone();
+        hash.finalize_reset()
+    }
 }
 
 fn open_file(name: &str) -> Result<Box<dyn io::Read>, io::Error> {
@@ -68,35 +125,19 @@ fn open_file(name: &str) -> Result<Box<dyn io::Read>, io::Error> {
 }
 
 #[allow(clippy::field_reassign_with_default)]
-pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Error> {
-    println!("File name: {}", name);
-
-    if name != "-" {
-        let metadata = fs::metadata(name)?;
-        println!("  size: {}", metadata.len());
-    }
-
+pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapInfo), io::Error> {
     let file = open_file(name)?;
     let mut reader = create_reader(128 * 1024, file).expect("reader");
 
-    let mut ctx = Context::default();
+    let mut ctx = PcapInfo::default();
     ctx.strict_time_order = true;
 
     let first_block = reader.next();
     match first_block {
         Ok((sz, PcapBlockOwned::LegacyHeader(hdr))) => {
-            println!("Type: Legacy Pcap");
-            println!("Version: {}.{}", hdr.version_major, hdr.version_minor);
-            println!(
-                "Byte Ordering: {}",
-                if hdr.magic_number >> 16 == 0xa1b2 {
-                    "Native"
-                } else {
-                    "Reverse"
-                }
-            );
-            println!("Captured length: {}", hdr.snaplen);
-            println!("Linktype: {}", hdr.network);
+            ctx.version_major = hdr.version_major;
+            ctx.version_minor = hdr.version_minor;
+            ctx.native_endian = hdr.magic_number >> 16 == 0xa1b2;
             let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
             let if_info = InterfaceInfo {
                 if_index: 0,
@@ -116,8 +157,10 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
             reader.consume(sz);
         }
         Ok((sz, PcapBlockOwned::NG(Block::SectionHeader(ref shb)))) => {
-            println!("Type: Pcap-NG");
-            pretty_print_shb(shb);
+            ctx.is_pcapng = true;
+            ctx.version_major = shb.major_version;
+            ctx.version_minor = shb.minor_version;
+            ctx.native_endian = shb.bom == BOM_MAGIC;
             let data = reader.data();
             ctx.hasher_blake2.update(&data[..sz]);
             ctx.hasher_sha1.update(&data[..sz]);
@@ -135,7 +178,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
     ctx.block_index += 1;
 
     if !options.check_file {
-        return Ok(0);
+        return Ok((0, ctx));
     }
 
     let mut last_incomplete_index = 0;
@@ -168,87 +211,10 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<i32, io::Err
         }
     }
 
-    println!("{:<20}: {:x}", "SHA256", ctx.hasher_sha256.finalize_reset());
-    println!(
-        "{:<20}: {:x}",
-        "BLAKE2S256",
-        ctx.hasher_blake2.finalize_reset()
-    );
-    println!("{:<20}: {:x}", "SHA1", ctx.hasher_sha1.finalize_reset());
-
-    let local_offset = UtcOffset::current_local_offset().expect("time: could not get local offset");
-    let first_ts = OffsetDateTime::from_unix_timestamp(ctx.first_packet_ts.0).unwrap()
-        + Duration::nanoseconds(ctx.first_packet_ts.1);
-    let last_ts = OffsetDateTime::from_unix_timestamp(ctx.last_packet_ts.0).unwrap()
-        + Duration::nanoseconds(ctx.last_packet_ts.1);
-    let cap_duration = last_ts - first_ts;
-    println!(
-        "{:<20}: {}.{:.6} seconds",
-        "Capture duration",
-        cap_duration.as_seconds_f32(),
-        cap_duration.subsec_microseconds()
-    );
-    // println!("{:<20}: {}", "Capture duration", cap_duration);
-    println!(
-        "{:<20}: {}",
-        "First packet time",
-        first_ts.to_offset(local_offset)
-    );
-    println!(
-        "{:<20}: {}",
-        "Last packet time",
-        last_ts.to_offset(local_offset)
-    );
-    println!("{:<20}: {}", "Strict time order", ctx.strict_time_order);
-    println!("{:<20}: {}", "Number of blocks", ctx.block_index);
-    println!("{:<20}: {}", "Number of packets", ctx.packet_index);
-    println!("{:<20}: {} bytes", "File size", ctx.file_bytes);
-    println!("{:<20}: {} bytes", "Data size", ctx.data_bytes);
-    let bit_rate = ctx.data_bytes as f64 / cap_duration.as_seconds_f64();
-    println!("{:<20}: {:.0} bytes/s", "Data byte rate", bit_rate);
-    println!("{:<20}: {:.0} kbps/s", "Data bit rate", bit_rate * 0.008);
-    println!(
-        "{:<20}: {:.2} bytes",
-        "Average packet size",
-        ctx.data_bytes as f64 / ctx.packet_index as f64
-    );
-    println!(
-        "{:<20}: {:.0} packets/s",
-        "Average packet rate",
-        ctx.packet_index as f64 / cap_duration.as_seconds_f64()
-    );
-    if ctx.num_ipv4_resolved > 0 {
-        println!(
-            "{:<20}: {}",
-            "Number of IPv4 resolved", ctx.num_ipv4_resolved
-        );
-    }
-    if ctx.num_ipv6_resolved > 0 {
-        println!(
-            "{:<20}: {}",
-            "Number of IPv6 resolved", ctx.num_ipv6_resolved
-        );
-    }
-    if ctx.num_secrets_blocks > 0 {
-        println!(
-            "{:<20}: {}",
-            "Number of decryption secrets blocks", ctx.num_secrets_blocks
-        );
-    }
-    if ctx.num_custom_blocks > 0 {
-        println!(
-            "{:<20}: {}",
-            "Number of custom blocks", ctx.num_custom_blocks
-        );
-    }
-    println!("{:<20}: {}", "Number of interfaces", ctx.interfaces.len());
-
-    end_of_section(&mut ctx);
-
-    Ok(rc)
+    Ok((rc, ctx))
 }
 
-fn update_time(ts_sec: i64, ts_nanosec: i64, ctx: &mut Context) {
+fn update_time(ts_sec: i64, ts_nanosec: i64, ctx: &mut PcapInfo) {
     let dt = (ts_sec, ts_nanosec);
     if ctx.first_packet_ts == (0, 0) {
         ctx.first_packet_ts = (ts_sec, ts_nanosec);
@@ -268,40 +234,31 @@ fn update_time(ts_sec: i64, ts_nanosec: i64, ctx: &mut Context) {
     ctx.previous_packet_ts = (ts_sec, ts_nanosec);
 }
 
-fn end_of_section(ctx: &mut Context) {
-    // print information for all interfaces in section
-    for interface in &ctx.interfaces {
-        pretty_print_interface(interface);
-    }
-    // reset section-related variables in context
-    ctx.interfaces = Vec::new();
-    ctx.section_num_packets = 0;
-}
-
-fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
+fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut PcapInfo) {
     match b {
-        PcapBlockOwned::NG(Block::SectionHeader(ref shb)) => {
-            end_of_section(ctx);
-            pretty_print_shb(shb);
+        PcapBlockOwned::NG(Block::SectionHeader(ref _shb)) => {
+            todo!("Files with multiple sections are not yet supported");
+            // end_of_section(ctx);
+            // pretty_print_shb(shb);
         }
         PcapBlockOwned::NG(Block::InterfaceDescription(ref idb)) => {
             let num_interfaces = ctx.interfaces.len();
             let if_info = pcapng_build_interface(idb, num_interfaces);
             ctx.interfaces.push(if_info);
         }
-        PcapBlockOwned::LegacyHeader(ref hdr) => {
-            eprintln!("Unexpected legacy header block");
-            end_of_section(ctx);
-            let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
-            let if_info = InterfaceInfo {
-                if_index: 0,
-                link_type: hdr.network,
-                if_tsoffset: 0,
-                if_tsresol: precision,
-                snaplen: hdr.snaplen,
-                ..InterfaceInfo::default()
-            };
-            ctx.interfaces.push(if_info);
+        PcapBlockOwned::LegacyHeader(ref _hdr) => {
+            todo!("Unexpected legacy header block");
+            // // end_of_section(ctx);
+            // let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
+            // let if_info = InterfaceInfo {
+            //     if_index: 0,
+            //     link_type: hdr.network,
+            //     if_tsoffset: 0,
+            //     if_tsresol: precision,
+            //     snaplen: hdr.snaplen,
+            //     ..InterfaceInfo::default()
+            // };
+            // ctx.interfaces.push(if_info);
         }
         PcapBlockOwned::Legacy(ref b) => {
             let if_info = &mut ctx.interfaces[0];
@@ -393,132 +350,7 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut Context) {
             ctx.num_custom_blocks += 1;
         }
         PcapBlockOwned::NG(b) => {
-            println!("*** Unsupported block type (magic={:08x}) ***", b.magic());
-        }
-    }
-}
-
-fn pretty_print_shb(shb: &SectionHeaderBlock) {
-    println!("Section header:");
-    println!("    Version: {}.{}", shb.major_version, shb.minor_version);
-    println!("    Section length: {}", shb.section_len);
-    println!(
-        "    Byte Ordering: {}",
-        if shb.bom == BOM_MAGIC {
-            "Native"
-        } else {
-            "Reverse"
-        }
-    );
-    for opt in &shb.options {
-        print!("    ");
-        pretty_print_shb_option(opt);
-    }
-}
-
-fn pretty_print_interface(if_info: &InterfaceInfo) {
-    println!("Interface #{} description:", if_info.if_index);
-    println!("    Index: {}", if_info.if_index);
-    println!(
-        "    Encapsulation: {} ({})",
-        if_info.link_type, if_info.link_type.0
-    );
-    println!("    Capture length: {}", if_info.snaplen);
-    println!("    Number of packets: {}", if_info.num_packets);
-    println!("    Number of stat entries: {}", if_info.num_stats);
-    for (opt_code, opt_value) in &if_info.options {
-        print!("    ");
-        pretty_print_idb_option(*opt_code, opt_value);
-    }
-}
-
-fn pretty_print_idb_option(code: OptionCode, value: &[u8]) {
-    match code {
-        OptionCode::Comment => {
-            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
-            println!("Hardware: {}", s);
-        }
-        OptionCode::EndOfOpt => println!("End of Options"),
-        OptionCode(2) => {
-            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
-            println!("Name: {}", s);
-        }
-        OptionCode(3) => {
-            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
-            println!("if_description: {}", s);
-        }
-        OptionCode(4) => {
-            if value.len() == 8 {
-                let ipv4_bytes: [u8; 4] = (&value[0..4]).try_into().unwrap();
-                let mask_bytes: [u8; 4] = (&value[4..8]).try_into().unwrap();
-                let ipv4 = Ipv4Addr::from(ipv4_bytes);
-                let mask = Ipv4Addr::from(mask_bytes);
-                println!("if_IPv4addr: {} / {}", ipv4, mask);
-            } else {
-                eprintln!("INVALID if_IPv4addr: {:x?}", value);
-            }
-        }
-        OptionCode(5) => {
-            if value.len() == 17 {
-                let (start, rest) = value.split_at(16);
-                let ipv6_bytes: [u8; 16] = start.try_into().unwrap();
-                let ipv6 = Ipv6Addr::from(ipv6_bytes);
-                println!("if_IPv6addr: {} / {}", ipv6, rest[0]);
-            } else {
-                eprintln!("INVALID if_IPv4addr: {:x?}", value);
-            }
-        }
-        OptionCode(8) => {
-            if value.len() == 8 {
-                let int_bytes: [u8; 8] = value.try_into().unwrap();
-                println!("if_speed: {}", u64::from_le_bytes(int_bytes));
-            } else {
-                eprintln!("INVALID if_speed: {:x?}", value);
-            }
-        }
-        OptionCode::IfTsresol => {
-            println!("Time resolution: 0x{:x}", value[0]);
-            if value.len() != 1 {
-                eprintln!("INVALID if_tsresol: len={} val={:x?}", value.len(), value);
-                eprintln!("if_tsresol len should be 1");
-            }
-        }
-        OptionCode(11) => {
-            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
-            println!("Filter string: {}", s);
-        }
-        OptionCode(12) => {
-            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
-            println!("Operating System: {}", s);
-        }
-        OptionCode(_) => {
-            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
-            println!("Option {}: {}", code, s);
-        }
-    }
-}
-fn pretty_print_shb_option(o: &PcapNGOption) {
-    match o.code {
-        OptionCode::Comment => {
-            let s = str::from_utf8(o.value).unwrap_or("<Invalid UTF-8>");
-            println!("Hardware: {}", s);
-        }
-        OptionCode::EndOfOpt => println!("End of Options"),
-        OptionCode::ShbHardware => {
-            let s = str::from_utf8(o.value).unwrap_or("<Invalid UTF-8>");
-            println!("Hardware: {}", s);
-        }
-        OptionCode::ShbOs => {
-            let s = str::from_utf8(o.value).unwrap_or("<Invalid UTF-8>");
-            println!("Operating system: {}", s);
-        }
-        OptionCode::ShbUserAppl => {
-            let s = str::from_utf8(o.value).unwrap_or("<Invalid UTF-8>");
-            println!("Capture application: {}", s);
-        }
-        OptionCode(_) => {
-            let s = str::from_utf8(o.value).unwrap_or("<Invalid UTF-8>");
-            println!("Option {}: {}", o.code.0, s);
+            eprintln!("*** Unsupported block type (magic={:08x}) ***", b.magic());
         }
     }
 }
