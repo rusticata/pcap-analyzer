@@ -1,4 +1,4 @@
-use crate::filter::*;
+use crate::filters::filter::*;
 use crate::pcap::*;
 use crate::pcapng::*;
 use crate::traits::Writer;

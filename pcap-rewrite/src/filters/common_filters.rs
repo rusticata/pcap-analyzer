@@ -1,4 +1,4 @@
-use crate::filter::*;
+use crate::filters::filter::*;
 use pcap_parser::data::{PacketData, ETHERTYPE_IPV4, ETHERTYPE_IPV6};
 use pnet_packet::ethernet::EthernetPacket;
 use pnet_packet::ipv4::Ipv4Packet;

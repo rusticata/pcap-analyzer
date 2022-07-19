@@ -21,8 +21,7 @@ use xz2::read::XzDecoder;
 
 use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
 
-mod common_filters;
-mod filter;
+mod filters;
 mod pcap;
 mod pcapng;
 mod rewriter;
@@ -106,7 +105,7 @@ Example: -f Source:192.168.1.1",
         None => FileFormat::Pcap,
     };
 
-    let mut filters: Vec<Box<dyn filter::Filter>> = Vec::new();
+    let mut filters: Vec<Box<dyn filters::filter::Filter>> = Vec::new();
     let filter_names: Vec<&str> = matches.values_of("filters").unwrap_or_default().collect();
     for name in &filter_names {
         eprintln!("adding filter: {}", name);
@@ -114,12 +113,12 @@ Example: -f Source:192.168.1.1",
         match args[0] {
             "IP" => {
                 eprintln!("adding IP filter");
-                let f = common_filters::IPFilter::new(&args[1..]);
+                let f = filters::common_filters::IPFilter::new(&args[1..]);
                 filters.push(Box::new(f));
             }
             "Source" => {
                 eprintln!("adding source filter");
-                let f = common_filters::SourceFilter::new(&args[1..]);
+                let f = filters::common_filters::SourceFilter::new(&args[1..]);
                 filters.push(Box::new(f));
             }
             _ => (),
