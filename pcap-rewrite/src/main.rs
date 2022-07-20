@@ -13,6 +13,7 @@ extern crate pcap_parser;
 extern crate xz2;
 
 use std::io;
+use std::net::IpAddr;
 use std::path::Path;
 use std::{fs::File, io::Read};
 
@@ -21,12 +22,20 @@ use xz2::read::XzDecoder;
 
 use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
 
+mod container;
 mod filters;
 mod pcap;
 mod pcapng;
 mod rewriter;
 mod traits;
+
 use crate::rewriter::*;
+use container::ipaddr_container::IpAddrC;
+use filters::dispatch_filter;
+use filters::filtering_action::FilteringAction;
+use filters::filtering_key::FilteringKey;
+use filters::key_parser_ipv4;
+use filters::key_parser_ipv6;
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
@@ -121,7 +130,71 @@ Example: -f Source:192.168.1.1",
                 let f = filters::common_filters::SourceFilter::new(&args[1..]);
                 filters.push(Box::new(f));
             }
-            _ => (),
+            "Dispatch" => {
+                eprintln!("adding dispatch filter");
+                let dispatch_data = args[1];
+                let args: Vec<_> = dispatch_data.split('%').collect();
+                assert_eq!(args.len(), 3);
+                let filtering_key = FilteringKey::of_string(args[0])
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let filtering_action = FilteringAction::of_string(args[1])
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let key_file_path = args[2];
+
+                match filtering_key {
+                    FilteringKey::SrcIpaddr => {
+                        let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
+                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+                        let keep: &dyn Fn(&IpAddrC, &IpAddr) -> Result<bool, String> =
+                            match filtering_action {
+                                FilteringAction::Keep => {
+                                    &|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr))
+                                }
+                                FilteringAction::Drop => {
+                                    &|c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr))
+                                }
+                            };
+
+                        let f = dispatch_filter::DispatchFilter::new(
+                            ipaddr_container,
+                            Box::new(key_parser_ipv4::parse_src_ipaddr),
+                            Box::new(key_parser_ipv6::parse_src_ipaddr),
+                            Box::new(keep),
+                        );
+                        filters.push(Box::new(f));
+                    }
+                    FilteringKey::DstIpaddr => {
+                        let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
+                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+                        let keep: &dyn Fn(&IpAddrC, &IpAddr) -> Result<bool, String> =
+                            match filtering_action {
+                                FilteringAction::Keep => {
+                                    &|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr))
+                                }
+                                FilteringAction::Drop => {
+                                    &|c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr))
+                                }
+                            };
+
+                        let f = dispatch_filter::DispatchFilter::new(
+                            ipaddr_container,
+                            // &key_parser_ipv4::parse_dst_ipaddr,
+                            // &key_parser_ipv6::parse_dst_ipaddr,
+                            // keep,
+                            Box::new(key_parser_ipv4::parse_dst_ipaddr),
+                            Box::new(key_parser_ipv6::parse_dst_ipaddr),
+                            Box::new(keep),
+                        );
+                        filters.push(Box::new(f));
+                    }
+                }
+            }
+            _ => {
+                error!("Unexpected filter name");
+                ::std::process::exit(1);
+            }
         }
     }
 
