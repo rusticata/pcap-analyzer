@@ -3,7 +3,7 @@ use std::io;
 mod info;
 mod interface;
 
-pub use info::{FileType, Options, PcapInfo};
+pub use info::{FileType, Options, PcapInfo, SectionInfo};
 pub use interface::InterfaceInfo;
 
 /// Display information about the input file (which must be pcap or pcap-ng)

@@ -38,23 +38,19 @@ pub struct PcapInfo {
     pub version_major: u16,
     pub version_minor: u16,
 
-    pub native_endian: bool,
-
     pub file_bytes: usize,
     pub data_bytes: usize,
     pub block_index: usize,
     pub packet_index: usize,
-    first_packet_ts: (i64, i64),
-    last_packet_ts: (i64, i64),
-    previous_packet_ts: (i64, i64),
+
     pub strict_time_order: bool,
     pub num_ipv4_resolved: usize,
     pub num_ipv6_resolved: usize,
     pub num_secrets_blocks: usize,
     pub num_custom_blocks: usize,
-    // section-related variables
-    pub interfaces: Vec<InterfaceInfo>,
-    section_num_packets: usize,
+
+    pub sections: Vec<SectionInfo>,
+
     // hashes
     hasher_blake2: Blake2s256,
     hasher_sha1: Sha1,
@@ -72,22 +68,22 @@ impl PcapInfo {
     }
 
     pub fn first_packet(&self) -> Option<OffsetDateTime> {
-        OffsetDateTime::from_unix_timestamp(self.first_packet_ts.0)
-            .ok()
-            .map(|t| t + Duration::nanoseconds(self.first_packet_ts.1))
+        self.sections
+            .iter()
+            .filter_map(|section| section.first_packet())
+            .min()
     }
 
     pub fn last_packet(&self) -> Option<OffsetDateTime> {
-        OffsetDateTime::from_unix_timestamp(self.last_packet_ts.0)
-            .ok()
-            .map(|t| t + Duration::nanoseconds(self.last_packet_ts.1))
+        self.sections
+            .iter()
+            .filter_map(|section| section.last_packet())
+            .min()
     }
 
     pub fn capture_duration(&self) -> Duration {
-        let first_ts = OffsetDateTime::from_unix_timestamp(self.first_packet_ts.0).unwrap()
-            + Duration::nanoseconds(self.first_packet_ts.1);
-        let last_ts = OffsetDateTime::from_unix_timestamp(self.last_packet_ts.0).unwrap()
-            + Duration::nanoseconds(self.last_packet_ts.1);
+        let first_ts = self.first_packet().unwrap();
+        let last_ts = self.last_packet().unwrap();
         last_ts - first_ts
     }
 
@@ -104,6 +100,49 @@ impl PcapInfo {
     pub fn blakes256(&self) -> GenericArray<u8, digest::typenum::U32> {
         let mut hash = self.hasher_blake2.clone();
         hash.finalize_reset()
+    }
+}
+
+#[derive(SmartDefault)]
+pub struct SectionInfo {
+    pub native_endian: bool,
+
+    pub options: Vec<(OptionCode, Vec<u8>)>,
+
+    pub interfaces: Vec<InterfaceInfo>,
+
+    pub num_packets: usize,
+
+    first_packet_ts: (i64, i64),
+    last_packet_ts: (i64, i64),
+    previous_packet_ts: (i64, i64),
+}
+
+impl SectionInfo {
+    fn add_shb_options(&mut self, shb: &SectionHeaderBlock) {
+        for opt in &shb.options {
+            self.options.push((opt.code, opt.value.to_vec()));
+        }
+    }
+
+    pub fn first_packet(&self) -> Option<OffsetDateTime> {
+        OffsetDateTime::from_unix_timestamp(self.first_packet_ts.0)
+            .ok()
+            .map(|t| t + Duration::nanoseconds(self.first_packet_ts.1))
+    }
+
+    pub fn last_packet(&self) -> Option<OffsetDateTime> {
+        OffsetDateTime::from_unix_timestamp(self.last_packet_ts.0)
+            .ok()
+            .map(|t| t + Duration::nanoseconds(self.last_packet_ts.1))
+    }
+
+    pub fn duration(&self) -> Duration {
+        let first_ts = OffsetDateTime::from_unix_timestamp(self.first_packet_ts.0).unwrap()
+            + Duration::nanoseconds(self.first_packet_ts.1);
+        let last_ts = OffsetDateTime::from_unix_timestamp(self.last_packet_ts.0).unwrap()
+            + Duration::nanoseconds(self.last_packet_ts.1);
+        last_ts - first_ts
     }
 }
 
@@ -132,12 +171,14 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapIn
     let mut ctx = PcapInfo::default();
     ctx.strict_time_order = true;
 
+    let mut current_section = SectionInfo::default();
+
     let first_block = reader.next();
     match first_block {
         Ok((sz, PcapBlockOwned::LegacyHeader(hdr))) => {
             ctx.version_major = hdr.version_major;
             ctx.version_minor = hdr.version_minor;
-            ctx.native_endian = hdr.magic_number >> 16 == 0xa1b2;
+            current_section.native_endian = hdr.magic_number >> 16 == 0xa1b2;
             let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
             let if_info = InterfaceInfo {
                 if_index: 0,
@@ -147,8 +188,8 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapIn
                 snaplen: hdr.snaplen,
                 ..InterfaceInfo::default()
             };
-            ctx.interfaces.push(if_info);
-            ctx.section_num_packets = 0;
+            current_section.interfaces.push(if_info);
+            current_section.num_packets = 0;
             let data = reader.data();
             ctx.hasher_blake2.update(&data[..sz]);
             ctx.hasher_sha1.update(&data[..sz]);
@@ -160,7 +201,8 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapIn
             ctx.is_pcapng = true;
             ctx.version_major = shb.major_version;
             ctx.version_minor = shb.minor_version;
-            ctx.native_endian = shb.bom == BOM_MAGIC;
+            current_section.native_endian = shb.bom == BOM_MAGIC;
+            current_section.add_shb_options(shb);
             let data = reader.data();
             ctx.hasher_blake2.update(&data[..sz]);
             ctx.hasher_sha1.update(&data[..sz]);
@@ -188,7 +230,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapIn
             Ok((sz, block)) => {
                 ctx.block_index += 1;
                 ctx.file_bytes += sz;
-                handle_pcapblockowned(&block, &mut ctx);
+                handle_pcapblockowned(&block, &mut ctx, &mut current_section);
                 let data = reader.data();
                 ctx.hasher_blake2.update(&data[..sz]);
                 ctx.hasher_sha1.update(&data[..sz]);
@@ -211,44 +253,54 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapIn
         }
     }
 
+    end_of_section(&mut ctx, &mut current_section);
+
     Ok((rc, ctx))
 }
 
-fn update_time(ts_sec: i64, ts_nanosec: i64, ctx: &mut PcapInfo) {
+fn update_time(
+    ts_sec: i64,
+    ts_nanosec: i64,
+    ctx: &mut PcapInfo,
+    current_section: &mut SectionInfo,
+) {
     let dt = (ts_sec, ts_nanosec);
-    if ctx.first_packet_ts == (0, 0) {
-        ctx.first_packet_ts = (ts_sec, ts_nanosec);
+    if current_section.first_packet_ts == (0, 0) {
+        current_section.first_packet_ts = (ts_sec, ts_nanosec);
     }
-    if dt < ctx.previous_packet_ts {
+    if dt < current_section.previous_packet_ts {
         println!("** unordered file");
         ctx.strict_time_order = false;
     }
-    if dt < ctx.first_packet_ts {
+    if dt < current_section.first_packet_ts {
         println!("** unordered file (before first packet)");
         ctx.strict_time_order = false;
-        ctx.first_packet_ts = (ts_sec, ts_nanosec);
+        current_section.first_packet_ts = (ts_sec, ts_nanosec);
     }
-    if dt > ctx.last_packet_ts {
-        ctx.last_packet_ts = (ts_sec, ts_nanosec);
+    if dt > current_section.last_packet_ts {
+        current_section.last_packet_ts = (ts_sec, ts_nanosec);
     }
-    ctx.previous_packet_ts = (ts_sec, ts_nanosec);
+    current_section.previous_packet_ts = (ts_sec, ts_nanosec);
 }
 
-fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut PcapInfo) {
+fn handle_pcapblockowned(
+    b: &PcapBlockOwned,
+    ctx: &mut PcapInfo,
+    current_section: &mut SectionInfo,
+) {
     match b {
-        PcapBlockOwned::NG(Block::SectionHeader(ref _shb)) => {
-            todo!("Files with multiple sections are not yet supported");
-            // end_of_section(ctx);
-            // pretty_print_shb(shb);
+        PcapBlockOwned::NG(Block::SectionHeader(ref shb)) => {
+            end_of_section(ctx, current_section);
+            current_section.add_shb_options(shb);
         }
         PcapBlockOwned::NG(Block::InterfaceDescription(ref idb)) => {
-            let num_interfaces = ctx.interfaces.len();
+            let num_interfaces = current_section.interfaces.len();
             let if_info = pcapng_build_interface(idb, num_interfaces);
-            ctx.interfaces.push(if_info);
+            current_section.interfaces.push(if_info);
         }
         PcapBlockOwned::LegacyHeader(ref _hdr) => {
-            todo!("Unexpected legacy header block");
-            // // end_of_section(ctx);
+            eprintln!("Unexpected legacy header block");
+            end_of_section(ctx, current_section);
             // let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
             // let if_info = InterfaceInfo {
             //     if_index: 0,
@@ -261,7 +313,7 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut PcapInfo) {
             // ctx.interfaces.push(if_info);
         }
         PcapBlockOwned::Legacy(ref b) => {
-            let if_info = &mut ctx.interfaces[0];
+            let if_info = &mut current_section.interfaces[0];
             if_info.num_packets += 1;
             let dt = if if_info.if_tsresol == 6 {
                 assert!(b.ts_usec < 1_000_000);
@@ -272,15 +324,15 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut PcapInfo) {
             };
             // add time offset if present
             let tz = if_info.if_tsoffset as i64;
-            update_time(dt.0 + tz, dt.1, ctx);
+            update_time(dt.0 + tz, dt.1, ctx, current_section);
             ctx.packet_index += 1;
             let data_len = b.caplen as usize;
             assert!(data_len <= b.data.len());
             ctx.data_bytes += data_len;
         }
         PcapBlockOwned::NG(Block::EnhancedPacket(epb)) => {
-            assert!((epb.if_id as usize) < ctx.interfaces.len());
-            let if_info = &mut ctx.interfaces[epb.if_id as usize];
+            assert!((epb.if_id as usize) < current_section.interfaces.len());
+            let if_info = &mut current_section.interfaces[epb.if_id as usize];
             if_info.num_packets += 1;
             if if_info.snaplen > 0 && epb.data.len() + 4 > if_info.snaplen as usize {
                 println!(
@@ -307,15 +359,15 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut PcapInfo) {
             let dt = (ts_sec as i64, ts_nanosec as i64);
             // add time offset if present
             let tz = if_info.if_tsoffset as i64;
-            update_time(dt.0 + tz, dt.1, ctx);
+            update_time(dt.0 + tz, dt.1, ctx, current_section);
             ctx.packet_index += 1;
             let data_len = epb.caplen as usize;
             assert!(data_len <= epb.data.len());
             ctx.data_bytes += data_len;
         }
         PcapBlockOwned::NG(Block::SimplePacket(spb)) => {
-            assert!(!ctx.interfaces.is_empty());
-            let if_info = ctx.interfaces.first_mut().unwrap();
+            assert!(!current_section.interfaces.is_empty());
+            let if_info = current_section.interfaces.first_mut().unwrap();
             if_info.num_packets += 1;
             let data_len = min(if_info.snaplen as usize, spb.data.len());
             ctx.data_bytes += data_len;
@@ -336,8 +388,8 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut PcapInfo) {
         }
         PcapBlockOwned::NG(Block::InterfaceStatistics(isb)) => {
             // println!("*** block type ISB ***");
-            assert!((isb.if_id as usize) < ctx.interfaces.len());
-            let if_info = &mut ctx.interfaces[isb.if_id as usize];
+            assert!((isb.if_id as usize) < current_section.interfaces.len());
+            let if_info = &mut current_section.interfaces[isb.if_id as usize];
             if_info.num_stats += 1;
         }
         PcapBlockOwned::NG(Block::DecryptionSecrets(_dsb)) => {
@@ -353,4 +405,9 @@ fn handle_pcapblockowned(b: &PcapBlockOwned, ctx: &mut PcapInfo) {
             eprintln!("*** Unsupported block type (magic={:08x}) ***", b.magic());
         }
     }
+}
+
+fn end_of_section(ctx: &mut PcapInfo, current_section: &mut SectionInfo) {
+    let section = std::mem::take(current_section);
+    ctx.sections.push(section);
 }

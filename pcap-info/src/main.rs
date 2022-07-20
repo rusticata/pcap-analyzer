@@ -57,12 +57,6 @@ fn display_pcap_info(name: &str, info: &PcapInfo) {
     };
     println!("Type: {}", file_type_s);
     println!("Version: {}.{}", info.version_major, info.version_minor);
-    let native_s = if info.native_endian {
-        "Native"
-    } else {
-        "Reverse"
-    };
-    println!("Byte Ordering: {}", native_s);
 
     println!("{:<20}: {:x}", "SHA256", info.sha256());
     println!("{:<20}: {:x}", "BLAKE2S256", info.blakes256());
@@ -132,8 +126,31 @@ fn display_pcap_info(name: &str, info: &PcapInfo) {
             "Number of custom blocks", info.num_custom_blocks
         );
     }
-    println!("{:<20}: {}", "Number of interfaces", info.interfaces.len());
 
+    for (idx, section_info) in info.sections.iter().enumerate() {
+        println!("Section #{}", idx);
+        display_section_info(section_info);
+    }
+}
+
+fn display_section_info(info: &SectionInfo) {
+    let native_s = if info.native_endian {
+        "Native"
+    } else {
+        "Reverse"
+    };
+    println!("  Byte Ordering: {}", native_s);
+
+    for (opt_code, opt_value) in &info.options {
+        print!("    ");
+        pretty_print_shb_option(*opt_code, opt_value);
+    }
+
+    println!(
+        "{:<20}: {}",
+        "  Number of interfaces",
+        info.interfaces.len()
+    );
     for interface in &info.interfaces {
         pretty_print_interface(interface);
     }
@@ -152,6 +169,32 @@ fn pretty_print_interface(if_info: &InterfaceInfo) {
     for (opt_code, opt_value) in &if_info.options {
         print!("    ");
         pretty_print_idb_option(*opt_code, opt_value);
+    }
+}
+
+fn pretty_print_shb_option(code: OptionCode, value: &[u8]) {
+    match code {
+        OptionCode::Comment => {
+            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
+            println!("Hardware: {}", s);
+        }
+        OptionCode::EndOfOpt => println!("End of Options"),
+        OptionCode::ShbHardware => {
+            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
+            println!("Hardware Description: {}", s);
+        }
+        OptionCode::ShbOs => {
+            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
+            println!("OS Description: {}", s);
+        }
+        OptionCode::ShbUserAppl => {
+            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
+            println!("User Application: {}", s);
+        }
+        OptionCode(_) => {
+            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
+            println!("Option {}: {}", code, s);
+        }
     }
 }
 
