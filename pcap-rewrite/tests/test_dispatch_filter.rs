@@ -1,3 +1,4 @@
+use pcap_parser::{Capture, PcapCapture};
 use std::env;
 use std::fs;
 use std::fs::File;
@@ -13,9 +14,11 @@ fn count_packet_in_trace(trace_file_path: &Path) -> u32 {
         if file_size == 0 {
             0
         } else {
-            let mut cap = pcap::Capture::from_file(trace_file_path).unwrap();
+            let data = fs::read(trace_file_path).unwrap();
+            let cap = PcapCapture::from_file(&data).unwrap();
             let mut count = 0;
-            while cap.next().is_ok() {
+            let mut iter = cap.iter();
+            while iter.next().is_some() {
                 count += 1;
             }
             count
