@@ -1,4 +1,5 @@
 use pcap_parser::data::PacketData;
+use pnet_packet::ethernet::{EtherType, EtherTypes};
 use pnet_packet::PrimitiveValues;
 
 use crate::filters::filter::FResult;
@@ -43,24 +44,20 @@ impl<C, D> DispatchFilter<C, D> {
                 )
             }
             PacketData::L3(l3_layer_value_u8, data) => {
-                let ether_type = pnet::packet::ethernet::EtherType::new(l3_layer_value_u8 as u16);
+                let ether_type = EtherType::new(l3_layer_value_u8 as u16);
                 match ether_type {
-                    pnet::packet::ethernet::EtherTypes::Ipv4 => {
-                        filter_utils::extract_test_callback_ipv4(
-                            &self.key_container,
-                            &self.get_key_from_ipv4_l3_data,
-                            &self.keep,
-                            data,
-                        )
-                    }
-                    pnet::packet::ethernet::EtherTypes::Ipv6 => {
-                        filter_utils::extract_test_callback_ipv6(
-                            &self.key_container,
-                            &self.get_key_from_ipv6_l3_data,
-                            &self.keep,
-                            data,
-                        )
-                    }
+                    EtherTypes::Ipv4 => filter_utils::extract_test_callback_ipv4(
+                        &self.key_container,
+                        &self.get_key_from_ipv4_l3_data,
+                        &self.keep,
+                        data,
+                    ),
+                    EtherTypes::Ipv6 => filter_utils::extract_test_callback_ipv6(
+                        &self.key_container,
+                        &self.get_key_from_ipv6_l3_data,
+                        &self.keep,
+                        data,
+                    ),
                     _ => Err(format!(
                         "Unimplemented Ethertype in L3 {:?}/{:x}",
                         ether_type,

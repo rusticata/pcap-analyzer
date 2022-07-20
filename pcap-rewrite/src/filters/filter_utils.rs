@@ -1,7 +1,6 @@
-use pnet::packet::ethernet::EthernetPacket;
-use pnet::packet::vlan::VlanPacket;
-use pnet::packet::Packet;
-use pnet_packet::ethernet::EtherTypes;
+use pnet_packet::ethernet::{EtherTypes, EthernetPacket};
+use pnet_packet::vlan::VlanPacket;
+use pnet_packet::Packet;
 use pnet_packet::PrimitiveValues;
 
 pub fn extract_test_callback_ipv4<D, C>(

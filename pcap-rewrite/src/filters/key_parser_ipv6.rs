@@ -1,4 +1,4 @@
-use pnet::packet::ipv6::Ipv6Packet;
+use pnet_packet::ipv6::Ipv6Packet;
 use std::net::IpAddr;
 
 pub fn parse_src_ipaddr(payload: &[u8]) -> Result<IpAddr, String> {
