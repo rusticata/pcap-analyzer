@@ -180,9 +180,6 @@ Example: -f Source:192.168.1.1",
 
                         let f = dispatch_filter::DispatchFilter::new(
                             ipaddr_container,
-                            // &key_parser_ipv4::parse_dst_ipaddr,
-                            // &key_parser_ipv6::parse_dst_ipaddr,
-                            // keep,
                             Box::new(key_parser_ipv4::parse_dst_ipaddr),
                             Box::new(key_parser_ipv6::parse_dst_ipaddr),
                             Box::new(keep),
