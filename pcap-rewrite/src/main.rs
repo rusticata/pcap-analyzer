@@ -186,6 +186,28 @@ Example: -f Source:192.168.1.1",
                         );
                         filters.push(Box::new(f));
                     }
+                    FilteringKey::SrcDstIpaddr => {
+                        let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
+                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+                        let keep: &dyn Fn(&IpAddrC, &(IpAddr, IpAddr)) -> Result<bool, String> =
+                            match filtering_action {
+                                FilteringAction::Keep => &|c, ipaddr_tuple| {
+                                    Ok(c.contains(&ipaddr_tuple.0) || c.contains(&ipaddr_tuple.1))
+                                },
+                                FilteringAction::Drop => &|c, ipaddr_tuple| {
+                                    Ok(!c.contains(&ipaddr_tuple.0) && !c.contains(&ipaddr_tuple.1))
+                                },
+                            };
+
+                        let f = dispatch_filter::DispatchFilter::new(
+                            ipaddr_container,
+                            Box::new(key_parser_ipv4::parse_src_dst_ipaddr),
+                            Box::new(key_parser_ipv6::parse_src_dst_ipaddr),
+                            Box::new(keep),
+                        );
+                        filters.push(Box::new(f));
+                    }
                 }
             }
             _ => {

@@ -2,6 +2,7 @@
 pub enum FilteringKey {
     SrcIpaddr,
     DstIpaddr,
+    SrcDstIpaddr,
 }
 
 impl FilteringKey {
@@ -9,8 +10,9 @@ impl FilteringKey {
         match s {
             "si" => Ok(FilteringKey::SrcIpaddr),
             "di" => Ok(FilteringKey::DstIpaddr),
+            "sdi" => Ok(FilteringKey::SrcDstIpaddr),
             _ => Err(format!(
-                "Invalid string as input to build filtering criterion: {} not among si|di",
+                "Invalid string as input to build filtering criterion: {} not among si|di|sdi",
                 s
             )),
         }

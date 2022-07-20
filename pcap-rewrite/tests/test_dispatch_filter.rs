@@ -83,6 +83,16 @@ fn test_filter_ipv4_dst_ipaddr() {
     )
 }
 
+#[test]
+fn test_filter_ipv4_src_dst_ipaddr() {
+    generic_test(
+        "../assets/nmap_tcp_22_ipv4.pcap",
+        "output_src_dst_ip_addr_ipv4",
+        "../assets/pcap-filter/ipv4_ipaddr",
+        "sdi",
+        4,
+    )
+}
 // IPV6
 
 #[test]
@@ -104,5 +114,16 @@ fn test_filter_ipv6_dst_ipaddr() {
         "../assets/pcap-filter/ipv6_ipaddr",
         "di",
         2,
+    )
+}
+
+#[test]
+fn test_filter_ipv6_src_dst_ipaddr() {
+    generic_test(
+        "../assets/nmap_tcp_22_ipv6.pcap",
+        "output_src_dst_ipaddr_ipv6.cap",
+        "../assets/pcap-filter/ipv6_ipaddr",
+        "sdi",
+        4,
     )
 }
