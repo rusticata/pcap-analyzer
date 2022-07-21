@@ -21,7 +21,7 @@ use std::{fs::File, io::Read};
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
 
-use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
+use libpcap_tools::{Config, FiveTuple, PcapDataEngine, PcapEngine};
 
 mod container;
 mod filters;
@@ -31,6 +31,7 @@ mod rewriter;
 mod traits;
 
 use crate::rewriter::*;
+use container::five_tuple_container::FiveTupleC;
 use container::ipaddr_container::IpAddrC;
 use container::ipaddr_proto_port_container::IpAddrProtoPortC;
 use filters::dispatch_filter;
@@ -231,6 +232,29 @@ Example: -f Source:192.168.1.1",
                             ipaddr_proto_port_container,
                             Box::new(key_parser_ipv4::parse_src_ipaddr_proto_dst_port),
                             Box::new(key_parser_ipv6::parse_src_ipaddr_proto_dst_port),
+                            Box::new(keep),
+                        );
+                        filters.push(Box::new(f));
+                    }
+                    FilteringKey::SrcDstIpaddrProtoSrcDstPort => {
+                        let five_tuple_container =
+                            FiveTupleC::of_file_path(Path::new(key_file_path))
+                                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+                        let keep: &dyn Fn(&FiveTupleC, &FiveTuple) -> Result<bool, String> =
+                            match filtering_action {
+                                FilteringAction::Keep => {
+                                    &|c, five_tuple| Ok(c.contains(five_tuple))
+                                }
+                                FilteringAction::Drop => {
+                                    &|c, five_tuple| Ok(!c.contains(five_tuple))
+                                }
+                            };
+
+                        let f = dispatch_filter::DispatchFilter::new(
+                            five_tuple_container,
+                            Box::new(key_parser_ipv4::parse_five_tuple),
+                            Box::new(key_parser_ipv6::parse_five_tuple),
                             Box::new(keep),
                         );
                         filters.push(Box::new(f));

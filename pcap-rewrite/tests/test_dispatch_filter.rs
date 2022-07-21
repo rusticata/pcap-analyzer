@@ -106,6 +106,17 @@ fn test_filter_ipv4_src_ipaddr_proto_dst_port() {
     )
 }
 
+#[test]
+fn test_filter_ipv4_five_tuple() {
+    generic_test(
+        "../assets/nmap_tcp_22_ipv4.pcap",
+        "output_five_tuple_ipv4",
+        "../assets/pcap-filter/ipv4_five_tuple",
+        "sdipsdp",
+        2,
+    )
+}
+
 // IPV6
 
 #[test]
@@ -149,5 +160,17 @@ fn test_filter_ipv6_src_ipaddr_proto_dst_port() {
         "../assets/pcap-filter/ipv6_ipaddr_proto_port",
         "sipdp",
         1,
+    )
+}
+
+
+#[test]
+fn test_filter_ipv6_five_tuple() {
+    generic_test(
+        "../assets/nmap_tcp_22_ipv6.pcap",
+        "output_five_tuple_ipv6",
+        "../assets/pcap-filter/ipv6_five_tuple",
+        "sdipsdp",
+        2,
     )
 }

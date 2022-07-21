@@ -4,6 +4,7 @@ pub enum FilteringKey {
     DstIpaddr,
     SrcDstIpaddr,
     SrcIpaddrProtoDstPort,
+    SrcDstIpaddrProtoSrcDstPort,
 }
 
 impl FilteringKey {
@@ -13,8 +14,9 @@ impl FilteringKey {
             "di" => Ok(FilteringKey::DstIpaddr),
             "sdi" => Ok(FilteringKey::SrcDstIpaddr),
             "sipdp" => Ok(FilteringKey::SrcIpaddrProtoDstPort),
+            "sdipsdp" => Ok(FilteringKey::SrcDstIpaddrProtoSrcDstPort),
             _ => Err(format!(
-                "Invalid string as input to build filtering criterion: {} not among si|di|sdi|sipdp",
+                "Invalid string as input to build filtering criterion: {} not among si|di|sdi|sipdp|sdipsdp",
                 s
             )),
         }
