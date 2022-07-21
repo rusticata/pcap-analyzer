@@ -102,31 +102,6 @@ fn display_pcap_info(name: &str, info: &PcapInfo) {
         info.packet_index as f64 / cap_duration.as_seconds_f64()
     );
 
-    if info.num_ipv4_resolved > 0 {
-        println!(
-            "{:<20}: {}",
-            "Number of IPv4 resolved", info.num_ipv4_resolved
-        );
-    }
-    if info.num_ipv6_resolved > 0 {
-        println!(
-            "{:<20}: {}",
-            "Number of IPv6 resolved", info.num_ipv6_resolved
-        );
-    }
-    if info.num_secrets_blocks > 0 {
-        println!(
-            "{:<20}: {}",
-            "Number of decryption secrets blocks", info.num_secrets_blocks
-        );
-    }
-    if info.num_custom_blocks > 0 {
-        println!(
-            "{:<20}: {}",
-            "Number of custom blocks", info.num_custom_blocks
-        );
-    }
-
     for (idx, section_info) in info.sections.iter().enumerate() {
         println!("Section #{}", idx);
         display_section_info(section_info);
@@ -144,6 +119,31 @@ fn display_section_info(info: &SectionInfo) {
     for (opt_code, opt_value) in &info.options {
         print!("    ");
         pretty_print_shb_option(*opt_code, opt_value);
+    }
+
+    if info.num_ipv4_resolved > 0 {
+        println!(
+            "  {:<20}: {}",
+            "Number of IPv4 resolved", info.num_ipv4_resolved
+        );
+    }
+    if info.num_ipv6_resolved > 0 {
+        println!(
+            "  {:<20}: {}",
+            "Number of IPv6 resolved", info.num_ipv6_resolved
+        );
+    }
+    if info.num_secrets_blocks > 0 {
+        println!(
+            "  {:<20}: {}",
+            "Number of decryption secrets blocks", info.num_secrets_blocks
+        );
+    }
+    if info.num_custom_blocks > 0 {
+        println!(
+            "  {:<20}: {}",
+            "Number of custom blocks", info.num_custom_blocks
+        );
     }
 
     println!(

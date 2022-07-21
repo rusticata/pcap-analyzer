@@ -44,10 +44,6 @@ pub struct PcapInfo {
     pub packet_index: usize,
 
     pub strict_time_order: bool,
-    pub num_ipv4_resolved: usize,
-    pub num_ipv6_resolved: usize,
-    pub num_secrets_blocks: usize,
-    pub num_custom_blocks: usize,
 
     pub sections: Vec<SectionInfo>,
 
@@ -112,6 +108,11 @@ pub struct SectionInfo {
     pub interfaces: Vec<InterfaceInfo>,
 
     pub num_packets: usize,
+
+    pub num_secrets_blocks: usize,
+    pub num_custom_blocks: usize,
+    pub num_ipv4_resolved: usize,
+    pub num_ipv6_resolved: usize,
 
     first_packet_ts: (i64, i64),
     last_packet_ts: (i64, i64),
@@ -377,8 +378,8 @@ fn handle_pcapblockowned(
             for nr in &nrb.nr {
                 match nr.record_type {
                     NameRecordType::End => (),
-                    NameRecordType::Ipv4 => ctx.num_ipv4_resolved += 1,
-                    NameRecordType::Ipv6 => ctx.num_ipv6_resolved += 1,
+                    NameRecordType::Ipv4 => current_section.num_ipv4_resolved += 1,
+                    NameRecordType::Ipv6 => current_section.num_ipv6_resolved += 1,
                     NameRecordType(n) => println!(
                         "*** invalid NameRecordType {} in NRB (block {})",
                         n, ctx.block_index
@@ -396,10 +397,10 @@ fn handle_pcapblockowned(
             // println!("*** DSB ***");
             // println!("secrets type {:?}", _dsb.secrets_type);
             // println!("secrets (as str): {:?}", std::str::from_utf8(_dsb.data));
-            ctx.num_secrets_blocks += 1;
+            current_section.num_secrets_blocks += 1;
         }
         PcapBlockOwned::NG(Block::Custom(_)) => {
-            ctx.num_custom_blocks += 1;
+            current_section.num_custom_blocks += 1;
         }
         PcapBlockOwned::NG(b) => {
             eprintln!("*** Unsupported block type (magic={:08x}) ***", b.magic());
