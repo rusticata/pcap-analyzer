@@ -6,6 +6,7 @@ extern crate log;
 
 extern crate clap;
 use clap::{crate_version, App, Arg};
+use pnet_packet::ip::IpNextHeaderProtocol;
 
 // extern crate env_logger;
 extern crate flate2;
@@ -31,6 +32,7 @@ mod traits;
 
 use crate::rewriter::*;
 use container::ipaddr_container::IpAddrC;
+use container::ipaddr_proto_port_container::IpAddrProtoPortC;
 use filters::dispatch_filter;
 use filters::filtering_action::FilteringAction;
 use filters::filtering_key::FilteringKey;
@@ -204,6 +206,31 @@ Example: -f Source:192.168.1.1",
                             ipaddr_container,
                             Box::new(key_parser_ipv4::parse_src_dst_ipaddr),
                             Box::new(key_parser_ipv6::parse_src_dst_ipaddr),
+                            Box::new(keep),
+                        );
+                        filters.push(Box::new(f));
+                    }
+                    FilteringKey::SrcIpaddrProtoDstPort => {
+                        let ipaddr_proto_port_container =
+                            IpAddrProtoPortC::of_file_path(Path::new(key_file_path))
+                                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+
+                        let keep: &dyn Fn(
+                            &IpAddrProtoPortC,
+                            &(IpAddr, IpNextHeaderProtocol, u16),
+                        ) -> Result<bool, String> = match filtering_action {
+                            FilteringAction::Keep => {
+                                &|c, tuple| Ok(c.contains(&tuple.0, &tuple.1, tuple.2))
+                            }
+                            FilteringAction::Drop => {
+                                &|c, tuple| Ok(!c.contains(&tuple.0, &tuple.1, tuple.2))
+                            }
+                        };
+
+                        let f = dispatch_filter::DispatchFilter::new(
+                            ipaddr_proto_port_container,
+                            Box::new(key_parser_ipv4::parse_src_ipaddr_proto_dst_port),
+                            Box::new(key_parser_ipv6::parse_src_ipaddr_proto_dst_port),
                             Box::new(keep),
                         );
                         filters.push(Box::new(f));

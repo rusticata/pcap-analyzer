@@ -4,5 +4,6 @@ pub mod filter;
 pub mod filter_utils;
 pub mod filtering_action;
 pub mod filtering_key;
+pub mod ipv6_utils;
 pub mod key_parser_ipv4;
 pub mod key_parser_ipv6;

@@ -51,6 +51,7 @@ fn generic_test(
         .arg(&trace_output_file_path);
 
     let _output = cmd.output().unwrap();
+    // println!("Output: {:?}", _output);
 
     let output_nb_packet = count_packet_in_trace(&trace_output_file_path);
 
@@ -93,6 +94,18 @@ fn test_filter_ipv4_src_dst_ipaddr() {
         4,
     )
 }
+
+#[test]
+fn test_filter_ipv4_src_ipaddr_proto_dst_port() {
+    generic_test(
+        "../assets/nmap_tcp_22_ipv4.pcap",
+        "output_src_ipaddr_proto_dst_port_ipv4",
+        "../assets/pcap-filter/ipv4_ipaddr_proto_port",
+        "sipdp",
+        1,
+    )
+}
+
 // IPV6
 
 #[test]
@@ -125,5 +138,16 @@ fn test_filter_ipv6_src_dst_ipaddr() {
         "../assets/pcap-filter/ipv6_ipaddr",
         "sdi",
         4,
+    )
+}
+
+#[test]
+fn test_filter_ipv6_src_ipaddr_proto_dst_port() {
+    generic_test(
+        "../assets/nmap_tcp_22_ipv6.pcap",
+        "output_src_ipaddr_proto_dst_port_ipv6",
+        "../assets/pcap-filter/ipv6_ipaddr_proto_port",
+        "sipdp",
+        1,
     )
 }
