@@ -193,12 +193,12 @@ pub fn test_two_tuple_proto_ipid_five_tuple_option_in_container(
     let (two_tuple_proto_ipid_c, five_tuple_c) = c;
 
     let in_0 = match two_tuple_proto_ipid_five_tuple.get_two_tuple_proto_ipid_option() {
-        Some(two_tuple_proto_ipid) => two_tuple_proto_ipid_c.contains(&two_tuple_proto_ipid),
+        Some(two_tuple_proto_ipid) => two_tuple_proto_ipid_c.contains(two_tuple_proto_ipid),
         None => true,
     };
 
     let in_1 = match two_tuple_proto_ipid_five_tuple.get_five_tuple_option() {
-        Some(five_tuple) => five_tuple_c.contains(&five_tuple),
+        Some(five_tuple) => five_tuple_c.contains(five_tuple),
         None => true,
     };
 

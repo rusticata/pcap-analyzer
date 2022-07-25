@@ -11,8 +11,7 @@ use crate::filters::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProt
 pub fn convert_data_hs_to_src_ipaddrc(data_hs: &HashSet<TwoTupleProtoIpidFiveTuple>) -> IpAddrC {
     let src_ipaddr_hs: HashSet<_> = data_hs
         .iter()
-        .map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
-        .filter_map(|x| x)
+        .filter_map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
         .map(|five_tuple| five_tuple.src)
         .collect();
     IpAddrC::new(src_ipaddr_hs)
@@ -21,8 +20,7 @@ pub fn convert_data_hs_to_src_ipaddrc(data_hs: &HashSet<TwoTupleProtoIpidFiveTup
 pub fn convert_data_hs_to_dst_ipaddrc(data_hs: &HashSet<TwoTupleProtoIpidFiveTuple>) -> IpAddrC {
     let dst_ipaddr_hs: HashSet<_> = data_hs
         .iter()
-        .map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
-        .filter_map(|x| x)
+        .filter_map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
         .map(|five_tuple| five_tuple.dst)
         .collect();
     IpAddrC::new(dst_ipaddr_hs)
@@ -33,14 +31,12 @@ pub fn convert_data_hs_to_src_dst_ipaddrc(
 ) -> IpAddrC {
     let mut src_dst_ipaddr_v: Vec<_> = data_hs
         .iter()
-        .map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
-        .filter_map(|x| x)
+        .filter_map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
         .map(|five_tuple| five_tuple.src)
         .collect();
     let mut dst_ipaddr_v: Vec<_> = data_hs
         .iter()
-        .map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
-        .filter_map(|x| x)
+        .filter_map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
         .map(|five_tuple| five_tuple.dst)
         .collect();
     let mut v = vec![];
@@ -55,8 +51,7 @@ pub fn convert_data_hs_to_src_ipaddr_proto_dst_port_container(
 ) -> IpAddrProtoPortC {
     let mut src_ipaddr_v: Vec<_> = data_hs
         .iter()
-        .map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
-        .filter_map(|x| x)
+        .filter_map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
         .map(|five_tuple| {
             (
                 five_tuple.src,
@@ -67,8 +62,7 @@ pub fn convert_data_hs_to_src_ipaddr_proto_dst_port_container(
         .collect();
     let mut dst_ipaddr_v: Vec<_> = data_hs
         .iter()
-        .map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
-        .filter_map(|x| x)
+        .filter_map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
         .map(|five_tuple| {
             (
                 five_tuple.dst,
@@ -89,8 +83,7 @@ pub fn convert_data_hs_to_ctuple(
 ) -> (TwoTupleProtoIpidC, FiveTupleC) {
     let two_tuple_proto_ipid_hs: HashSet<_> = data_hs
         .iter()
-        .map(|three_five_tuple| three_five_tuple.get_two_tuple_proto_ipid_option().clone())
-        .filter_map(|x| x)
+        .filter_map(|three_five_tuple| three_five_tuple.get_two_tuple_proto_ipid_option().clone())
         .collect();
     let two_tuple_proto_ipid_hs_reversed = two_tuple_proto_ipid_hs
         .iter()
@@ -101,8 +94,7 @@ pub fn convert_data_hs_to_ctuple(
 
     let five_tuple_hs: HashSet<_> = data_hs
         .iter()
-        .map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
-        .filter_map(|x| x)
+        .filter_map(|three_five_tuple| three_five_tuple.get_five_tuple_option().clone())
         .collect();
     let five_tuple_hs_reversed = five_tuple_hs
         .iter()
