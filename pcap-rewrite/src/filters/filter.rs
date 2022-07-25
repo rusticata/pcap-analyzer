@@ -28,6 +28,10 @@ pub trait Filter {
     fn pre_analyze(&mut self, _packet: &Packet) -> Result<(), String> {
         Ok(())
     }
+
+    fn preanalysis_done(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 pub fn apply_filters<'d>(
