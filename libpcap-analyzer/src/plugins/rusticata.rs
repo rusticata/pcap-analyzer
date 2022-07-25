@@ -1,6 +1,7 @@
 use crate::default_plugin_builder;
 use crate::packet_info::PacketInfo;
 use crate::plugin::{Plugin, PluginResult, PLUGIN_FLOW_DEL, PLUGIN_L4};
+use crate::output;
 use fnv::{FnvHashMap, FnvHashSet};
 use libpcap_tools::{Flow, FlowID, Packet};
 use rusticata::prologue::*;
@@ -209,6 +210,15 @@ impl Plugin for Rusticata {
     fn get_results(&mut self) -> Option<Box<dyn Any>> {
         let v = self.get_results_json();
         Some(Box::new(v))
+    }
+    
+    fn save_results(&mut self, path: &str) -> Result<(), &'static str> {
+        let results = self.get_results_json();
+        // save data to file
+        let file = output::create_file(path, "rusticata-stats.json")
+            .or(Err("Cannot create output file"))?;
+        serde_json::to_writer(file, &results).or(Err("Cannot save results to file"))?;
+        Ok(())
     }
 }
 
