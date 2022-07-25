@@ -9,6 +9,9 @@ use pnet_packet::udp::UdpPacket;
 use crate::filters::ipv6_utils;
 use libpcap_tools::FiveTuple;
 
+use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
+use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+
 pub fn parse_src_ipaddr(payload: &[u8]) -> Result<IpAddr, String> {
     let ipv6 = Ipv6Packet::new(payload).ok_or("Expected Ipv6 packet but not found")?;
     Ok(IpAddr::V6(ipv6.get_source()))
@@ -52,6 +55,27 @@ pub fn parse_src_ipaddr_proto_dst_port(
             None => Err("Expected UDP packet in Ipv6 but could not parse".to_string()),
         },
         _ => Ok((src_ipaddr, l4_proto, 0)),
+    }
+}
+
+pub fn parse_two_tuple_proto_ipid(payload: &[u8]) -> Result<Option<TwoTupleProtoIpid>, String> {
+    let ipv6_packet = Ipv6Packet::new(payload).ok_or("Expected Ipv6 packet but not found")?;
+    let src_ipaddr = IpAddr::V6(ipv6_packet.get_destination());
+    let dst_ipaddr = IpAddr::V6(ipv6_packet.get_destination());
+
+    let (fragment_packet_option, l4_proto, _payload) =
+        ipv6_utils::get_fragment_packet_option_l4_protol4_payload(payload, &ipv6_packet)?;
+
+    let proto = l4_proto.0;
+
+    match fragment_packet_option {
+        Some(fragment_packet) => {
+            let ip_id = fragment_packet.get_id();
+            Ok(Some(TwoTupleProtoIpid::new(
+                src_ipaddr, dst_ipaddr, proto, ip_id,
+            )))
+        }
+        None => Ok(None),
     }
 }
 
@@ -101,4 +125,14 @@ pub fn parse_five_tuple(payload: &[u8]) -> Result<FiveTuple, String> {
             dst_port: 0,
         }),
     }
+}
+
+pub fn parse_two_tuple_proto_ipid_five_tuple(
+    payload: &[u8],
+) -> Result<TwoTupleProtoIpidFiveTuple, String> {
+    Ok(TwoTupleProtoIpidFiveTuple::new(
+        parse_two_tuple_proto_ipid(payload)?,
+        // TODO: replace by dedicated error type to distinguish between Ipv6Packet parsing error and TcpPacket/UdpPacket error related to fragmentation
+        parse_five_tuple(payload).ok(),
+    ))
 }
