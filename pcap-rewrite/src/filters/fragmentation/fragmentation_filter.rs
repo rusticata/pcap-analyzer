@@ -177,7 +177,6 @@ impl<C, D> Filter for FragmentationFilter<C, D> {
 
     fn pre_analyze(&mut self, _packet: &Packet) -> Result<(), String> {
         self.test_fragmentation_and_save(_packet)
-            .map_err(|e| e.to_string())
     }
 
     fn preanalysis_done(&mut self) -> Result<(), String> {
