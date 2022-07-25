@@ -11,8 +11,7 @@ use pnet_packet::PrimitiveValues;
 use crate::container::five_tuple_container::FiveTupleC;
 use crate::container::ipaddr_container::IpAddrC;
 use crate::container::ipaddr_proto_port_container::IpAddrProtoPortC;
-use crate::filters::filter::FResult;
-use crate::filters::filter::Filter;
+use crate::filters::filter::{FResult, Filter, Verdict};
 use crate::filters::filter_utils;
 use crate::filters::filtering_action::FilteringAction;
 use crate::filters::filtering_key::FilteringKey;
@@ -45,7 +44,7 @@ impl<C, D> DispatchFilter<C, D> {
         let keep = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
-                    return FResult::Error("L2 data too small for ethernet".to_owned());
+                    return Err("L2 data too small for ethernet".to_owned());
                 }
 
                 filter_utils::extract_test_callback_ethernet(
@@ -84,12 +83,12 @@ impl<C, D> DispatchFilter<C, D> {
         match keep {
             Ok(b) => {
                 if b {
-                    FResult::Ok(packet_data)
+                    Ok(Verdict::Accept(packet_data))
                 } else {
-                    FResult::Drop
+                    Ok(Verdict::Drop)
                 }
             }
-            Err(s) => FResult::Error(s),
+            Err(s) => Err(s),
         }
     }
 }

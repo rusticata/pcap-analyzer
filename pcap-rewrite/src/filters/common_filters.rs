@@ -22,12 +22,12 @@ impl Filter for IPFilter {
             PacketData::L2(data) => {
                 let p = match EthernetPacket::new(data) {
                     Some(p) => p,
-                    None => return FResult::Error("Cannot build ethernet data".to_owned()),
+                    None => Err("Cannot build ethernet data")?,
                 };
                 if self.match_l3(p.get_ethertype().0, p.payload()) {
-                    FResult::Ok(i)
+                    Ok(Verdict::Accept(i))
                 } else {
-                    FResult::Drop
+                    Ok(Verdict::Drop)
                 }
             }
             PacketData::L3(ethertype, data) => {
@@ -49,15 +49,13 @@ impl Filter for IPFilter {
                     }
                 };
                 if matched ^ self.exclude {
-                    FResult::Ok(i)
+                    Ok(Verdict::Accept(i))
                 } else {
-                    FResult::Drop
+                    Ok(Verdict::Drop)
                 }
             }
-            PacketData::L4(_, _) => FResult::Error("Cannot filter IP, L4 content".to_owned()),
-            PacketData::Unsupported(_) => {
-                FResult::Error("Cannot filter IP, unsupported data".to_owned())
-            }
+            PacketData::L4(_, _) => Err("Cannot filter IP, L4 content")?,
+            PacketData::Unsupported(_) => Err("Cannot filter IP, unsupported data".to_owned()),
         }
     }
 }
@@ -110,25 +108,23 @@ impl Filter for SourceFilter {
             PacketData::L2(data) => {
                 let p = match EthernetPacket::new(data) {
                     Some(p) => p,
-                    None => return FResult::Error("Cannot build ethernet data".to_owned()),
+                    None => Err("Cannot build ethernet data")?,
                 };
                 if self.match_l3(p.get_ethertype().0, p.payload()) {
-                    FResult::Ok(i)
+                    Ok(Verdict::Accept(i))
                 } else {
-                    FResult::Drop
+                    Ok(Verdict::Drop)
                 }
             }
             PacketData::L3(ethertype, data) => {
                 if self.match_l3(ethertype, data) {
-                    FResult::Ok(i)
+                    Ok(Verdict::Accept(i))
                 } else {
-                    FResult::Drop
+                    Ok(Verdict::Drop)
                 }
             }
-            PacketData::L4(_, _) => FResult::Error("Cannot filter source, L4 content".to_owned()),
-            PacketData::Unsupported(_) => {
-                FResult::Error("Cannot filter source, unsupported data".to_owned())
-            }
+            PacketData::L4(_, _) => Err("Cannot filter source, L4 content".to_string()),
+            PacketData::Unsupported(_) => Err("Cannot filter source, unsupported data".to_string()),
         }
     }
 }

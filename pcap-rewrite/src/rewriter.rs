@@ -152,11 +152,11 @@ impl PcapAnalyzer for Rewriter {
 
         // apply filters
         let data = match apply_filters(&self.filters, packet.data.clone()) {
-            FResult::Ok(d) => d,
-            FResult::Drop => {
+            Ok(Verdict::Accept(d)) => d,
+            Ok(Verdict::Drop) => {
                 return Ok(());
             }
-            FResult::Error(e) => panic!("Filter fatal error: {}", e),
+            Err(e) => panic!("Filter fatal error: {}", e),
         };
         // convert data
         let data = convert_layer(&data, self.output_layer).map_err(Error::Generic)?;
