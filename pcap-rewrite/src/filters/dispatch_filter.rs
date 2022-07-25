@@ -69,7 +69,7 @@ impl<C, D> DispatchFilter<C, D> {
             PacketData::Unsupported(_) => unimplemented!(),
         };
 
-        match (&self.keep)(&self.key_container, &key) {
+        match (self.keep)(&self.key_container, &key) {
             Ok(b) => {
                 if b {
                     Ok(Verdict::Accept(packet_data))
