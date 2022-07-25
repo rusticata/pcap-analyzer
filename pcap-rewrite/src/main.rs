@@ -29,6 +29,7 @@ mod rewriter;
 mod traits;
 
 use crate::filters::dispatch_filter::DispatchFilterBuilder;
+use crate::filters::fragmentation::fragmentation_filter::FragmentationFilterBuilder;
 use crate::rewriter::*;
 use filters::filtering_action::FilteringAction;
 use filters::filtering_key::FilteringKey;
@@ -142,6 +143,24 @@ Example: -f Source:192.168.1.1",
                     filtering_action,
                     key_file_path,
                 )?;
+                filters.push(f);
+            }
+            "Fragmentation" => {
+                eprintln!("adding fragmentation filter");
+                let dispatch_data = args[1];
+                let args: Vec<_> = dispatch_data.split('%').collect();
+                if args.len() != 2 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "More than two arguments provided to fragmentation filter.".to_string(),
+                    ));
+                };
+                let filtering_key = FilteringKey::of_string(args[0])
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let filtering_action = FilteringAction::of_string(args[1])
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                let f = FragmentationFilterBuilder::from_args(filtering_key, filtering_action)?;
                 filters.push(f);
             }
             _ => {
