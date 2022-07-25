@@ -190,6 +190,13 @@ impl PcapAnalyzer for Rewriter {
         if self.run_pre_analysis {
             info!("Pre-analysis done.");
             self.run_pre_analysis = false;
+            
+            for filter in self.filters.iter_mut() {
+                if let Err(e) = filter.preanalysis_done() {
+                    panic!("Pre-analysis filter returned fatal error in post preanalysis function {}", e);
+                }
+            }
+
             return;
         }
         info!("Done.");
