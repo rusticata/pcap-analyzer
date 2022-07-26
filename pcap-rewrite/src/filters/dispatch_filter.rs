@@ -18,19 +18,24 @@ use crate::filters::filtering_key::FilteringKey;
 use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
 
+/// Function to extract key from data
+pub type GetKeyFn<D> = Box<dyn Fn(&[u8]) -> Result<D, String>>;
+/// Function to keep/drop extract key from container
+pub type KeepFn<C, D> = Box<dyn Fn(&C, &D) -> Result<bool, String>>;
+
 pub struct DispatchFilter<C, D> {
     key_container: C,
-    get_key_from_ipv4_l3_data: Box<dyn Fn(&[u8]) -> Result<D, String>>,
-    get_key_from_ipv6_l3_data: Box<dyn Fn(&[u8]) -> Result<D, String>>,
-    keep: Box<dyn Fn(&C, &D) -> Result<bool, String>>,
+    get_key_from_ipv4_l3_data: GetKeyFn<D>,
+    get_key_from_ipv6_l3_data: GetKeyFn<D>,
+    keep: KeepFn<C, D>,
 }
 
 impl<C, D> DispatchFilter<C, D> {
     pub fn new(
         key_container: C,
-        get_key_from_ipv4_l3_data: Box<dyn Fn(&[u8]) -> Result<D, String>>,
-        get_key_from_ipv6_l3_data: Box<dyn Fn(&[u8]) -> Result<D, String>>,
-        keep: Box<dyn Fn(&C, &D) -> Result<bool, String>>,
+        get_key_from_ipv4_l3_data: GetKeyFn<D>,
+        get_key_from_ipv6_l3_data: GetKeyFn<D>,
+        keep: KeepFn<C, D>,
     ) -> Self {
         DispatchFilter {
             key_container,
@@ -101,11 +106,12 @@ impl DispatchFilterBuilder {
                 let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: &dyn Fn(&IpAddrC, &IpAddr) -> Result<bool, String> =
-                    match filtering_action {
-                        FilteringAction::Keep => &|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr)),
-                        FilteringAction::Drop => &|c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr)),
-                    };
+                let keep: KeepFn<IpAddrC, IpAddr> = match filtering_action {
+                    FilteringAction::Keep => Box::new(|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr))),
+                    FilteringAction::Drop => {
+                        Box::new(|c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr)))
+                    }
+                };
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_container,
@@ -118,38 +124,38 @@ impl DispatchFilterBuilder {
                 let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: &dyn Fn(&IpAddrC, &IpAddr) -> Result<bool, String> =
-                    match filtering_action {
-                        FilteringAction::Keep => &|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr)),
-                        FilteringAction::Drop => &|c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr)),
-                    };
+                let keep: KeepFn<IpAddrC, IpAddr> = match filtering_action {
+                    FilteringAction::Keep => Box::new(|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr))),
+                    FilteringAction::Drop => {
+                        Box::new(|c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr)))
+                    }
+                };
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_container,
                     Box::new(key_parser_ipv4::parse_dst_ipaddr),
                     Box::new(key_parser_ipv6::parse_dst_ipaddr),
-                    Box::new(keep),
+                    keep,
                 )))
             }
             FilteringKey::SrcDstIpaddr => {
                 let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: &dyn Fn(&IpAddrC, &(IpAddr, IpAddr)) -> Result<bool, String> =
-                    match filtering_action {
-                        FilteringAction::Keep => &|c, ipaddr_tuple| {
-                            Ok(c.contains(&ipaddr_tuple.0) || c.contains(&ipaddr_tuple.1))
-                        },
-                        FilteringAction::Drop => &|c, ipaddr_tuple| {
-                            Ok(!c.contains(&ipaddr_tuple.0) && !c.contains(&ipaddr_tuple.1))
-                        },
-                    };
+                let keep: KeepFn<IpAddrC, (IpAddr, IpAddr)> = match filtering_action {
+                    FilteringAction::Keep => Box::new(|c, ipaddr_tuple| {
+                        Ok(c.contains(&ipaddr_tuple.0) || c.contains(&ipaddr_tuple.1))
+                    }),
+                    FilteringAction::Drop => Box::new(|c, ipaddr_tuple| {
+                        Ok(!c.contains(&ipaddr_tuple.0) && !c.contains(&ipaddr_tuple.1))
+                    }),
+                };
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_container,
                     Box::new(key_parser_ipv4::parse_src_dst_ipaddr),
                     Box::new(key_parser_ipv6::parse_src_dst_ipaddr),
-                    Box::new(keep),
+                    keep,
                 )))
             }
             FilteringKey::SrcIpaddrProtoDstPort => {
@@ -157,40 +163,37 @@ impl DispatchFilterBuilder {
                     IpAddrProtoPortC::of_file_path(Path::new(key_file_path))
                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: &dyn Fn(
-                    &IpAddrProtoPortC,
-                    &(IpAddr, IpNextHeaderProtocol, u16),
-                ) -> Result<bool, String> = match filtering_action {
-                    FilteringAction::Keep => {
-                        &|c, tuple| Ok(c.contains(&tuple.0, &tuple.1, tuple.2))
-                    }
-                    FilteringAction::Drop => {
-                        &|c, tuple| Ok(!c.contains(&tuple.0, &tuple.1, tuple.2))
-                    }
-                };
+                let keep: KeepFn<IpAddrProtoPortC, (IpAddr, IpNextHeaderProtocol, u16)> =
+                    match filtering_action {
+                        FilteringAction::Keep => {
+                            Box::new(|c, tuple| Ok(c.contains(&tuple.0, &tuple.1, tuple.2)))
+                        }
+                        FilteringAction::Drop => {
+                            Box::new(|c, tuple| Ok(!c.contains(&tuple.0, &tuple.1, tuple.2)))
+                        }
+                    };
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_proto_port_container,
                     Box::new(key_parser_ipv4::parse_src_ipaddr_proto_dst_port),
                     Box::new(key_parser_ipv6::parse_src_ipaddr_proto_dst_port),
-                    Box::new(keep),
+                    keep,
                 )))
             }
             FilteringKey::SrcDstIpaddrProtoSrcDstPort => {
                 let five_tuple_container = FiveTupleC::of_file_path(Path::new(key_file_path))
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: &dyn Fn(&FiveTupleC, &FiveTuple) -> Result<bool, String> =
-                    match filtering_action {
-                        FilteringAction::Keep => &|c, five_tuple| Ok(c.contains(five_tuple)),
-                        FilteringAction::Drop => &|c, five_tuple| Ok(!c.contains(five_tuple)),
-                    };
+                let keep: KeepFn<FiveTupleC, FiveTuple> = match filtering_action {
+                    FilteringAction::Keep => Box::new(|c, five_tuple| Ok(c.contains(five_tuple))),
+                    FilteringAction::Drop => Box::new(|c, five_tuple| Ok(!c.contains(five_tuple))),
+                };
 
                 Ok(Box::new(DispatchFilter::new(
                     five_tuple_container,
                     Box::new(key_parser_ipv4::parse_five_tuple),
                     Box::new(key_parser_ipv6::parse_five_tuple),
-                    Box::new(keep),
+                    keep,
                 )))
             }
         }
