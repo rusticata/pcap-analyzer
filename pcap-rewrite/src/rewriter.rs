@@ -144,7 +144,8 @@ impl PcapAnalyzer for Rewriter {
             // run pre-analysis plugins
             for p in self.filters.iter_mut() {
                 if let Err(e) = p.pre_analyze(packet) {
-                    panic!("Pre-analysis plugin returned fatal error {}", e);
+                    error!("Pre-analysis plugin returned fatal error {}", e);
+                    return Err(Error::Generic("Pre-analysis fatal error"));
                 }
             }
             return Ok(());
