@@ -19,23 +19,23 @@ use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
 
 /// Function to extract key from data
-pub type GetKeyFn<D> = Box<dyn Fn(&[u8]) -> Result<D, String>>;
+pub type GetKeyFn<Key> = Box<dyn Fn(&[u8]) -> Result<Key, String>>;
 /// Function to keep/drop extract key from container
-pub type KeepFn<C, D> = Box<dyn Fn(&C, &D) -> Result<bool, String>>;
+pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, String>>;
 
-pub struct DispatchFilter<C, D> {
-    key_container: C,
-    get_key_from_ipv4_l3_data: GetKeyFn<D>,
-    get_key_from_ipv6_l3_data: GetKeyFn<D>,
-    keep: KeepFn<C, D>,
+pub struct DispatchFilter<Container, Key> {
+    key_container: Container,
+    get_key_from_ipv4_l3_data: GetKeyFn<Key>,
+    get_key_from_ipv6_l3_data: GetKeyFn<Key>,
+    keep: KeepFn<Container, Key>,
 }
 
-impl<C, D> DispatchFilter<C, D> {
+impl<Container, Key> DispatchFilter<Container, Key> {
     pub fn new(
-        key_container: C,
-        get_key_from_ipv4_l3_data: GetKeyFn<D>,
-        get_key_from_ipv6_l3_data: GetKeyFn<D>,
-        keep: KeepFn<C, D>,
+        key_container: Container,
+        get_key_from_ipv4_l3_data: GetKeyFn<Key>,
+        get_key_from_ipv6_l3_data: GetKeyFn<Key>,
+        keep: KeepFn<Container, Key>,
     ) -> Self {
         DispatchFilter {
             key_container,
@@ -87,7 +87,7 @@ impl<C, D> DispatchFilter<C, D> {
     }
 }
 
-impl<C, D> Filter for DispatchFilter<C, D> {
+impl<Container, Key> Filter for DispatchFilter<Container, Key> {
     fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
         self.keep(i)
     }
