@@ -35,7 +35,24 @@ fn main() -> io::Result<()> {
                 .help(
                     "Filters to load (default: none)
 Arguments can be specified using : after the filter name.
-Example: -f Source:192.168.1.1",
+Examples:
+-f Source:192.168.1.1
+-f Dispatch:fk%fa%path
+-f Dispatch:fk%fa
+
+fk: filtering key=si|di|sdi|sipdp|sdipsdp
+with si: src IP
+     di: dst IP
+     sdi: srd/dst IP
+     sipdp: src IP, proto, dst port
+     sdipsdp: src/dst IP, proto, src/dst port
+
+fa: filtering action=k|d
+with k: keep
+     d: drop
+
+path: path to a csv formatted file without header that contains filtering keys
+",
                 )
                 .short('f')
                 .long("filters")
