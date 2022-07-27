@@ -19,6 +19,16 @@ travis-ci                         = { repository = "rusticata/pcap-analyzer" }
 is-it-maintained-open-issues      = { repository = "rusticata/pcap-analyzer" }
 maintenance                       = { status     = "actively-developed" }
 
+[lib]
+name = "pcap_rewrite"
+path = "src/lib.rs"
+doc = true
+
+[[bin]]
+name = "pcap-rewrite"
+path = "src/main.rs"
+doc = false
+
 [dependencies]
 csv = "1.1.6"
 clap = { version = "3.2", features = ["cargo", "derive"] }

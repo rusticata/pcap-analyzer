@@ -3,6 +3,7 @@ use crate::pcap::*;
 use crate::pcapng::*;
 use crate::traits::Writer;
 use libpcap_tools::{Error, Packet, ParseBlockContext, ParseContext, PcapAnalyzer};
+use log::{debug, error, info};
 use pcap_parser::data::*;
 use pcap_parser::Linktype;
 use pcap_parser::{Block, PcapBlockOwned};

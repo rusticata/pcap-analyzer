@@ -1,38 +1,19 @@
 #![warn(clippy::all)]
 #![allow(clippy::upper_case_acronyms)]
 
-#[macro_use]
-extern crate log;
-
-extern crate clap;
 use clap::{crate_version, App, Arg};
-
-// extern crate env_logger;
-extern crate flate2;
-extern crate pcap_parser;
-extern crate xz2;
-
+use libpcap_tools::Config;
+use log::{debug, error};
+use std::fs::File;
 use std::io;
 use std::path::Path;
-use std::{fs::File, io::Read};
 
-use flate2::read::GzDecoder;
-use xz2::read::XzDecoder;
-
-use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
-
-mod container;
-mod filters;
-mod pcap;
-mod pcapng;
-mod rewriter;
-mod traits;
-
-use crate::filters::dispatch_filter::DispatchFilterBuilder;
-use crate::filters::fragmentation::fragmentation_filter::FragmentationFilterBuilder;
-use crate::rewriter::*;
-use filters::filtering_action::FilteringAction;
-use filters::filtering_key::FilteringKey;
+use pcap_rewrite::filters::dispatch_filter::DispatchFilterBuilder;
+use pcap_rewrite::filters::filtering_action::FilteringAction;
+use pcap_rewrite::filters::filtering_key::FilteringKey;
+use pcap_rewrite::filters::fragmentation::fragmentation_filter::FragmentationFilterBuilder;
+use pcap_rewrite::rewriter::*;
+use pcap_rewrite::{filters, RewriteOptions};
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
@@ -170,51 +151,10 @@ Example: -f Source:192.168.1.1",
         }
     }
 
-    let mut input_reader = get_reader(input_filename)?;
-    let path = Path::new(&output_filename);
-    let outfile = File::create(path)?;
-
-    // let block_analyzer = BlockRewriter::new(outfile);
-    // let mut engine = BlockEngine::new(block_analyzer, &config);
-
-    let rewriter = Rewriter::new(Box::new(outfile), output_format, filters);
-    let mut engine = PcapDataEngine::new(rewriter, &config);
-
-    if engine.data_analyzer().require_pre_analysis() {
-        // check that we are not using stdin
-        if input_filename == "-" {
-            error!("Plugins with pre-analysis pass cannot be run on stdin");
-            ::std::process::exit(1);
-        }
-        info!("Running pre-analysis pass");
-        engine.data_analyzer_mut().set_run_pre_analysis(true);
-        engine.run(&mut input_reader).expect("run analyzer");
-        // reset reader
-        input_reader = get_reader(input_filename)?;
-    }
-
-    info!("Rewriting file (output format: {:?})", output_format);
-    engine.run(&mut input_reader).expect("run analyzer");
-
-    Ok(())
-}
-
-fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
-    let input_reader = if input_filename == "-" {
-        Box::new(io::stdin())
-    } else {
-        let path = Path::new(&input_filename);
-        let file = File::open(path).map_err(|e| {
-            error!("Could not open input file '{}'", input_filename);
-            e
-        })?;
-        if input_filename.ends_with(".gz") {
-            Box::new(GzDecoder::new(file))
-        } else if input_filename.ends_with(".xz") {
-            Box::new(XzDecoder::new(file))
-        } else {
-            Box::new(file) as Box<dyn io::Read>
-        }
+    let options = RewriteOptions {
+        output_format,
+        config,
     };
-    Ok(input_reader)
+
+    pcap_rewrite::pcap_rewrite_file(input_filename, output_filename, filters, &options)
 }

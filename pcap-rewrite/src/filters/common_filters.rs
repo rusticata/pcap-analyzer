@@ -61,7 +61,7 @@ impl Filter for IPFilter {
 }
 
 impl IPFilter {
-    pub(crate) fn new(args: &[&str]) -> Self {
+    pub fn new(args: &[&str]) -> Self {
         assert!(!args.is_empty());
         let (exclude, ip_str) = if args[0].starts_with('!') {
             (true, &args[0][1..])
@@ -130,7 +130,7 @@ impl Filter for SourceFilter {
 }
 
 impl SourceFilter {
-    pub(crate) fn new(args: &[&str]) -> Self {
+    pub fn new(args: &[&str]) -> Self {
         assert!(!args.is_empty());
         let (exclude, ip_str) = if args[0].starts_with('!') {
             (true, &args[0][1..])

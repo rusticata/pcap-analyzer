@@ -1,3 +1,5 @@
+use log::trace;
+
 use pnet_packet::ipv6::ExtensionPacket;
 use pnet_packet::ipv6::FragmentPacket;
 use pnet_packet::ipv6::Ipv6Packet;

@@ -1,5 +1,6 @@
 use crate::traits::Writer;
 use libpcap_tools::Packet;
+use log::debug;
 use pcap_parser::ToVec;
 use pcap_parser::{LegacyPcapBlock, Linktype, PcapBlockOwned};
 use std::io::{self, Error, ErrorKind, Write};
@@ -44,11 +45,14 @@ impl<W: Write> Writer for PcapWriter<W> {
                     "Pcap block serialization failed",
                 )))?;
                 self.w.write(&v)
-            },
+            }
             PcapBlockOwned::NG(b) => {
-                debug!("PcapWriter: skipping pcapng block with magic {:08x}", b.magic());
+                debug!(
+                    "PcapWriter: skipping pcapng block with magic {:08x}",
+                    b.magic()
+                );
                 Ok(0)
-            },
+            }
         }
     }
 
