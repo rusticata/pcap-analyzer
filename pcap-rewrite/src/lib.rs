@@ -1,3 +1,5 @@
+extern crate lz4;
+
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
@@ -86,6 +88,8 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
             Box::new(GzDecoder::new(file))
         } else if input_filename.ends_with(".xz") {
             Box::new(XzDecoder::new(file))
+        } else if input_filename.ends_with(".lz4") {
+            Box::new(lz4::Decoder::new(file)?)
         } else {
             Box::new(file) as Box<dyn io::Read>
         }
