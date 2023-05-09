@@ -20,7 +20,7 @@ is-it-maintained-open-issues      = { repository = "rusticata/pcap-analyzer" }
 maintenance                       = { status     = "actively-developed" }
 
 [features]
-default = ["release"]
+default = ["release", "dep:fasthash"]
 release = ["plugin_community_id", "plugin_ospf", "plugin_rusticata", "plugin_tls_stats"]
 all = ["release", "plugins_debug", "plugin_examples"]
 plugin_community_id = ["sha1", "base16ct", "base64ct"]
@@ -34,7 +34,7 @@ plugin_tls_stats = ["rusticata","tls-parser"]
 base16ct = { version="0.1", features=["alloc"], optional=true }
 base64ct = { version="1.5", features=["alloc"], optional=true }
 crossbeam-channel = "0.5"
-fasthash = "0.4"
+fasthash = { version = "0.4", optional=true }
 fnv = "1.0"
 indexmap = { version="1.1", features=["serde-1"] }
 lazy_static = "1.2"
