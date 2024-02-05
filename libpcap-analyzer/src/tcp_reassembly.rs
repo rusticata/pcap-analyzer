@@ -31,7 +31,7 @@ pub enum TcpStatus {
 pub struct TcpSegment {
     pub rel_seq: Wrapping<u32>,
     pub rel_ack: Wrapping<u32>,
-    pub flags: u16,
+    pub flags: u8,
     pub data: Vec<u8>,
     pub pcap_index: usize,
 }
@@ -976,7 +976,7 @@ pub(crate) fn finalize_tcp_streams(analyzer: &mut crate::analyzer::Analyzer) {
     analyzer.tcp_defrag.m.clear();
 }
 
-fn debug_print_tcp_flags(tcp_flags: u16) {
+fn debug_print_tcp_flags(tcp_flags: u8) {
     if log::Level::Debug <= log::STATIC_MAX_LEVEL {
         let mut s = String::from("tcp_flags: [");
         if tcp_flags & TcpFlags::SYN != 0 {
