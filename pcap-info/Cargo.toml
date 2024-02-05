@@ -31,12 +31,12 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 blake2 = "0.10"
-clap = { version = "3.2", features = ["cargo", "derive"] }
+clap = { version = "4.4", features = ["cargo", "derive"] }
 digest = "0.10"
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 sha-1 = "0.10"
 sha2 = "0.10"
-smart-default = "0.6"
+smart-default = "0.7"
 time = { version="0.3", features=["local-offset"] }
 xz2 = "0.1"
 

@@ -3,7 +3,7 @@
 #[macro_use]
 extern crate log;
 
-use clap::{crate_version, App, Arg};
+use clap::Parser;
 use explugin_example::ExEmptyPluginBuilder;
 use libpcap_analyzer::*;
 use libpcap_analyzer::plugins::PluginsFactory;
@@ -11,7 +11,6 @@ use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
 use simplelog::{LevelFilter, SimpleLogger};
 use std::fs::File;
 use std::io;
-use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -20,6 +19,30 @@ use xz2::read::XzDecoder;
 
 mod display;
 use display::*;
+
+/// Pcap analyzer test tool
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Configuration file
+    #[arg(short, long, value_name = "CONFIG")]
+    config: Option<String>,
+
+    /// Plugins to load (default: all)
+    #[arg(short, long)]
+    plugins: Option<String>,
+
+    /// Number of jobs to run (default: 1)
+    #[arg(short, long, default_value_t = 1)]
+    jobs: u8,
+
+    /// Number of packets to skip
+    #[arg(short, long, default_value_t = 0)]
+    skip: u32,
+
+    /// Input file
+    input: String,
+}
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
@@ -47,44 +70,7 @@ fn env_get_log_level() -> LevelFilter {
 }
 
 fn main() -> Result<(), io::Error> {
-    let matches = App::new("Pcap analyzer test tool")
-        .version(crate_version!())
-        .author("Pierre Chifflier")
-        .about("Test tool for pcap-analyzer crate")
-        .arg(
-            Arg::with_name("config")
-                .help("Configuration file")
-                .short('c')
-                .long("config")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("jobs")
-                .help("Number of concurrent jobs to run (default: 1)")
-                .short('j')
-                .long("jobs")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("plugins")
-                .help("Plugins to load (default: all)")
-                .short('p')
-                .long("plugins")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("INPUT")
-                .help("Input file name")
-                .required(true)
-                .index(1),
-        )
-        .arg(
-            Arg::with_name("skip")
-                .help("Skip given number of packets")
-                .long("skip")
-                .takes_value(true),
-        )
-        .get_matches();
+    let args = Args::parse();
 
     let log_level = env_get_log_level();
     let _ = SimpleLogger::init(log_level, simplelog::Config::default());
@@ -95,28 +81,17 @@ fn main() -> Result<(), io::Error> {
     // add external plugins
     factory.add_builder(Box::new(ExEmptyPluginBuilder));
     let mut config = Config::default();
-    if let Some(filename) = matches.value_of("config") {
-        load_config(&mut config, filename)?;
+    if let Some(filename) = args.config {
+        load_config(&mut config, &filename)?;
     }
-    let input_filename = matches.value_of("INPUT").unwrap();
+    let input_filename = &args.input;
 
-    let skip = matches.value_of("skip").unwrap_or("0");
-    let skip = skip.parse::<u32>().map_err(|_| Error::new(
-        ErrorKind::Other,
-        "Invalid value for 'skip' argument",
-    ))?;
-    config.set("skip_index", skip);
+    config.set("skip_index", args.skip);
 
     // override config options from command-line arguments
-    if let Some(jobs) = matches.value_of("jobs") {
-        let j = jobs.parse::<u32>().map_err(|_| io::Error::new(
-            io::ErrorKind::Other,
-            "Invalid value for 'jobs' argument",
-        ))?;
-        config.set("num_threads", j);
-    }
+    config.set("num_threads", args.jobs);
 
-    let registry = if let Some(plugin_names) = matches.value_of("plugins") {
+    let registry = if let Some(plugin_names) = args.plugins {
         debug!("Restricting plugins to: {}", plugin_names);
         let names: Vec<_> = plugin_names.split(',').collect();
         factory.build_filter_plugins(

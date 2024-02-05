@@ -31,7 +31,7 @@ doc = false
 
 [dependencies]
 csv = "1.1.6"
-clap = { version = "3.2", features = ["cargo", "derive"] }
+clap = { version = "4.4", features = ["cargo", "derive"] }
 libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }

@@ -2,8 +2,7 @@
 
 use pcap_info::*;
 
-extern crate clap;
-use clap::{crate_version, App, Arg};
+use clap::Parser;
 use pcap_parser::OptionCode;
 use time::UtcOffset;
 
@@ -14,28 +13,24 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use std::process;
 use std::str;
 
-fn main() -> Result<(), io::Error> {
-    let matches = App::new("Pcap information tool")
-        .version(crate_version!())
-        .author("Pierre Chifflier")
-        .about("Display information about pcap files")
-        .arg(
-            Arg::with_name("no-check")
-                .help("Do not check file")
-                .short('n')
-                .long("no-check"),
-        )
-        .arg(
-            Arg::with_name("INPUT")
-                .help("Input file name")
-                .required(true)
-                .index(1),
-        )
-        .get_matches();
+/// Pcap information tool
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Do not check file structure
+    #[arg(short, long)]
+    no_check: bool,
 
-    let input_filename = matches.value_of("INPUT").unwrap();
+    /// Input file
+    input: String,
+}
+
+fn main() -> Result<(), io::Error> {
+    let args = Args::parse();
+
+    let input_filename = &args.input;
     let options = Options {
-        check_file: !matches.is_present("no-check"),
+        check_file: !args.no_check,
     };
 
     let (rc, info) = pcap_info(input_filename, &options)?;

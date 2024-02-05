@@ -4,7 +4,7 @@
 extern crate log;
 
 extern crate clap;
-use clap::{crate_version, App, Arg};
+use clap::{crate_version, Parser};
 
 extern crate flate2;
 extern crate lz4;
@@ -12,7 +12,6 @@ extern crate xz2;
 
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::{Error, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -22,6 +21,46 @@ use xz2::read::XzDecoder;
 use libpcap_analyzer::*;
 use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
 
+/// Pcap file analysis tool
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Configuration file
+    #[arg(short, long, value_name = "CONFIG")]
+    config: Option<String>,
+
+    /// Plugins to load (default: all)
+    #[arg(short, long)]
+    plugins: Option<String>,
+
+    /// List plugin builders and exit
+    #[arg(long)]
+    list_builders: bool,
+
+    /// List instanciated plugins and exit
+    #[arg(long)]
+    list_plugins: bool,
+
+    /// Plugins output directory
+    #[arg(short, long)]
+    outdir: Option<String>,
+
+    /// Number of jobs to run (default: 0 (auto))
+    #[arg(short, long, default_value_t = 0)]
+    jobs: u8,
+
+    /// Number of packets to skip
+    #[arg(short, long, default_value_t = 0)]
+    skip: u32,
+
+    /// Be verbose
+    #[arg(short, long)]
+    verbose: bool,
+
+    /// Input file
+    input: Option<String>,
+}
+
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
     debug!("Loading configuration {}", filename);
     let path = Path::new(&filename);
@@ -30,101 +69,27 @@ fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
 }
 
 fn main() -> io::Result<()> {
-    let matches = App::new("Pcap analyzer")
-        .version(crate_version!())
-        .author("Pierre Chifflier")
-        .about("Tool for Pcap file analyzis")
-        .arg(
-            Arg::with_name("verbose")
-                .help("Be verbose")
-                .short('v')
-                .long("verbose"),
-        )
-        .arg(
-            Arg::with_name("jobs")
-                .help("Number of concurrent jobs to run (default: 1)")
-                .short('j')
-                .long("jobs")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("list-builders")
-                .help("List plugin builders and exit")
-                .long("list-builders")
-        )
-        .arg(
-            Arg::with_name("list-plugins")
-                .help("List instanciated plugins and exit")
-                .short('l')
-                .long("list-plugins")
-        )
-        .arg(
-            Arg::with_name("plugins")
-                .help("Plugins to load (default: all)")
-                .short('p')
-                .long("plugins")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("config")
-                .help("Configuration file")
-                .short('c')
-                .long("config")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("outdir")
-                .help("Plugins output directory")
-                .short('o')
-                .long("outdir")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("INPUT")
-                .help("Input file name")
-                .required(true)
-                .index(1),
-        )
-        .arg(
-            Arg::with_name("skip")
-                .help("Skip given number of packets")
-                .long("skip")
-                .takes_value(true),
-        )
-        .get_matches();
+    let args = Args::parse();
 
     // create plugin factory with all available plugins
     let factory = plugins::PluginsFactory::default();
     // check if asked to list plugin builders
-    if matches.is_present("list-builders") {
+    if args.list_builders {
         println!("pcap-analyzer available plugin builders:");
         factory.iter_builders(|name| println!("    {}", name));
         ::std::process::exit(0);
     }
     // load config
     let mut config = Config::default();
-    if let Some(filename) = matches.value_of("config") {
-        load_config(&mut config, filename)?;
+    if let Some(filename) = args.config {
+        load_config(&mut config, &filename)?;
     }
     // override config options from command-line arguments
-    if let Some(jobs) = matches.value_of("jobs") {
-        #[allow(clippy::or_fun_call)]
-        let j = jobs.parse::<u32>().or(Err(Error::new(
-            ErrorKind::Other,
-            "Invalid value for 'jobs' argument",
-        )))?;
-        config.set("num_threads", j);
+    config.set("num_threads", args.jobs);
+    if let Some(dir) = args.outdir {
+        config.set("output_dir", dir.as_str());
     }
-    if let Some(dir) = matches.value_of("outdir") {
-        config.set("output_dir", dir);
-    }
-
-    let skip = matches.value_of("skip").unwrap_or("0");
-    let skip = skip.parse::<u32>().map_err(|_| Error::new(
-        ErrorKind::Other,
-        "Invalid value for 'skip' argument",
-    ))?;
-    config.set("skip_index", skip);
+    config.set("skip_index", args.skip);
 
     // Open log file
     let log_file = config.get("log_file").unwrap_or("pcap-analyzer.log");
@@ -146,7 +111,7 @@ fn main() -> io::Result<()> {
     info!("Pcap analyser {}", crate_version!());
 
     // instantiate all plugins
-    let registry = if let Some(plugin_names) = matches.value_of("plugins") {
+    let registry = if let Some(plugin_names) = args.plugins.as_ref() {
         debug!("Restricting plugins to: {}", plugin_names);
         let names: Vec<_> = plugin_names.split(',').collect();
         factory.build_filter_plugins(
@@ -160,7 +125,7 @@ fn main() -> io::Result<()> {
         factory.build_plugins(&config).expect("Could not build factory")
     };
     // check if asked to list plugins
-    if matches.is_present("list-plugins") {
+    if args.list_plugins {
         println!("pcap-analyzer instanciated plugins:");
         registry.run_plugins(
             |_| true,
@@ -190,12 +155,18 @@ fn main() -> io::Result<()> {
             debug!("  {}", p.name());
         },
     );
-    let input_filename = matches.value_of("INPUT").unwrap();
+
+    let input_filename = match args.input.as_ref() {
+        Some(s) => s.as_str(),
+        None => {
+            return Err(io::Error::new(io::ErrorKind::NotFound, "Input file name cannot be empty"));
+        }
+    };
 
     let mut input_reader = if input_filename == "-" {
         Box::new(io::stdin())
     } else {
-        let path = Path::new(&input_filename);
+        let path = Path::new(input_filename);
         let file = File::open(path)?;
         if input_filename.ends_with(".gz") {
             Box::new(GzDecoder::new(file))
@@ -218,5 +189,8 @@ fn main() -> io::Result<()> {
     };
     engine.run(&mut input_reader).expect("run analyzer");
 
+    // TODO: log results
+
+    info!("pcap-analyzer: done, exiting");
     Ok(())
 }
