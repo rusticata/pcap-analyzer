@@ -1,7 +1,7 @@
 use clap::crate_version;
 use log::LevelFilter;
 use rustyline::error::ReadlineError;
-use rustyline::Editor;
+use rustyline::DefaultEditor;
 use std::{
     env,
     fs::File,
@@ -16,7 +16,7 @@ fn main() {
     println!("pcap-cli {}", crate_version!());
 
     // Create an Editor with the default configuration options.
-    let mut repl = Editor::<()>::new().expect("could not create repl editor");
+    let mut repl = DefaultEditor::new().expect("could not create repl editor");
     // Load a file with the history of commands
     // If the file does not exists, it creates one.
     if repl.load_history("history.txt").is_err() {
@@ -78,7 +78,8 @@ fn main() {
         match readline {
             Ok(line) => {
                 if !line.is_empty() {
-                    repl.add_history_entry(line.as_str());
+                    repl.add_history_entry(line.as_str())
+                        .expect("could not write history");
                 }
                 let line = line.trim_end();
                 if line.starts_with('#') {
