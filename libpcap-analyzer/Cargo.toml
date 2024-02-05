@@ -31,7 +31,7 @@ plugin_rusticata = ["rusticata"]
 plugin_tls_stats = ["rusticata","tls-parser"]
 
 [dependencies]
-base16ct = { version="0.1", features=["alloc"], optional=true }
+base16ct = { version="0.2", features=["alloc"], optional=true }
 base64ct = { version="1.5", features=["alloc"], optional=true }
 crossbeam-channel = "0.5"
 fasthash = "0.4"
@@ -40,7 +40,7 @@ indexmap = { version="1.1", features=["serde-1"] }
 lazy_static = "1.2"
 libpcap-tools = { path="../libpcap-tools" }
 log = "0.4"
-multimap = "0.8"
+multimap = "0.10"
 num_cpus = "1.10"
 ospf-parser = { version="0.5", optional=true }
 pnet_base = "0.31"
