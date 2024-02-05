@@ -10,7 +10,7 @@ jobs:
       matrix:
         rust:
           - stable
-          - 1.57.0
+          - 1.67.0
           - nightly
     steps:
       - uses: actions/checkout@v2
@@ -21,6 +21,9 @@ jobs:
           override: true
       - name: Cargo update
         run: cargo update
+      - name: Cargo update (fix for MSRV)
+        run: cargo update -p assert_cmd --precise 2.0.0
+        if: matrix.rust == '1.67.0'
       - uses: actions-rs/cargo@v1
         with:
           command: check
