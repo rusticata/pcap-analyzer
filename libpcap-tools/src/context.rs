@@ -64,7 +64,7 @@ pub fn pcapng_build_interface<'a>(idb: &'a InterfaceDescriptionBlock<'a>) -> Int
             }
             OptionCode::IfTsoffset => {
                 if opt.value.len() >= 8 {
-                    let int_bytes = <[u8; 8]>::try_from(opt.value).expect("Convert bytes to u64");
+                    let int_bytes = <[u8; 8]>::try_from(opt.value()).expect("Convert bytes to u64");
                     if_tsoffset = u64::from_le_bytes(int_bytes) /* LittleEndian::read_u64(opt.value) */;
                 }
             }

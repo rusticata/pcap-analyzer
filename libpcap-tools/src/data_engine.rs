@@ -118,7 +118,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
                     pcap_parser::build_ts(epb.ts_high, epb.ts_low, if_info.if_tsoffset, unit);
                 let unit = unit as u32; // XXX lossy cast
                 let ts_usec = if unit != MICROS_PER_SEC {
-                    ts_frac / ((unit / MICROS_PER_SEC) as u32)
+                    ts_frac / (unit / MICROS_PER_SEC)
                 } else {
                     ts_frac
                 };

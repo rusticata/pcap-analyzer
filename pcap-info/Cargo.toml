@@ -41,5 +41,5 @@ time = { version="0.3", features=["local-offset"] }
 xz2 = "0.1"
 
 [dependencies.pcap-parser]
-version = "0.14"
+version = "0.15"
 features = ["data", "serialize"]

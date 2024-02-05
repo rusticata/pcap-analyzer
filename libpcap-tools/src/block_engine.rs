@@ -61,7 +61,7 @@ impl<A: BlockAnalyzer> BlockEngine<A> {
                     continue;
                 }
                 Err(PcapError::Eof) => break,
-                Err(PcapError::Incomplete) => {
+                Err(PcapError::Incomplete(_)) => {
                     if last_incomplete_index == ctx.block_index && reader.reader_exhausted() {
                         warn!(
                             "Could not read complete data block (block_index={})",

@@ -239,7 +239,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapIn
                 reader.consume(sz);
             }
             Err(PcapError::Eof) => break,
-            Err(PcapError::Incomplete) => {
+            Err(PcapError::Incomplete(_)) => {
                 if last_incomplete_index == ctx.block_index && reader.reader_exhausted() {
                     eprintln!("Could not read complete data block.");
                     eprintln!("Hint: the reader buffer size may be too small, or the input file may be truncated.");

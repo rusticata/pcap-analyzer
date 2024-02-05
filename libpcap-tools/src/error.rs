@@ -1,3 +1,4 @@
+use pcap_parser::nom::Needed;
 use pcap_parser::nom::{error::ErrorKind, Err};
 use pcap_parser::PcapError;
 use std::convert::From;
@@ -31,7 +32,10 @@ impl From<ErrorKind> for Error {
 impl<'a> From<Err<PcapError<&'a [u8]>>> for Error {
     fn from(err: Err<PcapError<&'a [u8]>>) -> Self {
         match err {
-            Err::Incomplete(_) => Error::Pcap(PcapError::Incomplete),
+            Err::Incomplete(needed) => {
+                let sz = if let Needed::Size(sz) = needed { usize::from(sz) } else { 0 };
+                Error::Pcap(PcapError::Incomplete(sz))
+            }
             Err::Error(e) | Err::Failure(e) => Error::Pcap(e.to_owned_vec()),
         }
     }
