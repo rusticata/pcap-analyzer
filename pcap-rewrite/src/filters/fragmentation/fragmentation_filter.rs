@@ -79,7 +79,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                 )?
             }
             PacketData::L3(l3_layer_value_u8, data) => {
-                let ether_type = EtherType::new(l3_layer_value_u8 as u16);
+                let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
                     EtherTypes::Ipv4 => (fragmentation_test::is_ipv4_first_fragment)(data)?,
                     EtherTypes::Ipv6 => (fragmentation_test::is_ipv6_first_fragment)(data)?,
@@ -104,7 +104,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                     )?)
                 }
                 PacketData::L3(l3_layer_value_u8, data) => {
-                    let ether_type = EtherType::new(l3_layer_value_u8 as u16);
+                    let ether_type = EtherType::new(l3_layer_value_u8);
                     match ether_type {
                         EtherTypes::Ipv4 => Some(
                             (key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple)(data)?,
@@ -146,7 +146,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                 )?
             }
             PacketData::L3(l3_layer_value_u8, data) => {
-                let ether_type = EtherType::new(l3_layer_value_u8 as u16);
+                let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
                     EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(data)?,
                     EtherTypes::Ipv6 => (self.get_key_from_ipv6_l3_data)(data)?,

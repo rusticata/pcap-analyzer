@@ -176,7 +176,8 @@ macro_rules! plugin_builder {
                 registry: &mut $crate::PluginRegistry,
                 config: &libpcap_tools::Config,
             ) -> Result<(), $crate::PluginBuilderError> {
-                let plugin = $build_fn(config);
+                let build_fn = $build_fn;
+                let plugin = build_fn(config);
                 let protos = plugin.plugin_type();
                 let safe_p = $crate::build_safeplugin!(plugin);
                 let id = registry.add_plugin(safe_p);

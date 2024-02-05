@@ -169,7 +169,7 @@ impl PcapAnalyzer for Rewriter {
                     "truncating index {} to {} bytes",
                     ctx.pcap_index, self.snaplen
                 );
-                &data[..self.snaplen as usize]
+                &data[..self.snaplen]
             } else {
                 data
             }

@@ -58,8 +58,8 @@ impl<W: Write> Writer for PcapWriter<W> {
 
     fn write_packet(&mut self, packet: &Packet, data: &[u8]) -> Result<usize, io::Error> {
         let record = LegacyPcapBlock {
-            ts_sec: packet.ts.secs as u32,
-            ts_usec: packet.ts.micros as u32,
+            ts_sec: packet.ts.secs,
+            ts_usec: packet.ts.micros,
             caplen: data.len() as u32,  // packet.header.caplen,
             origlen: data.len() as u32, // packet.header.len,
             data,

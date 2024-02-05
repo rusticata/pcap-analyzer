@@ -10,8 +10,10 @@ use std::num::Wrapping;
 const EARLY_DETECT_OVERLAP: bool = false;
 
 #[derive(Debug, Eq, PartialEq)]
+#[derive(Default)]
 #[allow(dead_code)]
 pub enum TcpStatus {
+    #[default]
     Closed = 0,
     Listen,
     SynSent,
@@ -23,12 +25,6 @@ pub enum TcpStatus {
     FinWait2,
     LastAck,
     TimeWait,
-}
-
-impl Default for TcpStatus {
-    fn default() -> Self {
-        TcpStatus::Closed
-    }
 }
 
 #[derive(Debug)]
@@ -158,9 +154,9 @@ impl TcpStream {
         }
     }
 
-    pub fn handle_new_connection<'a>(
+    pub fn handle_new_connection(
         &mut self,
-        tcp: &'a TcpPacket,
+        tcp: &TcpPacket,
         to_server: bool,
         pcap_index: usize,
     ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
@@ -168,7 +164,7 @@ impl TcpStream {
         let ack = Wrapping(tcp.get_acknowledgement());
         let tcp_flags = tcp.get_flags();
 
-        let (mut src, mut dst) = if to_server {
+        let (src, dst) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
             (&mut self.server, &mut self.client)
@@ -327,9 +323,9 @@ impl TcpStream {
         Ok(None)
     }
 
-    pub fn handle_established_connection<'a>(
+    pub fn handle_established_connection(
         &mut self,
-        tcp: &'a TcpPacket,
+        tcp: &TcpPacket,
         to_server: bool,
         pcap_index: usize,
     ) -> Result<Option<Vec<TcpSegment>>, TcpStreamError> {
@@ -393,7 +389,7 @@ impl TcpStream {
         to_server: bool,
         pcap_index: usize,
     ) -> Option<Vec<TcpSegment>> {
-        let (mut origin, destination) = if to_server {
+        let (origin, destination) = if to_server {
             (&mut self.client, &mut self.server)
         } else {
             (&mut self.server, &mut self.client)
@@ -560,7 +556,7 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
         let mut before = None;
         let mut after = None;
         // let mut opt_pos = None;
-        for (_n, s) in peer.segments.iter().enumerate() {
+        for s in peer.segments.iter() {
             if s.rel_seq < segment.rel_seq {
                 before = Some(s);
             } else {
@@ -905,7 +901,7 @@ impl TcpStreamReassembly {
             tcp.get_acknowledgement()
         );
 
-        let mut stream = self
+        let stream = self
             .m
             .entry(flow.flow_id)
             .or_insert_with(|| TcpStream::new(flow));

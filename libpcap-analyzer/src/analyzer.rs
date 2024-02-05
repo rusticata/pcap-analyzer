@@ -1095,10 +1095,10 @@ where
 }
 
 /// Run plugins attached to the physical layer
-pub(crate) fn run_plugins_v2_physical<'a>(
+pub(crate) fn run_plugins_v2_physical(
     packet: &Packet,
     ctx: &ParseContext,
-    data: &'a [u8],
+    data: &[u8],
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     let cb = move |p: &mut dyn Plugin| p.handle_layer_physical(packet, data);
@@ -1108,11 +1108,11 @@ pub(crate) fn run_plugins_v2_physical<'a>(
 }
 
 /// Run plugins attached to the link layer (ethernet, etc.)
-pub(crate) fn run_plugins_v2_link<'a>(
+pub(crate) fn run_plugins_v2_link(
     packet: &Packet,
     ctx: &ParseContext,
     linktype: LinkLayerType,
-    l2_payload: &'a [u8],
+    l2_payload: &[u8],
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     let cb = move |p: &mut dyn Plugin| p.handle_layer_link(packet, linktype as u16, l2_payload);
@@ -1122,10 +1122,10 @@ pub(crate) fn run_plugins_v2_link<'a>(
 }
 
 /// Run plugins attached to the network layer (IPv4, IPv6, Arp, IPsec, etc.)
-fn run_plugins_v2_network<'a>(
+fn run_plugins_v2_network(
     packet: &Packet,
     ctx: &ParseContext,
-    l3_payload: &'a [u8],
+    l3_payload: &[u8],
     three_tuple: &ThreeTuple,
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {

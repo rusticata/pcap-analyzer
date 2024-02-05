@@ -59,7 +59,7 @@ impl<Container, Key> DispatchFilter<Container, Key> {
                 )?
             }
             PacketData::L3(l3_layer_value_u8, data) => {
-                let ether_type = EtherType::new(l3_layer_value_u8 as u16);
+                let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
                     EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(data)?,
                     EtherTypes::Ipv6 => (self.get_key_from_ipv4_l3_data)(data)?,

@@ -38,7 +38,7 @@ impl Plugin for BasicStats {
         t3: &'s ThreeTuple,
     ) -> PluginResult<'i> {
         // info!("BasicStats::handle_l3 (len {})", data.len());
-        let entry = self.l3_conversations.entry(t3.clone()).or_insert_with(Stats::default);
+        let entry = self.l3_conversations.entry(t3.clone()).or_default();
         entry.num_bytes += data.len();
         entry.num_packets += 1;
         self.total_bytes_l3 += data.len();
@@ -51,7 +51,7 @@ impl Plugin for BasicStats {
         _packet: &'s Packet,
         pinfo: &PacketInfo,
     ) -> PluginResult<'i> {
-        let entry = self.l4_conversations.entry(pinfo.five_tuple.clone()).or_insert_with(Stats::default);
+        let entry = self.l4_conversations.entry(pinfo.five_tuple.clone()).or_default();
         entry.num_bytes += pinfo.l4_payload.map(|l4| l4.len()).unwrap_or(0);
         if let Some(flow) = pinfo.flow {
             entry.flow_id = Some(flow.flow_id);

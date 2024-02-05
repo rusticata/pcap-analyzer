@@ -38,11 +38,11 @@ pub fn apply_filters<'d>(
     filters: &'d [Box<dyn Filter>],
     data: PacketData<'d>,
 ) -> FResult<PacketData<'d>, String> {
-    filters.iter().fold(Ok(Verdict::Accept(data)), |d, f| {
-        if let Ok(Verdict::Accept(data)) = d {
+    filters.iter().try_fold(Verdict::Accept(data), |d, f| {
+        if let Verdict::Accept(data) = d {
             f.filter(data)
         } else {
-            d
+            Ok(d)
         }
     })
 }
