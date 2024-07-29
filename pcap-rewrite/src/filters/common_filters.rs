@@ -1,5 +1,5 @@
 use crate::filters::filter::*;
-use libpcap_tools::ParseContext;
+use libpcap_tools::{Error,ParseContext};
 use pcap_parser::data::{PacketData, ETHERTYPE_IPV4, ETHERTYPE_IPV6};
 use pnet_packet::ethernet::EthernetPacket;
 use pnet_packet::ipv4::Ipv4Packet;
@@ -18,7 +18,7 @@ pub struct IPFilter {
 }
 
 impl Filter for IPFilter {
-    fn filter<'i>(&self, _ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
+    fn filter<'i>(&self, _ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, Error> {
         match i {
             PacketData::L2(data) => {
                 let p = match EthernetPacket::new(data) {
@@ -56,7 +56,9 @@ impl Filter for IPFilter {
                 }
             }
             PacketData::L4(_, _) => Err("Cannot filter IP, L4 content")?,
-            PacketData::Unsupported(_) => Err("Cannot filter IP, unsupported data".to_owned()),
+            PacketData::Unsupported(_) => {
+                Err(Error::Unsupported("Cannot filter IP, unsupported data"))
+            }
         }
     }
 }
@@ -104,7 +106,7 @@ pub struct SourceFilter {
 }
 
 impl Filter for SourceFilter {
-    fn filter<'i>(&self, _ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
+    fn filter<'i>(&self, _ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, Error> {
         match i {
             PacketData::L2(data) => {
                 let p = match EthernetPacket::new(data) {
@@ -124,8 +126,10 @@ impl Filter for SourceFilter {
                     Ok(Verdict::Drop)
                 }
             }
-            PacketData::L4(_, _) => Err("Cannot filter source, L4 content".to_string()),
-            PacketData::Unsupported(_) => Err("Cannot filter source, unsupported data".to_string()),
+            PacketData::L4(_, _) => Err(Error::Unsupported("Cannot filter source, L4 content")),
+            PacketData::Unsupported(_) => {
+                Err(Error::Unsupported("Cannot filter source, unsupported data"))
+            }
         }
     }
 }

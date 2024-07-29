@@ -1,8 +1,9 @@
 use std::io;
 use std::net::IpAddr;
 use std::path::Path;
+use log::warn;
 
-use libpcap_tools::{FiveTuple, ParseContext};
+use libpcap_tools::{Error, FiveTuple, ParseContext};
 use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
 use pnet_packet::ip::IpNextHeaderProtocol;
@@ -19,9 +20,9 @@ use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
 
 /// Function to extract key from data
-pub type GetKeyFn<Key> = Box<dyn Fn(&[u8]) -> Result<Key, String>>;
+pub type GetKeyFn<Key> = Box<dyn Fn(&[u8]) -> Result<Key, Error>>;
 /// Function to keep/drop extract key from container
-pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, String>>;
+pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, Error>>;
 
 pub struct DispatchFilter<Container, Key> {
     key_container: Container,
@@ -49,11 +50,11 @@ impl<Container, Key> DispatchFilter<Container, Key> {
         &self,
         _ctx: &ParseContext,
         packet_data: PacketData<'j>,
-    ) -> FResult<PacketData<'j>, String> {
+    ) -> FResult<PacketData<'j>, Error> {
         let key = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
-                    return Err("L2 data too small for ethernet".to_owned());
+                    return Err(Error::DataParser("L2 data too small for ethernet"));
                 }
 
                 filter_utils::extract_callback_ethernet(
@@ -67,11 +68,14 @@ impl<Container, Key> DispatchFilter<Container, Key> {
                 match ether_type {
                     EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(data)?,
                     EtherTypes::Ipv6 => (self.get_key_from_ipv4_l3_data)(data)?,
-                    _ => Err(format!(
-                        "Unimplemented Ethertype in L3 {:?}/{:x}",
-                        ether_type,
-                        ether_type.to_primitive_values().0
-                    ))?,
+                    _ => {
+                        warn!(
+                            "Unimplemented Ethertype in L3 {:?}/{:x}",
+                            ether_type,
+                            ether_type.to_primitive_values().0
+                        );
+                        Err(Error::Unimplemented("Unimplemented Ethertype in L3"))?
+                    }
                 }
             }
             PacketData::L4(_, _) => unimplemented!(),
@@ -92,7 +96,7 @@ impl<Container, Key> DispatchFilter<Container, Key> {
 }
 
 impl<Container, Key> Filter for DispatchFilter<Container, Key> {
-    fn filter<'i>(&self, ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
+    fn filter<'i>(&self, ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, Error> {
         self.keep(ctx, i)
     }
 }

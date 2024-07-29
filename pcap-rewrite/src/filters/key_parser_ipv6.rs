@@ -7,23 +7,26 @@ use pnet_packet::tcp::TcpPacket;
 use pnet_packet::udp::UdpPacket;
 
 use crate::filters::ipv6_utils;
-use libpcap_tools::FiveTuple;
+use libpcap_tools::{Error, FiveTuple};
 
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
 
-pub fn parse_src_ipaddr(payload: &[u8]) -> Result<IpAddr, String> {
-    let ipv6 = Ipv6Packet::new(payload).ok_or("Expected Ipv6 packet but not found")?;
+pub fn parse_src_ipaddr(payload: &[u8]) -> Result<IpAddr, Error> {
+    let ipv6 =
+        Ipv6Packet::new(payload).ok_or(Error::Pnet("Expected Ipv6 packet but could not parse"))?;
     Ok(IpAddr::V6(ipv6.get_source()))
 }
 
-pub fn parse_dst_ipaddr(payload: &[u8]) -> Result<IpAddr, String> {
-    let ipv6 = Ipv6Packet::new(payload).ok_or("Expected Ipv6 packet but not found")?;
+pub fn parse_dst_ipaddr(payload: &[u8]) -> Result<IpAddr, Error> {
+    let ipv6 =
+        Ipv6Packet::new(payload).ok_or(Error::Pnet("Expected Ipv6 packet but could not parse"))?;
     Ok(IpAddr::V6(ipv6.get_destination()))
 }
 
-pub fn parse_src_dst_ipaddr(payload: &[u8]) -> Result<(IpAddr, IpAddr), String> {
-    let ipv6_packet = Ipv6Packet::new(payload).ok_or("Expected Ipv6 packet but not found")?;
+pub fn parse_src_dst_ipaddr(payload: &[u8]) -> Result<(IpAddr, IpAddr), Error> {
+    let ipv6_packet =
+        Ipv6Packet::new(payload).ok_or(Error::Pnet("Expected Ipv6 packet but could not parse"))?;
     let src_ipaddr = IpAddr::V6(ipv6_packet.get_source());
     let dst_ipaddr = IpAddr::V6(ipv6_packet.get_destination());
     Result::Ok((src_ipaddr, dst_ipaddr))
@@ -31,8 +34,9 @@ pub fn parse_src_dst_ipaddr(payload: &[u8]) -> Result<(IpAddr, IpAddr), String> 
 
 pub fn parse_src_ipaddr_proto_dst_port(
     payload: &[u8],
-) -> Result<(IpAddr, IpNextHeaderProtocol, u16), String> {
-    let ipv6_packet = Ipv6Packet::new(payload).ok_or("Expected Ipv6 packet but not found")?;
+) -> Result<(IpAddr, IpNextHeaderProtocol, u16), Error> {
+    let ipv6_packet =
+        Ipv6Packet::new(payload).ok_or(Error::Pnet("Expected Ipv6 packet but could not parse"))?;
 
     let src_ipaddr = IpAddr::V6(ipv6_packet.get_source());
 
@@ -45,21 +49,26 @@ pub fn parse_src_ipaddr_proto_dst_port(
                 let dst_port = tcp.get_destination();
                 Ok((src_ipaddr, IpNextHeaderProtocols::Tcp, dst_port))
             }
-            None => Err("Expected TCP packet in Ipv6 but could not parse".to_string()),
+            None => Err(Error::Pnet(
+                "Expected TCP packet in Ipv6 but could not parse",
+            )),
         },
         IpNextHeaderProtocols::Udp => match UdpPacket::new(payload) {
             Some(ref udp) => {
                 let dst_port = udp.get_destination();
                 Ok((src_ipaddr, IpNextHeaderProtocols::Udp, dst_port))
             }
-            None => Err("Expected UDP packet in Ipv6 but could not parse".to_string()),
+            None => Err(Error::Pnet(
+                "Expected UDP packet in Ipv6 but could not parse",
+            )),
         },
         _ => Ok((src_ipaddr, l4_proto, 0)),
     }
 }
 
-pub fn parse_two_tuple_proto_ipid(payload: &[u8]) -> Result<Option<TwoTupleProtoIpid>, String> {
-    let ipv6_packet = Ipv6Packet::new(payload).ok_or("Expected Ipv6 packet but not found")?;
+pub fn parse_two_tuple_proto_ipid(payload: &[u8]) -> Result<Option<TwoTupleProtoIpid>, Error> {
+    let ipv6_packet =
+        Ipv6Packet::new(payload).ok_or(Error::Pnet("Expected Ipv6 packet but could not parse"))?;
     let src_ipaddr = IpAddr::V6(ipv6_packet.get_destination());
     let dst_ipaddr = IpAddr::V6(ipv6_packet.get_destination());
 
@@ -79,8 +88,9 @@ pub fn parse_two_tuple_proto_ipid(payload: &[u8]) -> Result<Option<TwoTupleProto
     }
 }
 
-pub fn parse_five_tuple(payload: &[u8]) -> Result<FiveTuple, String> {
-    let ipv6_packet = Ipv6Packet::new(payload).ok_or("Expected Ipv6 packet but not found")?;
+pub fn parse_five_tuple(payload: &[u8]) -> Result<FiveTuple, Error> {
+    let ipv6_packet =
+        Ipv6Packet::new(payload).ok_or(Error::Pnet("Expected Ipv6 packet but could not parse"))?;
 
     let src_ipaddr = IpAddr::V6(ipv6_packet.get_source());
     let dst_ipaddr = IpAddr::V6(ipv6_packet.get_destination());
@@ -101,7 +111,9 @@ pub fn parse_five_tuple(payload: &[u8]) -> Result<FiveTuple, String> {
                     dst_port,
                 })
             }
-            None => Err("Expected TCP packet in Ipv6 but could not parse".to_string()),
+            None => Err(Error::Pnet(
+                "Expected TCP packet in Ipv6 but could not parse",
+            )),
         },
         IpNextHeaderProtocols::Udp => match UdpPacket::new(payload) {
             Some(ref udp) => {
@@ -115,7 +127,9 @@ pub fn parse_five_tuple(payload: &[u8]) -> Result<FiveTuple, String> {
                     dst_port,
                 })
             }
-            None => Err("Expected UDP packet in Ipv6 but could not parse".to_string()),
+            None => Err(Error::Pnet(
+                "Expected UDP packet in Ipv6 but could not parse",
+            )),
         },
         _ => Ok(FiveTuple {
             src: src_ipaddr,
@@ -129,7 +143,7 @@ pub fn parse_five_tuple(payload: &[u8]) -> Result<FiveTuple, String> {
 
 pub fn parse_two_tuple_proto_ipid_five_tuple(
     payload: &[u8],
-) -> Result<TwoTupleProtoIpidFiveTuple, String> {
+) -> Result<TwoTupleProtoIpidFiveTuple, Error> {
     Ok(TwoTupleProtoIpidFiveTuple::new(
         parse_two_tuple_proto_ipid(payload)?,
         // TODO: replace by dedicated error type to distinguish between Ipv6Packet parsing error and TcpPacket/UdpPacket error related to fragmentation

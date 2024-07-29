@@ -9,6 +9,8 @@ use pnet_packet::PacketSize;
 use pnet_packet::ip::IpNextHeaderProtocol;
 use pnet_packet::ip::IpNextHeaderProtocols;
 
+use libpcap_tools::Error;
+
 // TODO: factorize with code at URL below
 // From https://github.com/rusticata/pcap-analyzer/blob/3064dabbc51a19c51181dc223670ead34ce25844/libpcap-analyzer/src/analyzer.rs
 pub fn is_ipv6_opt(opt: IpNextHeaderProtocol) -> bool {
@@ -27,7 +29,7 @@ pub fn is_ipv6_opt(opt: IpNextHeaderProtocol) -> bool {
 pub fn get_fragment_packet_option_l4_protol4_payload<'a>(
     data: &'a [u8],
     ipv6: &'a Ipv6Packet,
-) -> Result<(Option<FragmentPacket<'a>>, IpNextHeaderProtocol, &'a [u8]), String> {
+) -> Result<(Option<FragmentPacket<'a>>, IpNextHeaderProtocol, &'a [u8]), Error> {
     // From https://github.com/rusticata/pcap-analyzer/blob/3064dabbc51a19c51181dc223670ead34ce25844/libpcap-analyzer/src/analyzer.rs
     let mut payload = ipv6.payload();
     let mut l4_proto = ipv6.get_next_header();
@@ -38,7 +40,7 @@ pub fn get_fragment_packet_option_l4_protol4_payload<'a>(
         if data.len() >= 40 {
             payload = &data[40..];
         } else {
-            return Err("IPv6 length is 0, but frame is too short for an IPv6 header".to_string());
+            return Err(Error::DataParser("IPv6 length is 0, but frame is too short for an IPv6 header"));
         }
     }
 
@@ -57,7 +59,7 @@ pub fn get_fragment_packet_option_l4_protol4_payload<'a>(
         trace!("option header: {}", l4_proto);
         if l4_proto == IpNextHeaderProtocols::Ipv6Frag {
             if fragment_packet_option.is_some() {
-                return Err("multiple IPv6Frag extensions".to_string());
+                return Err(Error::DataParser("multiple IPv6Frag extensions"));
             }
             fragment_packet_option = FragmentPacket::new(payload);
         }
