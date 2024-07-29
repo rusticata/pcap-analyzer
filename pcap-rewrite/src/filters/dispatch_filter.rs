@@ -2,7 +2,7 @@ use std::io;
 use std::net::IpAddr;
 use std::path::Path;
 
-use libpcap_tools::FiveTuple;
+use libpcap_tools::{FiveTuple, ParseContext};
 use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
 use pnet_packet::ip::IpNextHeaderProtocol;
@@ -45,7 +45,11 @@ impl<Container, Key> DispatchFilter<Container, Key> {
         }
     }
 
-    pub fn keep<'j>(&self, packet_data: PacketData<'j>) -> FResult<PacketData<'j>, String> {
+    pub fn keep<'j>(
+        &self,
+        _ctx: &ParseContext,
+        packet_data: PacketData<'j>,
+    ) -> FResult<PacketData<'j>, String> {
         let key = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
@@ -88,8 +92,8 @@ impl<Container, Key> DispatchFilter<Container, Key> {
 }
 
 impl<Container, Key> Filter for DispatchFilter<Container, Key> {
-    fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
-        self.keep(i)
+    fn filter<'i>(&self, ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
+        self.keep(ctx, i)
     }
 }
 

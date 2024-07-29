@@ -153,7 +153,7 @@ impl PcapAnalyzer for Rewriter {
         }
 
         // apply filters
-        let data = match apply_filters(&self.filters, packet.data.clone()) {
+        let data = match apply_filters(&self.filters, ctx, packet.data.clone()) {
             Ok(Verdict::Accept(d)) => d,
             Ok(Verdict::Drop) => {
                 return Ok(());
@@ -191,10 +191,13 @@ impl PcapAnalyzer for Rewriter {
         if self.run_pre_analysis {
             info!("Pre-analysis done.");
             self.run_pre_analysis = false;
-            
+
             for filter in self.filters.iter_mut() {
                 if let Err(e) = filter.preanalysis_done() {
-                    panic!("Pre-analysis filter returned fatal error in post preanalysis function {}", e);
+                    panic!(
+                        "Pre-analysis filter returned fatal error in post preanalysis function {}",
+                        e
+                    );
                 }
             }
 

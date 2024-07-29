@@ -1,4 +1,4 @@
-use libpcap_tools::Packet;
+use libpcap_tools::{Packet,ParseContext};
 use pcap_parser::data::PacketData;
 
 /// Verdict emitted by a Filter
@@ -13,7 +13,7 @@ pub enum Verdict<O> {
 pub type FResult<O, E> = Result<Verdict<O>, E>;
 
 pub trait Filter {
-    fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String>;
+    fn filter<'i>(&self, ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String>;
 
     /// Does this filter plugin require a first pass to pre-analyze data? (default: `false`)
     fn require_pre_analysis(&self) -> bool {
@@ -36,11 +36,12 @@ pub trait Filter {
 
 pub fn apply_filters<'d>(
     filters: &'d [Box<dyn Filter>],
+    ctx: &ParseContext,
     data: PacketData<'d>,
 ) -> FResult<PacketData<'d>, String> {
     filters.iter().try_fold(Verdict::Accept(data), |d, f| {
         if let Verdict::Accept(data) = d {
-            f.filter(data)
+            f.filter(ctx, data)
         } else {
             Ok(d)
         }
