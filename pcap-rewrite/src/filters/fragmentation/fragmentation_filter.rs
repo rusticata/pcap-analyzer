@@ -142,7 +142,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
 
     pub fn keep<'j>(
         &self,
-        _ctx: &ParseContext,
+        ctx: &ParseContext,
         packet_data: PacketData<'j>,
     ) -> FResult<PacketData<'j>, Error> {
         let key = match packet_data {
@@ -152,6 +152,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                 }
 
                 filter_utils::extract_callback_ethernet(
+                    ctx,
                     &self.get_key_from_ipv4_l3_data,
                     &self.get_key_from_ipv6_l3_data,
                     data,
