@@ -13,6 +13,14 @@ pub enum Error {
     IoError(#[from] io::Error),
     #[error("Pcap parser error {0:?}")]
     Pcap(#[from] PcapError<&'static [u8]>),
+    #[error("Pnet error {0}")]
+    Pnet(&'static str),
+    #[error("Data parser error {0}")]
+    DataParser(&'static str),
+    #[error("Unimplemented error {0}")]
+    Unimplemented(&'static str),
+    #[error("Unsupported error {0}")]
+    Unsupported(&'static str),
     #[error("Generic error {0}")]
     Generic(&'static str),
 }
