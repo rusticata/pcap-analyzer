@@ -6,7 +6,7 @@ use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
 use pnet_packet::ip::IpNextHeaderProtocol;
 
-use libpcap_tools::Packet;
+use libpcap_tools::{Packet, ParseContext};
 
 use crate::container::five_tuple_container::FiveTupleC;
 use crate::container::ipaddr_container::IpAddrC;
@@ -132,7 +132,11 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         Ok(())
     }
 
-    pub fn keep<'j>(&self, packet_data: PacketData<'j>) -> FResult<PacketData<'j>, String> {
+    pub fn keep<'j>(
+        &self,
+        _ctx: &ParseContext,
+        packet_data: PacketData<'j>,
+    ) -> FResult<PacketData<'j>, String> {
         let key = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
@@ -174,8 +178,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
 }
 
 impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
-    fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
-        self.keep(i)
+    fn filter<'i>(&self, ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
+        self.keep(ctx, i)
     }
 
     fn require_pre_analysis(&self) -> bool {

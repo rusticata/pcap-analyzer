@@ -1,4 +1,5 @@
 use crate::filters::filter::*;
+use libpcap_tools::ParseContext;
 use pcap_parser::data::{PacketData, ETHERTYPE_IPV4, ETHERTYPE_IPV6};
 use pnet_packet::ethernet::EthernetPacket;
 use pnet_packet::ipv4::Ipv4Packet;
@@ -17,7 +18,7 @@ pub struct IPFilter {
 }
 
 impl Filter for IPFilter {
-    fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
+    fn filter<'i>(&self, _ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
         match i {
             PacketData::L2(data) => {
                 let p = match EthernetPacket::new(data) {
@@ -103,7 +104,7 @@ pub struct SourceFilter {
 }
 
 impl Filter for SourceFilter {
-    fn filter<'i>(&self, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
+    fn filter<'i>(&self, _ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
         match i {
             PacketData::L2(data) => {
                 let p = match EthernetPacket::new(data) {
