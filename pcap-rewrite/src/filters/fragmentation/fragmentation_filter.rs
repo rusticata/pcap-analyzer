@@ -2,11 +2,12 @@ use std::collections::HashSet;
 use std::io;
 use std::net::IpAddr;
 
+use log::warn;
 use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
 use pnet_packet::ip::IpNextHeaderProtocol;
 
-use libpcap_tools::{Packet, ParseContext};
+use libpcap_tools::{Error, Packet, ParseContext};
 
 use crate::container::five_tuple_container::FiveTupleC;
 use crate::container::ipaddr_container::IpAddrC;
@@ -28,9 +29,9 @@ use super::convert_fn;
 /// Function to convert TwoTupleProtoIpid/FiveTuple data to key container
 pub type ConvertFn<Container> = Box<dyn Fn(&HashSet<TwoTupleProtoIpidFiveTuple>) -> Container>;
 /// Function to extract key from data
-pub type GetKeyFn<Key> = Box<dyn Fn(&[u8]) -> Result<Key, String>>;
+pub type GetKeyFn<Key> = Box<dyn Fn(&[u8]) -> Result<Key, Error>>;
 /// Function to keep/drop extract key from container
-pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, String>>;
+pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, Error>>;
 
 pub struct FragmentationFilter<Container, Key> {
     data_hs: HashSet<TwoTupleProtoIpidFiveTuple>,
@@ -63,13 +64,13 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         }
     }
 
-    fn test_fragmentation_and_save(&mut self, packet: &Packet) -> Result<(), String> {
+    fn test_fragmentation_and_save(&mut self, packet: &Packet) -> Result<(), Error> {
         // Note: we only test the first fragment to be sure to capture the IP ID value.
         // Subsequent fragment with TCP/UDP/ICMP are always dropped because header parsing fails on all packets/fragments after the first.
         let is_first_fragment = match packet.data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
-                    return Err("L2 data too small for ethernet".to_string());
+                    return Err(Error::DataParser("L2 data too small for ethernet"));
                 }
 
                 filter_utils::extract_callback_ethernet(
@@ -83,7 +84,13 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                 match ether_type {
                     EtherTypes::Ipv4 => (fragmentation_test::is_ipv4_first_fragment)(data)?,
                     EtherTypes::Ipv6 => (fragmentation_test::is_ipv6_first_fragment)(data)?,
-                    _ => return Err(format!("{} is not implmented", ether_type)),
+                    _ => {
+                        warn!(
+                            "Unimplemented Ethertype in L3: {:?}/{:x}",
+                            ether_type, ether_type.0
+                        );
+                        return Err(Error::Unimplemented("Unimplemented EtherType in L3"));
+                    }
                 }
             }
             PacketData::L4(_, _) => unimplemented!(),
@@ -94,7 +101,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             let data_option: Option<TwoTupleProtoIpidFiveTuple> = match packet.data {
                 PacketData::L2(data) => {
                     if data.len() < 14 {
-                        return Err("L2 data too small for ethernet".to_string());
+                        return Err(Error::DataParser("L2 data too small for ethernet"));
                     }
 
                     Some(filter_utils::extract_callback_ethernet(
@@ -113,10 +120,11 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                             (key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple)(data)?,
                         ),
                         _ => {
-                            return Err(format!(
-                                "Unimplemented Ethertype in L3 {:?}/{:x}",
+                            warn!(
+                                "Unimplemented Ethertype in L3: {:?}/{:x}",
                                 ether_type, ether_type.0
-                            ))
+                            );
+                            return Err(Error::Unimplemented("Unimplemented Ethertype in L3"));
                         }
                     }
                 }
@@ -136,11 +144,11 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         &self,
         _ctx: &ParseContext,
         packet_data: PacketData<'j>,
-    ) -> FResult<PacketData<'j>, String> {
+    ) -> FResult<PacketData<'j>, Error> {
         let key = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
-                    return Err("L2 data too small for ethernet".to_owned());
+                    return Err(Error::DataParser("L2 data too small for ethernet"));
                 }
 
                 filter_utils::extract_callback_ethernet(
@@ -154,10 +162,13 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                 match ether_type {
                     EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(data)?,
                     EtherTypes::Ipv6 => (self.get_key_from_ipv6_l3_data)(data)?,
-                    _ => Err(format!(
-                        "Unimplemented Ethertype in L3 {:?}/{:x}",
-                        ether_type, ether_type.0
-                    ))?,
+                    _ => {
+                        warn!(
+                            "Unimplemented Ethertype in L3: {:?}/{:x}",
+                            ether_type, ether_type.0
+                        );
+                        return Err(Error::Unimplemented("Unimplemented Ethertype in L3"));
+                    }
                 }
             }
             PacketData::L4(_, _) => unimplemented!(),
@@ -178,7 +189,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
 }
 
 impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
-    fn filter<'i>(&self, ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, String> {
+    fn filter<'i>(&self, ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, Error> {
         self.keep(ctx, i)
     }
 
@@ -186,11 +197,11 @@ impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
         true
     }
 
-    fn pre_analyze(&mut self, _packet: &Packet) -> Result<(), String> {
+    fn pre_analyze(&mut self, _packet: &Packet) -> Result<(), Error> {
         self.test_fragmentation_and_save(_packet)
     }
 
-    fn preanalysis_done(&mut self) -> Result<(), String> {
+    fn preanalysis_done(&mut self) -> Result<(), Error> {
         self.key_container = (self.convert_data_hs_c)(&self.data_hs);
         Ok(())
     }
@@ -199,7 +210,7 @@ impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
 pub fn test_two_tuple_proto_ipid_five_tuple_option_in_container(
     container_tuple: &(TwoTupleProtoIpidC, FiveTupleC),
     two_tuple_proto_ipid_five_tuple: &TwoTupleProtoIpidFiveTuple,
-) -> Result<bool, String> {
+) -> Result<bool, Error> {
     let (two_tuple_proto_ipid_c, five_tuple_c) = container_tuple;
 
     let in_0 = match two_tuple_proto_ipid_five_tuple.get_two_tuple_proto_ipid_option() {
