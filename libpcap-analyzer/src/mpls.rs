@@ -86,7 +86,6 @@ impl<'a> MplsPacket<'a> {
     }
     /// The size (in bytes) of the label stack.
     #[inline]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_top_label(&self) -> MplsLabel {
         let _self = self;
         let label = (_self.packet[0] as u32) << 24
@@ -96,7 +95,6 @@ impl<'a> MplsPacket<'a> {
         MplsLabel(label)
     }
     /// The label stack (top element is first).
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_label_stack(&self) -> Vec<MplsLabel> {
         assert!(self.stack_size % 4 == 0);
         let _self = self;
@@ -121,7 +119,6 @@ impl<'a> ::pnet_macros_support::packet::Packet for MplsPacket<'a> {
         &self.packet[..]
     }
     #[inline]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     fn payload(&self) -> &[u8] {
         let _self = self;
         let start = self.stack_size;

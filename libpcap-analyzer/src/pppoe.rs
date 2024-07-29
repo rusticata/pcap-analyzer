@@ -44,7 +44,6 @@ impl<'a> PppoeSessionPacket<'a> {
     /// Get the session id field.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_session_id(&self) -> u16be {
         let _self = self;
         let b0 = ((_self.packet[2] as u16be) << 8) as u16be;
@@ -54,7 +53,6 @@ impl<'a> PppoeSessionPacket<'a> {
     /// Get the length field.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_length(&self) -> u16be {
         let _self = self;
         let b0 = ((_self.packet[4] as u16be) << 8) as u16be;
@@ -69,7 +67,6 @@ impl<'a> ::pnet_macros_support::packet::Packet for PppoeSessionPacket<'a> {
         &self.packet[..]
     }
     #[inline]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     fn payload(&self) -> &[u8] {
         let _self = self;
         let start = 6;

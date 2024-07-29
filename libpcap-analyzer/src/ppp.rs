@@ -75,7 +75,6 @@ impl<'a> ::pnet_macros_support::packet::Packet for PppPacket<'a> {
         &self.packet[..]
     }
     #[inline]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     fn payload(&self) -> &[u8] {
         let _self = self;
         let mut start = if self.has_address_and_control() { 2 } else { 0 };

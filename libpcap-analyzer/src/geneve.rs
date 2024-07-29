@@ -75,7 +75,6 @@ impl<'a> GenevePacket<'a> {
     /// Get the raw &[u8] value of the options field, without copying
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_options_raw(&self) -> &[u8] {
         use std::cmp::min;
         let _self = self;
@@ -87,7 +86,6 @@ impl<'a> GenevePacket<'a> {
     /// Get the value of the options field (copies contents)
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_options(&self) -> Vec<GeneveOption> {
         use pnet_packet::FromPacket;
         let buf = self.get_options_raw();
@@ -98,7 +96,6 @@ impl<'a> GenevePacket<'a> {
     /// Get the value of the options field as iterator
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_options_iter(&self) -> GeneveOptionIterable {
         let buf = self.get_options_raw();
         GeneveOptionIterable { buf }
@@ -111,7 +108,6 @@ impl<'a> ::pnet_macros_support::packet::Packet for GenevePacket<'a> {
         &self.packet[..]
     }
     #[inline]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     fn payload(&self) -> &[u8] {
         let _self = self;
         let options_len = (self.get_option_length() as usize) * 4;
@@ -198,7 +194,6 @@ impl<'a> ::pnet_macros_support::packet::Packet for GeneveOptionPacket<'a> {
         &self.packet[..]
     }
     #[inline]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     fn payload(&self) -> &[u8] {
         let _self = self;
         let options_len = (self.get_option_length() as usize) * 4;
@@ -208,7 +203,6 @@ impl<'a> ::pnet_macros_support::packet::Packet for GeneveOptionPacket<'a> {
 }
 
 impl<'a> ::pnet_macros_support::packet::PacketSize for GeneveOptionPacket<'a> {
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     fn packet_size(&self) -> usize {
         4 + 4 * (self.get_option_length() as usize)
     }

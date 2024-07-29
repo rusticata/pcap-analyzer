@@ -29,7 +29,6 @@ impl<'a> ErspanPacket<'a> {
     /// Get the version field.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_version(&self) -> u4 {
         let _self = self;
         let co = 0;
@@ -38,7 +37,6 @@ impl<'a> ErspanPacket<'a> {
     /// Get the vlan field.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_vlan(&self) -> u12be {
         let _self = self;
         let b0 = (((_self.packet[0] & 0b0000_1111) as u12be) << 8) as u12be;
@@ -48,7 +46,6 @@ impl<'a> ErspanPacket<'a> {
     /// Get the COS field.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_cos(&self) -> u3 {
         let _self = self;
         let co = 2;
@@ -57,7 +54,6 @@ impl<'a> ErspanPacket<'a> {
     /// Get the encap field.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_encap(&self) -> u3 {
         let _self = self;
         let co = 2;
@@ -66,7 +62,6 @@ impl<'a> ErspanPacket<'a> {
     /// Get the truncated field.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_truncated(&self) -> u1 {
         let _self = self;
         let co = 2;
@@ -75,7 +70,6 @@ impl<'a> ErspanPacket<'a> {
     /// Get the span ID field.
     #[inline]
     #[allow(trivial_numeric_casts, clippy::identity_op)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_span_id(&self) -> u10be {
         let _self = self;
         let co = 2;
@@ -90,7 +84,6 @@ impl<'a> ::pnet_macros_support::packet::Packet for ErspanPacket<'a> {
         &self.packet[..]
     }
     #[inline]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     fn payload(&self) -> &[u8] {
         let _self = self;
         let start = 8;

@@ -44,7 +44,6 @@ impl <'a> VxlanPacket<'a> {
     /// within the struct, but this accessor returns host order.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_flags(&self) -> u16be {
         let _self = self;
         let b0 = ((_self.packet[0] as u16be) << 8) as u16be;
@@ -55,7 +54,6 @@ impl <'a> VxlanPacket<'a> {
     /// within the struct, but this accessor returns host order.
     #[inline]
     #[allow(trivial_numeric_casts)]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     pub fn get_vlan_identifier(&self) -> u24be {
         let _self = self;
         let co = 4;
@@ -71,7 +69,6 @@ impl<'a> ::pnet_macros_support::packet::Packet for VxlanPacket<'a> {
         &self.packet[..]
     }
     #[inline]
-    #[cfg_attr(feature = "clippy", allow(used_underscore_binding))]
     fn payload(&self) -> &[u8] {
         let _self = self;
         let start = 8;
