@@ -231,6 +231,46 @@ pub(crate) fn handle_l3(
     }
 }
 
+/// Extract payload from IPv4 packet, handling special cases (padding/ip_len == 0)
+pub fn extract_payload_l3_ipv4<'data, 'ipv4>(
+    ctx: &ParseContext,
+    ipv4: &'ipv4 Ipv4Packet<'data>,
+) -> Result<&'data [u8], Error>
+where
+    'ipv4: 'data,
+{
+    let data = ipv4.packet();
+
+    let ip_len = ipv4.get_total_length() as usize;
+    let start = ipv4.get_header_length() as usize * 4;
+    let end = min(ip_len, data.len());
+
+    if start > data.len() {
+        // we don't have data. truncated packet?
+        if ip_len == 0 {
+            warn!(
+                "IPv4: ip_len == 0 and ipv4.get_header_length is invalid! (idx={})",
+                ctx.pcap_index
+            );
+        }
+        return Ok(&[]);
+    }
+
+    let payload = if end < start {
+        // end is < start if:
+        // - there is TSO offloading and ip_len == 0
+        // - `ip_len` is invalid
+        &data[start..]
+    } else {
+        // data length can be:
+        // - equal to ip_len
+        // - shorter than ip_len if packet was truncated
+        // - longer than ip_len if there is padding
+        &data[start..end]
+    };
+    Ok(payload)
+}
+
 fn handle_l3_ipv4(
     packet: &Packet,
     ctx: &ParseContext,
@@ -242,18 +282,7 @@ fn handle_l3_ipv4(
     // eprintln!("ABORT pkt {:?}", ipv4);
     let orig_len = data.len();
 
-    let ip_len = ipv4.get_total_length() as usize;
-
-    // remove padding
-    let (data, ipv4) = {
-        if ip_len < data.len() && ip_len > 0 {
-            let d = &data[..ip_len];
-            let ipv4 = Ipv4Packet::new(d).ok_or("Could not build IPv4 packet from data")?;
-            (d, ipv4)
-        } else {
-            (data, ipv4)
-        }
-    };
+    let payload = extract_payload_l3_ipv4(ctx, &ipv4)?;
 
     let l4_proto = ipv4.get_next_level_protocol().0;
     let t3 = ThreeTuple {
@@ -268,23 +297,6 @@ fn handle_l3_ipv4(
             warn!("IPv4: invalid checksum");
         }
     }
-
-    // if get_total_length is 0, assume TSO offloading and no padding
-    let payload = if ip_len == 0 {
-        warn!(
-            "IPv4: packet reported length is 0. Assuming TSO (idx={})",
-            ctx.pcap_index
-        );
-        // the payload() function from pnet will fail
-        let start = ipv4.get_header_length() as usize * 4;
-        if start > data.len() {
-            warn!("IPv4: ip_len == 0 and ipv4.get_header_length is invalid!");
-            return Ok(());
-        }
-        &data[start..]
-    } else {
-        ipv4.payload()
-    };
 
     // check IP fragmentation before calling handle_l4
     let frag_offset = (ipv4.get_fragment_offset() * 8) as usize;
@@ -314,7 +326,7 @@ fn handle_l3_ipv4(
         }
     };
 
-    // TODO check if   ip_len - ipv4.get_options_raw().len() - 20 > payload.len()
+    // TODO: check if   ip_len - ipv4.get_options_raw().len() - 20 > payload.len()
     // if yes, capture may be truncated
 
     run_plugins_v2_network(packet, ctx, payload, &t3, analyzer)?;
