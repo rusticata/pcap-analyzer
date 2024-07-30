@@ -1,4 +1,4 @@
-use libpcap_tools::{Error,Packet,ParseContext};
+use libpcap_tools::{Error, Packet, ParseContext};
 use pcap_parser::data::PacketData;
 
 /// Verdict emitted by a Filter
@@ -25,7 +25,7 @@ pub trait Filter {
     /// Any error raised in this function is fatal
     ///
     /// Note: packet content can be accessed in `packet.data`
-    fn pre_analyze(&mut self, _packet: &Packet) -> Result<(), Error> {
+    fn pre_analyze(&mut self, _ctx: &ParseContext, _packet: &Packet) -> Result<(), Error> {
         Ok(())
     }
 

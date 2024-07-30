@@ -29,7 +29,7 @@ use super::convert_fn;
 /// Function to convert TwoTupleProtoIpid/FiveTuple data to key container
 pub type ConvertFn<Container> = Box<dyn Fn(&HashSet<TwoTupleProtoIpidFiveTuple>) -> Container>;
 /// Function to extract key from data
-pub type GetKeyFn<Key> = Box<dyn Fn(&[u8]) -> Result<Key, Error>>;
+pub type GetKeyFn<Key> = Box<dyn Fn(&ParseContext, &[u8]) -> Result<Key, Error>>;
 /// Function to keep/drop extract key from container
 pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, Error>>;
 
@@ -64,7 +64,11 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         }
     }
 
-    fn test_fragmentation_and_save(&mut self, packet: &Packet) -> Result<(), Error> {
+    fn test_fragmentation_and_save(
+        &mut self,
+        ctx: &ParseContext,
+        packet: &Packet,
+    ) -> Result<(), Error> {
         // Note: we only test the first fragment to be sure to capture the IP ID value.
         // Subsequent fragment with TCP/UDP/ICMP are always dropped because header parsing fails on all packets/fragments after the first.
         let is_first_fragment = match packet.data {
@@ -74,6 +78,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                 }
 
                 filter_utils::extract_callback_ethernet(
+                    ctx,
                     &fragmentation_test::is_ipv4_first_fragment,
                     &fragmentation_test::is_ipv6_first_fragment,
                     data,
@@ -82,8 +87,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
-                    EtherTypes::Ipv4 => (fragmentation_test::is_ipv4_first_fragment)(data)?,
-                    EtherTypes::Ipv6 => (fragmentation_test::is_ipv6_first_fragment)(data)?,
+                    EtherTypes::Ipv4 => (fragmentation_test::is_ipv4_first_fragment)(ctx, data)?,
+                    EtherTypes::Ipv6 => (fragmentation_test::is_ipv6_first_fragment)(ctx, data)?,
                     _ => {
                         warn!(
                             "Unimplemented Ethertype in L3: {:?}/{:x}",
@@ -105,6 +110,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                     }
 
                     Some(filter_utils::extract_callback_ethernet(
+                        ctx,
                         &key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple,
                         &key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple,
                         data,
@@ -114,10 +120,10 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                     let ether_type = EtherType::new(l3_layer_value_u8);
                     match ether_type {
                         EtherTypes::Ipv4 => Some(
-                            (key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple)(data)?,
+                            (key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple)(ctx, data)?,
                         ),
                         EtherTypes::Ipv6 => Some(
-                            (key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple)(data)?,
+                            (key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple)(ctx, data)?,
                         ),
                         _ => {
                             warn!(
@@ -161,8 +167,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
-                    EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(data)?,
-                    EtherTypes::Ipv6 => (self.get_key_from_ipv6_l3_data)(data)?,
+                    EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(ctx, data)?,
+                    EtherTypes::Ipv6 => (self.get_key_from_ipv6_l3_data)(ctx, data)?,
                     _ => {
                         warn!(
                             "Unimplemented Ethertype in L3: {:?}/{:x}",
@@ -198,8 +204,8 @@ impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
         true
     }
 
-    fn pre_analyze(&mut self, _packet: &Packet) -> Result<(), Error> {
-        self.test_fragmentation_and_save(_packet)
+    fn pre_analyze(&mut self, ctx: &ParseContext, packet: &Packet) -> Result<(), Error> {
+        self.test_fragmentation_and_save(ctx, packet)
     }
 
     fn preanalysis_done(&mut self) -> Result<(), Error> {
