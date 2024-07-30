@@ -23,7 +23,9 @@ pub trait PcapAnalyzer {
     fn handle_packet(&mut self, packet: &Packet, ctx: &ParseContext) -> Result<(), Error>;
 
     /// Teardown function, called after reading pcap data (optional)
-    fn teardown(&mut self) {}
+    fn teardown(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
 
     fn before_refill(&mut self) {}
 }
