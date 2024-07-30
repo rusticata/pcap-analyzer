@@ -1,5 +1,5 @@
 //! Plugin to build Community ID Flow Hash
-//! See https://github.com/corelight/community-id-spec
+//! See <https://github.com/corelight/community-id-spec>
 
 use crate::output;
 use crate::plugin_registry::PluginRegistry;

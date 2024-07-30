@@ -3,14 +3,14 @@ pub struct PppProtocolType(pub u16);
 
 /// PPP DLL Protocol Number
 ///
-/// See https://www.iana.org/assignments/ppp-numbers/ppp-numbers.xhtml#ppp-numbers-2
+/// See <https://www.iana.org/assignments/ppp-numbers/ppp-numbers.xhtml#ppp-numbers-2>
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
 pub mod PppProtocolTypes {
     use crate::ppp::PppProtocolType;
-    /// Internet Protocol version 4 (IPv4) [RFC1332].
+    /// Internet Protocol version 4 (IPv4) \[RFC1332\].
     pub const Ipv4: PppProtocolType = PppProtocolType(0x0021);
-    /// Internet Protocol version 6 (IPv6) [RFC5072].
+    /// Internet Protocol version 6 (IPv6) \[RFC5072\].
     pub const Ipv6: PppProtocolType = PppProtocolType(0x0057);
 }
 
