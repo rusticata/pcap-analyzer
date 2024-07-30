@@ -29,7 +29,7 @@ use super::convert_fn;
 /// Function to convert TwoTupleProtoIpid/FiveTuple data to key container
 pub type ConvertFn<Container> = Box<dyn Fn(&HashSet<TwoTupleProtoIpidFiveTuple>) -> Container>;
 /// Function to extract key from data
-pub type GetKeyFn<Key> = Box<dyn Fn(&ParseContext, &[u8]) -> Result<Key, Error>>;
+pub type GetKeyFn<Key> = fn(&ParseContext, &[u8]) -> Result<Key, Error>;
 /// Function to keep/drop extract key from container
 pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, Error>>;
 
@@ -79,8 +79,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
 
                 filter_utils::extract_callback_ethernet(
                     ctx,
-                    &fragmentation_test::is_ipv4_first_fragment,
-                    &fragmentation_test::is_ipv6_first_fragment,
+                    fragmentation_test::is_ipv4_first_fragment,
+                    fragmentation_test::is_ipv6_first_fragment,
                     data,
                 )?
             }
@@ -111,8 +111,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
 
                     Some(filter_utils::extract_callback_ethernet(
                         ctx,
-                        &key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple,
-                        &key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple,
+                        key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple,
+                        key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple,
                         data,
                     )?)
                 }
@@ -151,7 +151,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         ctx: &ParseContext,
         packet_data: PacketData<'j>,
     ) -> FResult<PacketData<'j>, Error> {
-        let key = match packet_data {
+        let key: Key = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
                     return Err(Error::DataParser("L2 data too small for ethernet"));
@@ -159,8 +159,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
 
                 filter_utils::extract_callback_ethernet(
                     ctx,
-                    &self.get_key_from_ipv4_l3_data,
-                    &self.get_key_from_ipv6_l3_data,
+                    self.get_key_from_ipv4_l3_data,
+                    self.get_key_from_ipv6_l3_data,
                     data,
                 )?
             }
@@ -255,8 +255,8 @@ impl FragmentationFilterBuilder {
                     HashSet::new(),
                     Box::new(convert_fn::convert_data_hs_to_src_ipaddrc),
                     ipaddr_container,
-                    Box::new(key_parser_ipv4::parse_src_ipaddr),
-                    Box::new(key_parser_ipv6::parse_src_ipaddr),
+                    key_parser_ipv4::parse_src_ipaddr,
+                    key_parser_ipv6::parse_src_ipaddr,
                     keep,
                 )))
             }
@@ -274,8 +274,8 @@ impl FragmentationFilterBuilder {
                     HashSet::new(),
                     Box::new(convert_fn::convert_data_hs_to_dst_ipaddrc),
                     ipaddr_container,
-                    Box::new(key_parser_ipv4::parse_dst_ipaddr),
-                    Box::new(key_parser_ipv6::parse_dst_ipaddr),
+                    key_parser_ipv4::parse_dst_ipaddr,
+                    key_parser_ipv6::parse_dst_ipaddr,
                     keep,
                 )))
             }
@@ -295,8 +295,8 @@ impl FragmentationFilterBuilder {
                     HashSet::new(),
                     Box::new(convert_fn::convert_data_hs_to_src_dst_ipaddrc),
                     ipaddr_container,
-                    Box::new(key_parser_ipv4::parse_src_dst_ipaddr),
-                    Box::new(key_parser_ipv6::parse_src_dst_ipaddr),
+                    key_parser_ipv4::parse_src_dst_ipaddr,
+                    key_parser_ipv6::parse_src_dst_ipaddr,
                     keep,
                 )))
             }
@@ -317,8 +317,8 @@ impl FragmentationFilterBuilder {
                     HashSet::new(),
                     Box::new(convert_fn::convert_data_hs_to_src_ipaddr_proto_dst_port_container),
                     ipaddr_proto_port_container,
-                    Box::new(key_parser_ipv4::parse_src_ipaddr_proto_dst_port),
-                    Box::new(key_parser_ipv6::parse_src_ipaddr_proto_dst_port),
+                    key_parser_ipv4::parse_src_ipaddr_proto_dst_port,
+                    key_parser_ipv6::parse_src_ipaddr_proto_dst_port,
                     keep,
                 )))
             }
@@ -347,8 +347,8 @@ impl FragmentationFilterBuilder {
                     HashSet::new(),
                     Box::new(convert_fn::convert_data_hs_to_ctuple),
                     (two_tuple_proto_proto_ipid_c, five_tuple_container),
-                    Box::new(key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple),
-                    Box::new(key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple),
+                    key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple,
+                    key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple,
                     keep,
                 )))
             }
