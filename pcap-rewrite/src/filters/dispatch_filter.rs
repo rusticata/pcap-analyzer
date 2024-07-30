@@ -20,7 +20,8 @@ use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
 
 /// Function to extract key from data
-pub type GetKeyFn<Key> = Box<dyn Fn(&ParseContext, &[u8]) -> Result<Key, Error>>;
+// pub type GetKeyFn<Key> = Box<dyn Fn(&ParseContext, &[u8]) -> Result<Key, Error>>;
+pub type GetKeyFn<Key> = fn(&ParseContext, &[u8]) -> Result<Key, Error>;
 /// Function to keep/drop extract key from container
 pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, Error>>;
 
@@ -59,8 +60,8 @@ impl<Container, Key> DispatchFilter<Container, Key> {
 
                 filter_utils::extract_callback_ethernet(
                     ctx,
-                    &self.get_key_from_ipv4_l3_data,
-                    &self.get_key_from_ipv6_l3_data,
+                    self.get_key_from_ipv4_l3_data,
+                    self.get_key_from_ipv6_l3_data,
                     data,
                 )?
             }
@@ -124,8 +125,8 @@ impl DispatchFilterBuilder {
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_container,
-                    Box::new(key_parser_ipv4::parse_src_ipaddr),
-                    Box::new(key_parser_ipv6::parse_src_ipaddr),
+                    key_parser_ipv4::parse_src_ipaddr,
+                    key_parser_ipv6::parse_src_ipaddr,
                     Box::new(keep),
                 )))
             }
@@ -142,8 +143,8 @@ impl DispatchFilterBuilder {
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_container,
-                    Box::new(key_parser_ipv4::parse_dst_ipaddr),
-                    Box::new(key_parser_ipv6::parse_dst_ipaddr),
+                    key_parser_ipv4::parse_dst_ipaddr,
+                    key_parser_ipv6::parse_dst_ipaddr,
                     keep,
                 )))
             }
@@ -162,8 +163,8 @@ impl DispatchFilterBuilder {
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_container,
-                    Box::new(key_parser_ipv4::parse_src_dst_ipaddr),
-                    Box::new(key_parser_ipv6::parse_src_dst_ipaddr),
+                    key_parser_ipv4::parse_src_dst_ipaddr,
+                    key_parser_ipv6::parse_src_dst_ipaddr,
                     keep,
                 )))
             }
@@ -184,8 +185,8 @@ impl DispatchFilterBuilder {
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_proto_port_container,
-                    Box::new(key_parser_ipv4::parse_src_ipaddr_proto_dst_port),
-                    Box::new(key_parser_ipv6::parse_src_ipaddr_proto_dst_port),
+                    key_parser_ipv4::parse_src_ipaddr_proto_dst_port,
+                    key_parser_ipv6::parse_src_ipaddr_proto_dst_port,
                     keep,
                 )))
             }
@@ -200,8 +201,8 @@ impl DispatchFilterBuilder {
 
                 Ok(Box::new(DispatchFilter::new(
                     five_tuple_container,
-                    Box::new(key_parser_ipv4::parse_five_tuple),
-                    Box::new(key_parser_ipv6::parse_five_tuple),
+                    key_parser_ipv4::parse_five_tuple,
+                    key_parser_ipv6::parse_five_tuple,
                     keep,
                 )))
             }
