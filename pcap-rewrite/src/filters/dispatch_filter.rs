@@ -1,7 +1,7 @@
+use log::warn;
 use std::io;
 use std::net::IpAddr;
 use std::path::Path;
-use log::warn;
 
 use libpcap_tools::{Error, FiveTuple, ParseContext};
 use pcap_parser::data::PacketData;
@@ -20,7 +20,7 @@ use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
 
 /// Function to extract key from data
-pub type GetKeyFn<Key> = Box<dyn Fn(&[u8]) -> Result<Key, Error>>;
+pub type GetKeyFn<Key> = Box<dyn Fn(&ParseContext, &[u8]) -> Result<Key, Error>>;
 /// Function to keep/drop extract key from container
 pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, Error>>;
 
@@ -67,8 +67,8 @@ impl<Container, Key> DispatchFilter<Container, Key> {
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
-                    EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(data)?,
-                    EtherTypes::Ipv6 => (self.get_key_from_ipv4_l3_data)(data)?,
+                    EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(ctx, data)?,
+                    EtherTypes::Ipv6 => (self.get_key_from_ipv4_l3_data)(ctx, data)?,
                     _ => {
                         warn!(
                             "Unimplemented Ethertype in L3 {:?}/{:x}",
