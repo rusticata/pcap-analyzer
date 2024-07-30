@@ -1209,40 +1209,39 @@ impl PcapAnalyzer for Analyzer {
     }
 
     /// Finalize analysis and notify plugins
-    fn teardown(&mut self) {
-        {
-            // expire all TCP connections in reassembly engine
-            finalize_tcp_streams(self);
-            // expire remaining flows
-            let flows = &self.flows;
-            trace!("{} flows remaining in table", flows.len());
-            // let start = ::std::time::Instant::now();
+    fn teardown(&mut self) -> Result<(), Error> {
+        // expire all TCP connections in reassembly engine
+        finalize_tcp_streams(self);
+        // expire remaining flows
+        let flows = &self.flows;
+        trace!("{} flows remaining in table", flows.len());
+        // let start = ::std::time::Instant::now();
+        self.registry.run_plugins(
+            |p| p.plugin_type() & PLUGIN_FLOW_DEL != 0,
+            |p| {
+                flows.values().for_each(|flow| {
+                    p.flow_destroyed(flow);
+                });
+            },
+        );
+        // let elapsed = start.elapsed();
+        // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
+        self.flows.clear();
+
+        self.registry.run_plugins(|_| true, |p| p.post_process());
+
+        if let Some(output_dir) = &self.output_dir {
             self.registry.run_plugins(
-                |p| p.plugin_type() & PLUGIN_FLOW_DEL != 0,
+                |_| true,
                 |p| {
-                    flows.values().for_each(|flow| {
-                        p.flow_destroyed(flow);
-                    });
+                    let res = p.save_results(output_dir);
+                    if let Err(e) = res {
+                        warn!("error while saving results for {}: {}", p.name(), e);
+                    }
                 },
             );
-            // let elapsed = start.elapsed();
-            // debug!("Time to run flow_destroyed {}.{}", elapsed.as_secs(), elapsed.as_millis());
-            self.flows.clear();
-
-            self.registry.run_plugins(|_| true, |p| p.post_process());
-
-            if let Some(output_dir) = &self.output_dir {
-                self.registry.run_plugins(
-                    |_| true,
-                    |p| {
-                        let res = p.save_results(output_dir);
-                        if let Err(e) = res {
-                            warn!("error while saving results for {}: {}", p.name(), e);
-                        }
-                    },
-                );
-            }
-        };
+        }
+        Ok(())
     }
 }
 

@@ -187,23 +187,25 @@ impl PcapAnalyzer for Rewriter {
         Ok(())
     }
 
-    fn teardown(&mut self) {
+    fn teardown(&mut self) -> Result<(), Error> {
         if self.run_pre_analysis {
             info!("Pre-analysis done.");
             self.run_pre_analysis = false;
 
             for filter in self.filters.iter_mut() {
                 if let Err(e) = filter.preanalysis_done() {
-                    panic!(
+                    error!(
                         "Pre-analysis filter returned fatal error in post preanalysis function {}",
                         e
                     );
+                    return Err(Error::Generic("pre-analysis pass failed"));
                 }
             }
 
-            return;
+            return Ok(());
         }
         info!("Done.");
         info!("Stats: {:?}", self.stats);
+        Ok(())
     }
 }

@@ -61,7 +61,7 @@ pub fn pcap_rewrite_file<S1: AsRef<str>, S2: AsRef<str>>(
         }
         info!("Running pre-analysis pass");
         engine.data_analyzer_mut().set_run_pre_analysis(true);
-        engine.run(&mut input_reader).expect("run analyzer");
+        engine.run(&mut input_reader).expect("pre-analysis pass failed");
         // reset reader
         input_reader = get_reader(input_filename)?;
     }

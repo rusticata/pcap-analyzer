@@ -17,7 +17,9 @@ pub trait BlockAnalyzer {
     ) -> Result<(), Error>;
 
     /// Teardown function, called after reading pcap data (optional)
-    fn teardown(&mut self) {}
+    fn teardown(&mut self) -> Result<(), Error> {
+        Ok(())
+    }
 
     fn before_refill(&mut self) {}
 }
@@ -95,7 +97,6 @@ impl<A: BlockAnalyzer> BlockEngine<A> {
             }
         }
 
-        self.analyzer.teardown();
-        Ok(())
+        self.analyzer.teardown()
     }
 }

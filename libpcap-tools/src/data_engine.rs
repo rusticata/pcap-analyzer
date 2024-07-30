@@ -223,7 +223,7 @@ impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
         Ok(())
     }
 
-    fn teardown(&mut self) {
+    fn teardown(&mut self) -> Result<(), Error> {
         self.data_analyzer.teardown()
     }
 

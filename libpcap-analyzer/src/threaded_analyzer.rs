@@ -173,7 +173,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
         Ok(())
     }
 
-    fn teardown(&mut self) {
+    fn teardown(&mut self) -> Result<(), Error> {
         debug!("main: exit");
         self.wait_for_empty_jobs();
         for job in self.local_jobs.iter() {
@@ -188,6 +188,7 @@ impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
         debug!("main: all workers ended");
 
         self.registry.run_plugins(|_| true, |p| p.post_process());
+        Ok(())
     }
 
     fn before_refill(&mut self) {
