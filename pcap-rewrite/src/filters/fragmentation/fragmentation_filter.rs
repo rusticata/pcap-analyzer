@@ -77,12 +77,15 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                     return Err(Error::DataParser("L2 data too small for ethernet"));
                 }
 
+                // If returned value is None, it means that EtherType was neither IPv4 nor IPv6.
+                // E.g.: ARP
                 filter_utils::extract_callback_ethernet(
                     ctx,
                     fragmentation_test::is_ipv4_first_fragment,
                     fragmentation_test::is_ipv6_first_fragment,
                     data,
                 )?
+                .unwrap_or(false)
             }
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
@@ -109,12 +112,12 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                         return Err(Error::DataParser("L2 data too small for ethernet"));
                     }
 
-                    Some(filter_utils::extract_callback_ethernet(
+                    filter_utils::extract_callback_ethernet(
                         ctx,
                         key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple,
                         key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple,
                         data,
-                    )?)
+                    )?
                 }
                 PacketData::L3(l3_layer_value_u8, data) => {
                     let ether_type = EtherType::new(l3_layer_value_u8);
@@ -151,7 +154,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         ctx: &ParseContext,
         packet_data: PacketData<'j>,
     ) -> FResult<PacketData<'j>, Error> {
-        let key: Key = match packet_data {
+        let key_option = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
                     return Err(Error::DataParser("L2 data too small for ethernet"));
@@ -167,8 +170,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
-                    EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(ctx, data)?,
-                    EtherTypes::Ipv6 => (self.get_key_from_ipv6_l3_data)(ctx, data)?,
+                    EtherTypes::Ipv4 => Some((self.get_key_from_ipv4_l3_data)(ctx, data)?),
+                    EtherTypes::Ipv6 => Some((self.get_key_from_ipv6_l3_data)(ctx, data)?),
                     _ => {
                         warn!(
                             "Unimplemented Ethertype in L3: {:?}/{:x}",
@@ -182,15 +185,18 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             PacketData::Unsupported(_) => unimplemented!(),
         };
 
-        match (self.keep)(&self.key_container, &key) {
-            Ok(b) => {
-                if b {
-                    Ok(Verdict::Accept(packet_data))
-                } else {
-                    Ok(Verdict::Drop)
+        match key_option {
+            None => Ok(Verdict::Drop),
+            Some(key) => match (self.keep)(&self.key_container, &key) {
+                Ok(b) => {
+                    if b {
+                        Ok(Verdict::Accept(packet_data))
+                    } else {
+                        Ok(Verdict::Drop)
+                    }
                 }
-            }
-            Err(s) => Err(s),
+                Err(s) => Err(s),
+            },
         }
     }
 }
