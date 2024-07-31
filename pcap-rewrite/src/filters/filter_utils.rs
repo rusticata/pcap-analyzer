@@ -19,53 +19,60 @@ where
 {
     let ethernet_packet = EthernetPacket::new(packet_data)
         .ok_or(Error::Pnet("Expected Ethernet packet but could not parse"))?;
-    match ethernet_packet.get_ethertype() {
-        EtherTypes::Arp => Ok(None),
-        EtherTypes::Ipv4 => Ok(Some((get_key_from_ipv4_l3_data)(
-            ctx,
-            ethernet_packet.payload(),
-        )?)),
-        EtherTypes::Ipv6 => Ok(Some((get_key_from_ipv6_l3_data)(
-            ctx,
-            ethernet_packet.payload(),
-        )?)),
-        EtherTypes::Ipx => Ok(None),
-        EtherTypes::Lldp => Ok(None),
-        EtherTypes::Vlan => {
-            // 802.11q
-            let vlan_packet = VlanPacket::new(ethernet_packet.payload())
-                .ok_or(Error::Pnet("Expected VLAN packet but could not parse"))?;
-            match vlan_packet.get_ethertype() {
-                EtherTypes::Arp => Ok(None),
-                EtherTypes::Ipv4 => Ok(Some((get_key_from_ipv4_l3_data)(
-                    ctx,
-                    ethernet_packet.payload(),
-                )?)),
-                EtherTypes::Ipv6 => Ok(Some((get_key_from_ipv6_l3_data)(
-                    ctx,
-                    ethernet_packet.payload(),
-                )?)),
-                EtherTypes::Ipx => Ok(None),
-                EtherTypes::Lldp => Ok(None),
-                _ => {
-                    warn!(
-                        "Unimplemented Ethertype in 33024/802.11q: {:?}/{:x}",
-                        vlan_packet.get_ethertype(),
-                        vlan_packet.get_ethertype().to_primitive_values().0
-                    );
-                    Err(Error::Unimplemented(
-                        "Unimplemented Ethertype in 33024/802.11q",
-                    ))
+    let ether_type_u16 = ethernet_packet.get_ethertype().0;
+    if ether_type_u16 <= 1500 {
+        // Ethernet 802.3
+        Ok(None)
+    } else {
+        // Ethernet II
+        match ethernet_packet.get_ethertype() {
+            EtherTypes::Arp => Ok(None),
+            EtherTypes::Ipv4 => Ok(Some((get_key_from_ipv4_l3_data)(
+                ctx,
+                ethernet_packet.payload(),
+            )?)),
+            EtherTypes::Ipv6 => Ok(Some((get_key_from_ipv6_l3_data)(
+                ctx,
+                ethernet_packet.payload(),
+            )?)),
+            EtherTypes::Ipx => Ok(None),
+            EtherTypes::Lldp => Ok(None),
+            EtherTypes::Vlan => {
+                // 802.11q
+                let vlan_packet = VlanPacket::new(ethernet_packet.payload())
+                    .ok_or(Error::Pnet("Expected VLAN packet but could not parse"))?;
+                match vlan_packet.get_ethertype() {
+                    EtherTypes::Arp => Ok(None),
+                    EtherTypes::Ipv4 => Ok(Some((get_key_from_ipv4_l3_data)(
+                        ctx,
+                        ethernet_packet.payload(),
+                    )?)),
+                    EtherTypes::Ipv6 => Ok(Some((get_key_from_ipv6_l3_data)(
+                        ctx,
+                        ethernet_packet.payload(),
+                    )?)),
+                    EtherTypes::Ipx => Ok(None),
+                    EtherTypes::Lldp => Ok(None),
+                    _ => {
+                        warn!(
+                            "Unimplemented Ethertype in 33024/802.11q: {:?}/{:x}",
+                            vlan_packet.get_ethertype(),
+                            vlan_packet.get_ethertype().to_primitive_values().0
+                        );
+                        Err(Error::Unimplemented(
+                            "Unimplemented Ethertype in 33024/802.11q",
+                        ))
+                    }
                 }
             }
-        }
-        _ => {
-            warn!(
-                "Unimplemented Ethertype: {:?}/{:x}",
-                ethernet_packet.get_ethertype(),
-                ethernet_packet.get_ethertype().to_primitive_values().0
-            );
-            Err(Error::Unimplemented("Unimplemented Ethertype"))
+            _ => {
+                warn!(
+                    "Unimplemented Ethertype: {:?}/{:x}",
+                    ethernet_packet.get_ethertype(),
+                    ethernet_packet.get_ethertype().to_primitive_values().0
+                );
+                Err(Error::Unimplemented("Unimplemented Ethertype"))
+            }
         }
     }
 }
