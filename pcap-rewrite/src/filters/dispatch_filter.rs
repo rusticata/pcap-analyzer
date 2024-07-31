@@ -20,7 +20,6 @@ use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
 
 /// Function to extract key from data
-// pub type GetKeyFn<Key> = Box<dyn Fn(&ParseContext, &[u8]) -> Result<Key, Error>>;
 pub type GetKeyFn<Key> = fn(&ParseContext, &[u8]) -> Result<Key, Error>;
 /// Function to keep/drop extract key from container
 pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, Error>>;
