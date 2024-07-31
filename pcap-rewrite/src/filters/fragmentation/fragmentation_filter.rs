@@ -90,8 +90,11 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
+                    EtherTypes::Arp => false,
                     EtherTypes::Ipv4 => (fragmentation_test::is_ipv4_first_fragment)(ctx, data)?,
                     EtherTypes::Ipv6 => (fragmentation_test::is_ipv6_first_fragment)(ctx, data)?,
+                    EtherTypes::Ipx => false,
+                    EtherTypes::Lldp => false,
                     _ => {
                         warn!(
                             "Unimplemented Ethertype in L3: {:?}/{:x}",
@@ -122,12 +125,15 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                 PacketData::L3(l3_layer_value_u8, data) => {
                     let ether_type = EtherType::new(l3_layer_value_u8);
                     match ether_type {
+                        EtherTypes::Arp => None,
                         EtherTypes::Ipv4 => Some(
                             (key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple)(ctx, data)?,
                         ),
                         EtherTypes::Ipv6 => Some(
                             (key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple)(ctx, data)?,
                         ),
+                        EtherTypes::Ipx => None,
+                        EtherTypes::Lldp => None,
                         _ => {
                             warn!(
                                 "Unimplemented Ethertype in L3: {:?}/{:x}",
@@ -170,8 +176,11 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
+                    EtherTypes::Arp => None,
                     EtherTypes::Ipv4 => Some((self.get_key_from_ipv4_l3_data)(ctx, data)?),
                     EtherTypes::Ipv6 => Some((self.get_key_from_ipv6_l3_data)(ctx, data)?),
+                    EtherTypes::Ipx => None,
+                    EtherTypes::Lldp => None,
                     _ => {
                         warn!(
                             "Unimplemented Ethertype in L3: {:?}/{:x}",

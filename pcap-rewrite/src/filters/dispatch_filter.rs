@@ -67,8 +67,11 @@ impl<Container, Key> DispatchFilter<Container, Key> {
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
+                    EtherTypes::Arp => None,
                     EtherTypes::Ipv4 => Some((self.get_key_from_ipv4_l3_data)(ctx, data)?),
                     EtherTypes::Ipv6 => Some((self.get_key_from_ipv4_l3_data)(ctx, data)?),
+                    EtherTypes::Ipx => None,
+                    EtherTypes::Lldp => None,
                     _ => {
                         warn!(
                             "Unimplemented Ethertype in L3 {:?}/{:x}",
