@@ -27,11 +27,11 @@ use crate::filters::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProt
 use super::convert_fn;
 
 /// Function to convert TwoTupleProtoIpid/FiveTuple data to key container
-pub type ConvertFn<Container> = Box<dyn Fn(&HashSet<TwoTupleProtoIpidFiveTuple>) -> Container>;
+pub type ConvertFn<Container> = fn(&HashSet<TwoTupleProtoIpidFiveTuple>) -> Container;
 /// Function to extract key from data
 pub type GetKeyFn<Key> = fn(&ParseContext, &[u8]) -> Result<Key, Error>;
 /// Function to keep/drop extract key from container
-pub type KeepFn<Container, Key> = Box<dyn Fn(&Container, &Key) -> Result<bool, Error>>;
+pub type KeepFn<Container, Key> = fn(&Container, &Key) -> Result<bool, Error>;
 
 pub struct FragmentationFilter<Container, Key> {
     data_hs: HashSet<TwoTupleProtoIpidFiveTuple>,
@@ -245,15 +245,13 @@ impl FragmentationFilterBuilder {
                 let ipaddr_container = IpAddrC::new(HashSet::new());
 
                 let keep: KeepFn<IpAddrC, IpAddr> = match filtering_action {
-                    FilteringAction::Keep => Box::new(|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr))),
-                    FilteringAction::Drop => {
-                        Box::new(|c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr)))
-                    }
+                    FilteringAction::Keep => |c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr)),
+                    FilteringAction::Drop => |c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr)),
                 };
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
-                    Box::new(convert_fn::convert_data_hs_to_src_ipaddrc),
+                    convert_fn::convert_data_hs_to_src_ipaddrc,
                     ipaddr_container,
                     key_parser_ipv4::parse_src_ipaddr,
                     key_parser_ipv6::parse_src_ipaddr,
@@ -264,15 +262,13 @@ impl FragmentationFilterBuilder {
                 let ipaddr_container = IpAddrC::new(HashSet::new());
 
                 let keep: KeepFn<IpAddrC, IpAddr> = match filtering_action {
-                    FilteringAction::Keep => Box::new(|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr))),
-                    FilteringAction::Drop => {
-                        Box::new(|c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr)))
-                    }
+                    FilteringAction::Keep => |c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr)),
+                    FilteringAction::Drop => |c: &IpAddrC, ipaddr| Ok(!c.contains(ipaddr)),
                 };
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
-                    Box::new(convert_fn::convert_data_hs_to_dst_ipaddrc),
+                    convert_fn::convert_data_hs_to_dst_ipaddrc,
                     ipaddr_container,
                     key_parser_ipv4::parse_dst_ipaddr,
                     key_parser_ipv6::parse_dst_ipaddr,
@@ -283,17 +279,17 @@ impl FragmentationFilterBuilder {
                 let ipaddr_container = IpAddrC::new(HashSet::new());
 
                 let keep: KeepFn<IpAddrC, (IpAddr, IpAddr)> = match filtering_action {
-                    FilteringAction::Keep => Box::new(|c, ipaddr_tuple| {
+                    FilteringAction::Keep => |c, ipaddr_tuple| {
                         Ok(c.contains(&ipaddr_tuple.0) || c.contains(&ipaddr_tuple.1))
-                    }),
-                    FilteringAction::Drop => Box::new(|c, ipaddr_tuple| {
+                    },
+                    FilteringAction::Drop => |c, ipaddr_tuple| {
                         Ok(!c.contains(&ipaddr_tuple.0) && !c.contains(&ipaddr_tuple.1))
-                    }),
+                    },
                 };
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
-                    Box::new(convert_fn::convert_data_hs_to_src_dst_ipaddrc),
+                    convert_fn::convert_data_hs_to_src_dst_ipaddrc,
                     ipaddr_container,
                     key_parser_ipv4::parse_src_dst_ipaddr,
                     key_parser_ipv6::parse_src_dst_ipaddr,
@@ -306,16 +302,16 @@ impl FragmentationFilterBuilder {
                 let keep: KeepFn<IpAddrProtoPortC, (IpAddr, IpNextHeaderProtocol, u16)> =
                     match filtering_action {
                         FilteringAction::Keep => {
-                            Box::new(|c, tuple| Ok(c.contains(&tuple.0, &tuple.1, tuple.2)))
+                            |c, tuple| Ok(c.contains(&tuple.0, &tuple.1, tuple.2))
                         }
                         FilteringAction::Drop => {
-                            Box::new(|c, tuple| Ok(!c.contains(&tuple.0, &tuple.1, tuple.2)))
+                            |c, tuple| Ok(!c.contains(&tuple.0, &tuple.1, tuple.2))
                         }
                     };
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
-                    Box::new(convert_fn::convert_data_hs_to_src_ipaddr_proto_dst_port_container),
+                    convert_fn::convert_data_hs_to_src_ipaddr_proto_dst_port_container,
                     ipaddr_proto_port_container,
                     key_parser_ipv4::parse_src_ipaddr_proto_dst_port,
                     key_parser_ipv6::parse_src_ipaddr_proto_dst_port,
@@ -329,23 +325,23 @@ impl FragmentationFilterBuilder {
 
                 let keep: KeepFn<(TwoTupleProtoIpidC, FiveTupleC), TwoTupleProtoIpidFiveTuple> =
                     match filtering_action {
-                        FilteringAction::Keep => Box::new(|c, two_tuple_proto_ipid_five_tuple| {
+                        FilteringAction::Keep => |c, two_tuple_proto_ipid_five_tuple| {
                             test_two_tuple_proto_ipid_five_tuple_option_in_container(
                                 c,
                                 two_tuple_proto_ipid_five_tuple,
                             )
-                        }),
-                        FilteringAction::Drop => Box::new(|c, two_tuple_proto_ipid_five_tuple| {
+                        },
+                        FilteringAction::Drop => |c, two_tuple_proto_ipid_five_tuple| {
                             Ok(!(test_two_tuple_proto_ipid_five_tuple_option_in_container(
                                 c,
                                 two_tuple_proto_ipid_five_tuple,
                             )?))
-                        }),
+                        },
                     };
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
-                    Box::new(convert_fn::convert_data_hs_to_ctuple),
+                    convert_fn::convert_data_hs_to_ctuple,
                     (two_tuple_proto_proto_ipid_c, five_tuple_container),
                     key_parser_ipv4::parse_two_tuple_proto_ipid_five_tuple,
                     key_parser_ipv6::parse_two_tuple_proto_ipid_five_tuple,
