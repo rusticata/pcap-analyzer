@@ -1,12 +1,15 @@
+extern crate infer;
 extern crate lz4;
 
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, Error, ErrorKind, Read, Seek};
 use std::path::Path;
 
 use flate2::read::GzDecoder;
 use libpcap_tools::{Config, PcapDataEngine, PcapEngine};
+use log::warn;
 use log::{error, info};
+use std::io::SeekFrom;
 use xz2::read::XzDecoder;
 
 mod container;
@@ -61,7 +64,9 @@ pub fn pcap_rewrite_file<S1: AsRef<str>, S2: AsRef<str>>(
         }
         info!("Running pre-analysis pass");
         engine.data_analyzer_mut().set_run_pre_analysis(true);
-        engine.run(&mut input_reader).expect("pre-analysis pass failed");
+        engine
+            .run(&mut input_reader)
+            .expect("pre-analysis pass failed");
         // reset reader
         input_reader = get_reader(input_filename)?;
     }
@@ -80,19 +85,60 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
         Box::new(io::stdin())
     } else {
         let path = Path::new(&input_filename);
-        let file = File::open(path).map_err(|e| {
+        let mut file = File::open(path).map_err(|e| {
             error!("Could not open input file '{}'", input_filename);
             e
         })?;
-        if input_filename.ends_with(".gz") {
-            Box::new(GzDecoder::new(file))
-        } else if input_filename.ends_with(".xz") {
-            Box::new(XzDecoder::new(file))
-        } else if input_filename.ends_with(".lz4") {
-            Box::new(lz4::Decoder::new(file)?)
-        } else {
-            Box::new(file) as Box<dyn io::Read>
+
+        // https://en.wikipedia.org/wiki/LZ4_(compression_algorithm)
+        fn lz4_matcher(buf: &[u8]) -> bool {
+            buf.len() >= 4 && buf[0] == 0x04 && buf[1] == 0x22 && buf[2] == 0x4d && buf[3] == 0x18
         }
+        // https://www.tcpdump.org/manpages/pcap-savefile.5.html
+        fn pcap_same_endianess_matcher(buf: &[u8]) -> bool {
+            buf.len() >= 4 && buf[0] == 0xa1 && buf[1] == 0xb2 && buf[2] == 0xc3 && buf[3] == 0xd4
+        }
+        fn pcap_reverse_endianess_matcher(buf: &[u8]) -> bool {
+            buf.len() >= 4 && buf[0] == 0xd4 && buf[1] == 0xc3 && buf[2] == 0xb2 && buf[3] == 0xa1
+        }
+        let mut info = infer::Infer::new();
+        info.add("custom/lz4", "lz4", lz4_matcher);
+        info.add("custom/pcap", "pcap", pcap_same_endianess_matcher);
+        info.add("custom/pcap", "pcap", pcap_reverse_endianess_matcher);
+
+        let mut buf = vec![0; 4];
+        file.read_exact(&mut buf)?;
+
+        let kind = info.get(&buf).unwrap();
+
+        file.seek(SeekFrom::Start(0))?;
+        let b: Result<Box<dyn Read>, Error> = match kind.mime_type() {
+            "application/gz" => {
+                if !input_filename.ends_with(".gz") {
+                    warn!("Inferred file type is gz but file extension is not gz")
+                }
+                Ok(Box::new(GzDecoder::new(file)))
+            }
+            "application/xz" => {
+                if !input_filename.ends_with(".xz") {
+                    warn!("Inferred file type is xz but file extension is not xz")
+                };
+                Ok(Box::new(XzDecoder::new(file)))
+            }
+            "custom/lz4" => {
+                if !input_filename.ends_with(".lz4") {
+                    warn!("Inferred file type is lz4 but file extension is not lz4")
+                };
+                Ok(Box::new(lz4::Decoder::new(file)?))
+            }
+            "custom/pcap" => Ok(Box::new(file) as Box<dyn io::Read>),
+            _ => {
+                error!("Could not infer type '{}'", input_filename);
+                Err(Error::new(ErrorKind::Other, "Could not infer type"))
+            }
+        };
+
+        b?
     };
     Ok(input_reader)
 }

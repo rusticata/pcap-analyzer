@@ -32,6 +32,7 @@ doc = false
 [dependencies]
 csv = "1.1.6"
 clap = { version = "4.4", features = ["cargo", "derive"] }
+infer = "0.16.0"
 libpcap-analyzer = { version="0.1.0", path="../libpcap-analyzer" }
 libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
 log = { version = "0.4" }
