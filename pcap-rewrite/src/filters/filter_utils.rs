@@ -20,6 +20,7 @@ where
     let ethernet_packet = EthernetPacket::new(packet_data)
         .ok_or(Error::Pnet("Expected Ethernet packet but could not parse"))?;
     match ethernet_packet.get_ethertype() {
+        EtherTypes::Arp => Ok(None),
         EtherTypes::Ipv4 => Ok(Some((get_key_from_ipv4_l3_data)(
             ctx,
             ethernet_packet.payload(),
@@ -28,11 +29,14 @@ where
             ctx,
             ethernet_packet.payload(),
         )?)),
+        EtherTypes::Ipx => Ok(None),
+        EtherTypes::Lldp => Ok(None),
         EtherTypes::Vlan => {
             // 802.11q
             let vlan_packet = VlanPacket::new(ethernet_packet.payload())
                 .ok_or(Error::Pnet("Expected VLAN packet but could not parse"))?;
             match vlan_packet.get_ethertype() {
+                EtherTypes::Arp => Ok(None),
                 EtherTypes::Ipv4 => Ok(Some((get_key_from_ipv4_l3_data)(
                     ctx,
                     ethernet_packet.payload(),
@@ -41,6 +45,8 @@ where
                     ctx,
                     ethernet_packet.payload(),
                 )?)),
+                EtherTypes::Ipx => Ok(None),
+                EtherTypes::Lldp => Ok(None),
                 _ => {
                     warn!(
                         "Unimplemented Ethertype in 33024/802.11q: {:?}/{:x}",
