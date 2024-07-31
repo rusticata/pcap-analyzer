@@ -51,7 +51,7 @@ impl<Container, Key> DispatchFilter<Container, Key> {
         ctx: &ParseContext,
         packet_data: PacketData<'j>,
     ) -> FResult<PacketData<'j>, Error> {
-        let key = match packet_data {
+        let key_option = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
                     return Err(Error::DataParser("L2 data too small for ethernet"));
@@ -67,8 +67,8 @@ impl<Container, Key> DispatchFilter<Container, Key> {
             PacketData::L3(l3_layer_value_u8, data) => {
                 let ether_type = EtherType::new(l3_layer_value_u8);
                 match ether_type {
-                    EtherTypes::Ipv4 => (self.get_key_from_ipv4_l3_data)(ctx, data)?,
-                    EtherTypes::Ipv6 => (self.get_key_from_ipv4_l3_data)(ctx, data)?,
+                    EtherTypes::Ipv4 => Some((self.get_key_from_ipv4_l3_data)(ctx, data)?),
+                    EtherTypes::Ipv6 => Some((self.get_key_from_ipv4_l3_data)(ctx, data)?),
                     _ => {
                         warn!(
                             "Unimplemented Ethertype in L3 {:?}/{:x}",
@@ -83,15 +83,18 @@ impl<Container, Key> DispatchFilter<Container, Key> {
             PacketData::Unsupported(_) => unimplemented!(),
         };
 
-        match (self.keep)(&self.key_container, &key) {
-            Ok(b) => {
-                if b {
-                    Ok(Verdict::Accept(packet_data))
-                } else {
-                    Ok(Verdict::Drop)
+        match key_option {
+            None => Ok(Verdict::Drop),
+            Some(key) => match (self.keep)(&self.key_container, &key) {
+                Ok(b) => {
+                    if b {
+                        Ok(Verdict::Accept(packet_data))
+                    } else {
+                        Ok(Verdict::Drop)
+                    }
                 }
-            }
-            Err(s) => Err(s),
+                Err(s) => Err(s),
+            },
         }
     }
 }
