@@ -87,7 +87,7 @@ impl<Container, Key> DispatchFilter<Container, Key> {
         };
 
         match key_option {
-            None => Ok(Verdict::Drop),
+            None => Ok(Verdict::Accept(packet_data)),
             Some(key) => match (self.keep)(&self.key_container, &key) {
                 Ok(b) => {
                     if b {
