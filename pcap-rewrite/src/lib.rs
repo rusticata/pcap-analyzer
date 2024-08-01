@@ -95,16 +95,27 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
             buf.len() >= 4 && buf[0] == 0x04 && buf[1] == 0x22 && buf[2] == 0x4d && buf[3] == 0x18
         }
         // https://www.tcpdump.org/manpages/pcap-savefile.5.html
-        fn pcap_same_endianess_matcher(buf: &[u8]) -> bool {
+        fn pcap_same_endianess_matcher_microsecond(buf: &[u8]) -> bool {
             buf.len() >= 4 && buf[0] == 0xa1 && buf[1] == 0xb2 && buf[2] == 0xc3 && buf[3] == 0xd4
         }
-        fn pcap_reverse_endianess_matcher(buf: &[u8]) -> bool {
+        fn pcap_reverse_endianess_matcher_microsecond(buf: &[u8]) -> bool {
             buf.len() >= 4 && buf[0] == 0xd4 && buf[1] == 0xc3 && buf[2] == 0xb2 && buf[3] == 0xa1
+        }
+        fn pcap_same_endianess_matcher_nanosecond(buf: &[u8]) -> bool {
+            buf.len() >= 4 && buf[0] == 0xa1 && buf[1] == 0xb2 && buf[2] == 0x3c && buf[3] == 0x4d
+        }
+        fn pcap_reverse_endianess_matcher_nanosecond(buf: &[u8]) -> bool {
+            buf.len() >= 4 && buf[0] == 0x4d && buf[1] == 0x3c && buf[2] == 0xb2 && buf[3] == 0xa1
+        }
+        fn pcap_matcher(buf: &[u8]) -> bool {
+            pcap_same_endianess_matcher_microsecond(buf)
+                || pcap_reverse_endianess_matcher_microsecond(buf)
+                || pcap_same_endianess_matcher_nanosecond(buf)
+                || pcap_reverse_endianess_matcher_nanosecond(buf)
         }
         let mut info = infer::Infer::new();
         info.add("custom/lz4", "lz4", lz4_matcher);
-        info.add("custom/pcap", "pcap", pcap_same_endianess_matcher);
-        info.add("custom/pcap", "pcap", pcap_reverse_endianess_matcher);
+        info.add("custom/pcap", "pcap", pcap_matcher);
 
         let mut buf = vec![0; 4];
         file.read_exact(&mut buf)?;
