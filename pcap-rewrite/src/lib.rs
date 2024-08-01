@@ -113,11 +113,36 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
                 || pcap_same_endianess_matcher_nanosecond(buf)
                 || pcap_reverse_endianess_matcher_nanosecond(buf)
         }
+
+        fn pcapng_shb_magic_matcher(buf: &[u8]) -> bool {
+            buf.len() >= 4 && buf[0] == 0x0a && buf[1] == 0x0d && buf[2] == 0x0d && buf[3] == 0x0a
+        }
+        fn pcapng_bom_magic_same_endianess_matcher(buf: &[u8]) -> bool {
+            buf.len() >= 12
+                && buf[8] == 0x1a
+                && buf[9] == 0x2b
+                && buf[10] == 0x3c
+                && buf[11] == 0x4d
+        }
+        fn pcapng_bom_magic_reverse_endianess_matcher(buf: &[u8]) -> bool {
+            buf.len() >= 12
+                && buf[8] == 0x4d
+                && buf[9] == 0x3c
+                && buf[10] == 0x2b
+                && buf[11] == 0x1a
+        }
+        fn pcapng_matcher(buf: &[u8]) -> bool {
+            pcapng_shb_magic_matcher(buf)
+                && (pcapng_bom_magic_same_endianess_matcher(buf)
+                    || pcapng_bom_magic_reverse_endianess_matcher(buf))
+        }
+
         let mut info = infer::Infer::new();
         info.add("custom/lz4", "lz4", lz4_matcher);
         info.add("custom/pcap", "pcap", pcap_matcher);
+        info.add("custom/pcap", "pcap", pcapng_matcher);
 
-        let mut buf = vec![0; 4];
+        let mut buf = vec![0; 12];
         file.read_exact(&mut buf)?;
 
         let kind = info.get(&buf).unwrap();
