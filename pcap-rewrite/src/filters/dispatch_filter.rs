@@ -54,6 +54,7 @@ impl<Container, Key> DispatchFilter<Container, Key> {
         let key_option = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
+                    warn!("L2 data too small for ethernet at index {}", ctx.pcap_index);
                     return Err(Error::DataParser("L2 data too small for ethernet"));
                 }
 
@@ -74,7 +75,8 @@ impl<Container, Key> DispatchFilter<Container, Key> {
                     EtherTypes::Lldp => None,
                     _ => {
                         warn!(
-                            "Unimplemented Ethertype in L3 {:?}/{:x}",
+                            "Unimplemented Ethertype in L3 at index {}: {:?}/{:x}",
+                            ctx.pcap_index,
                             ether_type,
                             ether_type.to_primitive_values().0
                         );
