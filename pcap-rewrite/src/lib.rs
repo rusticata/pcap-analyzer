@@ -2,7 +2,7 @@ extern crate infer;
 extern crate lz4;
 
 use std::fs::File;
-use std::io::{self, Error, ErrorKind, Read, Seek};
+use std::io::{self, Error, Read, Seek};
 use std::path::Path;
 
 use flate2::read::GzDecoder;
@@ -169,8 +169,16 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
             }
             "custom/pcap" => Ok(Box::new(file) as Box<dyn io::Read>),
             _ => {
-                error!("Could not infer type '{}'", input_filename);
-                Err(Error::new(ErrorKind::Other, "Could not infer type"))
+                warn!("Could not infer file type '{}'", input_filename);
+                if input_filename.ends_with(".gz") {
+                    Ok(Box::new(GzDecoder::new(file)))
+                } else if input_filename.ends_with(".xz") {
+                    Ok(Box::new(XzDecoder::new(file)))
+                } else if input_filename.ends_with(".lz4") {
+                    Ok(Box::new(lz4::Decoder::new(file)?))
+                } else {
+                    Ok(Box::new(file) as Box<dyn io::Read>)
+                }
             }
         };
 
