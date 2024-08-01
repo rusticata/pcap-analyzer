@@ -89,6 +89,7 @@ impl<A: PcapAnalyzer> PcapEngine for PcapDataEngine<A> {
 
 impl<A: PcapAnalyzer> BlockAnalyzer for PcapDataAnalyzer<A> {
     fn init(&mut self) -> Result<(), Error> {
+        self.ctx = ParseContext::default();
         self.data_analyzer.init()
     }
 
