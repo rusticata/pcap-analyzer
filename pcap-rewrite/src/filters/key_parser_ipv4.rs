@@ -12,6 +12,7 @@ use libpcap_tools::{Error, FiveTuple, ParseContext};
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
 use crate::container::ipaddr_proto_port_container::IpAddrProtoPort;
+use crate::filters::ipaddr_pair::IpAddrPair;
 
 pub fn parse_src_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Error> {
     let ipv4 = Ipv4Packet::new(payload).ok_or_else(|| {
@@ -35,7 +36,7 @@ pub fn parse_dst_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Er
     Result::Ok(IpAddr::V4(ipv4.get_destination()))
 }
 
-pub fn parse_src_dst_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<(IpAddr, IpAddr), Error> {
+pub fn parse_src_dst_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddrPair, Error> {
     let ipv4_packet = Ipv4Packet::new(payload).ok_or_else(|| {
         warn!(
             "Expected Ipv4 packet but could not parse at index {}",
@@ -45,7 +46,7 @@ pub fn parse_src_dst_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<(IpAdd
     })?;
     let src_ipaddr = IpAddr::V4(ipv4_packet.get_source());
     let dst_ipaddr = IpAddr::V4(ipv4_packet.get_destination());
-    Result::Ok((src_ipaddr, dst_ipaddr))
+    Result::Ok(IpAddrPair::new(src_ipaddr, dst_ipaddr))
 }
 
 pub fn parse_src_ipaddr_proto_dst_port(
