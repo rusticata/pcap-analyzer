@@ -1,11 +1,15 @@
-use crate::filters::filter::*;
-use libpcap_tools::{Error,ParseContext};
+use std::net::IpAddr;
+
+use log::warn;
 use pcap_parser::data::{PacketData, ETHERTYPE_IPV4, ETHERTYPE_IPV6};
 use pnet_packet::ethernet::EthernetPacket;
 use pnet_packet::ipv4::Ipv4Packet;
 use pnet_packet::ipv6::Ipv6Packet;
 use pnet_packet::Packet;
-use std::net::IpAddr;
+
+use libpcap_tools::{Error, ParseContext};
+
+use crate::filters::filter::*;
 
 /// Common filter to select packets matching this IP address either as source or destination
 ///
@@ -18,14 +22,17 @@ pub struct IPFilter {
 }
 
 impl Filter for IPFilter {
-    fn filter<'i>(&self, _ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, Error> {
+    fn filter<'i>(&self, ctx: &ParseContext, i: PacketData<'i>) -> FResult<PacketData<'i>, Error> {
         match i {
             PacketData::L2(data) => {
-                let p = match EthernetPacket::new(data) {
-                    Some(p) => p,
-                    None => Err("Cannot build ethernet data")?,
-                };
-                if self.match_l3(p.get_ethertype().0, p.payload()) {
+                let ethernet_packet = EthernetPacket::new(data).ok_or_else(|| {
+                    warn!(
+                        "Expected Ethernet packet but could not parse at index {:?}",
+                        ctx.pcap_index
+                    );
+                    Error::Pnet("Expected Ethernet packet but could not parse")
+                })?;
+                if self.match_l3(ethernet_packet.get_ethertype().0, ethernet_packet.payload()) {
                     Ok(Verdict::Accept(i))
                 } else {
                     Ok(Verdict::Drop)
@@ -55,7 +62,7 @@ impl Filter for IPFilter {
                     Ok(Verdict::Drop)
                 }
             }
-            PacketData::L4(_, _) => Err("Cannot filter IP, L4 content")?,
+            PacketData::L4(_, _) => Err(Error::DataParser("Cannot filter IP, L4 content"))?,
             PacketData::Unsupported(_) => {
                 Err(Error::Unsupported("Cannot filter IP, unsupported data"))
             }

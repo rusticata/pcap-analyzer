@@ -17,8 +17,13 @@ where
     F1: Fn(&ParseContext, &[u8]) -> Result<D, Error>,
     F2: Fn(&ParseContext, &[u8]) -> Result<D, Error>,
 {
-    let ethernet_packet = EthernetPacket::new(packet_data)
-        .ok_or(Error::Pnet("Expected Ethernet packet but could not parse"))?;
+    let ethernet_packet = EthernetPacket::new(packet_data).ok_or_else(|| {
+        warn!(
+            "Expected Ethernet packet but could not parse at index {:?}",
+            ctx.pcap_index
+        );
+        Error::Pnet("Expected Ethernet packet but could not parse")
+    })?;
     let ether_type_u16 = ethernet_packet.get_ethertype().0;
     if ether_type_u16 <= 1500 {
         // Ethernet 802.3
@@ -39,8 +44,13 @@ where
             EtherTypes::Lldp => Ok(None),
             EtherTypes::Vlan => {
                 // 802.11q
-                let vlan_packet = VlanPacket::new(ethernet_packet.payload())
-                    .ok_or(Error::Pnet("Expected VLAN packet but could not parse"))?;
+                let vlan_packet = VlanPacket::new(ethernet_packet.payload()).ok_or_else(|| {
+                    warn!(
+                        "Expected VLAN packet but could not parse at index {:?}",
+                        ctx.pcap_index
+                    );
+                    Error::Pnet("Expected VLAN packet but could not parse")
+                })?;
                 match vlan_packet.get_ethertype() {
                     EtherTypes::Arp => Ok(None),
                     EtherTypes::Ipv4 => Ok(Some((get_key_from_ipv4_l3_data)(
@@ -55,7 +65,8 @@ where
                     EtherTypes::Lldp => Ok(None),
                     _ => {
                         warn!(
-                            "Unimplemented Ethertype in 33024/802.11q: {:?}/{:x}",
+                            "Unimplemented Ethertype in 33024/802.11q at index {}: {:?}/{:x}",
+                            ctx.pcap_index,
                             vlan_packet.get_ethertype(),
                             vlan_packet.get_ethertype().to_primitive_values().0
                         );
@@ -67,7 +78,8 @@ where
             }
             _ => {
                 warn!(
-                    "Unimplemented Ethertype: {:?}/{:x}",
+                    "Unimplemented Ethertype at index {}: {:?}/{:x}",
+                    ctx.pcap_index,
                     ethernet_packet.get_ethertype(),
                     ethernet_packet.get_ethertype().to_primitive_values().0
                 );

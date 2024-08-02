@@ -74,6 +74,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         let is_first_fragment = match packet.data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
+                    warn!("L2 data too small for ethernet at index {}", ctx.pcap_index);
                     return Err(Error::DataParser("L2 data too small for ethernet"));
                 }
 
@@ -97,8 +98,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                     EtherTypes::Lldp => false,
                     _ => {
                         warn!(
-                            "Unimplemented Ethertype in L3: {:?}/{:x}",
-                            ether_type, ether_type.0
+                            "Unimplemented Ethertype in L3 at index {}: {:?}/{:x}",
+                            ctx.pcap_index, ether_type, ether_type.0
                         );
                         return Err(Error::Unimplemented("Unimplemented EtherType in L3"));
                     }
@@ -112,6 +113,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             let data_option: Option<TwoTupleProtoIpidFiveTuple> = match packet.data {
                 PacketData::L2(data) => {
                     if data.len() < 14 {
+                        warn!("L2 data too small for ethernet at index {}", ctx.pcap_index);
                         return Err(Error::DataParser("L2 data too small for ethernet"));
                     }
 
@@ -136,8 +138,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                         EtherTypes::Lldp => None,
                         _ => {
                             warn!(
-                                "Unimplemented Ethertype in L3: {:?}/{:x}",
-                                ether_type, ether_type.0
+                                "Unimplemented Ethertype in L3 at index {}: {:?}/{:x}",
+                                ctx.pcap_index, ether_type, ether_type.0
                             );
                             return Err(Error::Unimplemented("Unimplemented Ethertype in L3"));
                         }
@@ -148,7 +150,9 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
             };
 
             match data_option {
-                None => Err("Could find a first IP fragment but could not two tuple/proto/IP id")?,
+                None => Err(Error::DataParser(
+                    "Could find a first IP fragment but could not find two tuple/proto/IP id",
+                ))?,
                 Some(data) => self.data_hs.insert(data),
             };
         }
@@ -163,6 +167,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         let key_option = match packet_data {
             PacketData::L2(data) => {
                 if data.len() < 14 {
+                    warn!("L2 data too small for ethernet at index {}", ctx.pcap_index);
                     return Err(Error::DataParser("L2 data too small for ethernet"));
                 }
 
@@ -183,8 +188,8 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
                     EtherTypes::Lldp => None,
                     _ => {
                         warn!(
-                            "Unimplemented Ethertype in L3: {:?}/{:x}",
-                            ether_type, ether_type.0
+                            "Unimplemented Ethertype in L3 at index {}: {:?}/{:x}",
+                            ctx.pcap_index, ether_type, ether_type.0
                         );
                         return Err(Error::Unimplemented("Unimplemented Ethertype in L3"));
                     }
