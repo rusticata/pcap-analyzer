@@ -17,11 +17,11 @@ use crate::filters::filter::{FResult, Verdict};
 use crate::filters::filter_utils;
 use crate::filters::filtering_action::FilteringAction;
 use crate::filters::filtering_key::FilteringKey;
-use crate::filters::key_parser_ipv4;
-use crate::filters::key_parser_ipv6;
-
 use crate::filters::fragmentation::fragmentation_test;
 use crate::filters::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+use crate::filters::ipaddr_pair::IpAddrPair;
+use crate::filters::key_parser_ipv4;
+use crate::filters::key_parser_ipv6;
 
 use super::convert_fn;
 
@@ -297,12 +297,12 @@ impl FragmentationFilterBuilder {
             FilteringKey::SrcDstIpaddr => {
                 let ipaddr_container = IpAddrC::new(HashSet::new());
 
-                let keep: KeepFn<IpAddrC, (IpAddr, IpAddr)> = match filtering_action {
-                    FilteringAction::Keep => |c, ipaddr_tuple| {
-                        Ok(c.contains(&ipaddr_tuple.0) || c.contains(&ipaddr_tuple.1))
-                    },
-                    FilteringAction::Drop => |c, ipaddr_tuple| {
-                        Ok(!c.contains(&ipaddr_tuple.0) && !c.contains(&ipaddr_tuple.1))
+                let keep: KeepFn<IpAddrC, IpAddrPair> = match filtering_action {
+                    FilteringAction::Keep => {
+                        |c, ipaddr_pair| Ok(c.contains(&ipaddr_pair.0) || c.contains(&ipaddr_pair.1))
+                    }
+                    FilteringAction::Drop => |c, ipaddr_pair| {
+                        Ok(!c.contains(&ipaddr_pair.0) && !c.contains(&ipaddr_pair.1))
                     },
                 };
 

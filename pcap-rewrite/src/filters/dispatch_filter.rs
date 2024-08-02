@@ -15,6 +15,7 @@ use crate::filters::filter::{FResult, Filter, Verdict};
 use crate::filters::filter_utils;
 use crate::filters::filtering_action::FilteringAction;
 use crate::filters::filtering_key::FilteringKey;
+use crate::filters::ipaddr_pair::IpAddrPair;
 use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
 
@@ -158,12 +159,12 @@ impl DispatchFilterBuilder {
                 let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: KeepFn<IpAddrC, (IpAddr, IpAddr)> = match filtering_action {
-                    FilteringAction::Keep => Box::new(|c, ipaddr_tuple| {
-                        Ok(c.contains(&ipaddr_tuple.0) || c.contains(&ipaddr_tuple.1))
+                let keep: KeepFn<IpAddrC, IpAddrPair> = match filtering_action {
+                    FilteringAction::Keep => Box::new(|c, ipaddr_pair| {
+                        Ok(c.contains(&ipaddr_pair.0) || c.contains(&ipaddr_pair.1))
                     }),
-                    FilteringAction::Drop => Box::new(|c, ipaddr_tuple| {
-                        Ok(!c.contains(&ipaddr_tuple.0) && !c.contains(&ipaddr_tuple.1))
+                    FilteringAction::Drop => Box::new(|c, ipaddr_pair| {
+                        Ok(!c.contains(&ipaddr_pair.0) && !c.contains(&ipaddr_pair.1))
                     }),
                 };
 
