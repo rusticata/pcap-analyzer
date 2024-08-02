@@ -7,7 +7,7 @@ use libpcap_tools::FiveTuple;
 
 use crate::container::five_tuple_container::FiveTupleC;
 use crate::container::ipaddr_container::IpAddrC;
-use crate::container::ipaddr_proto_port_container::IpAddrProtoPortC;
+use crate::container::ipaddr_proto_port_container::{IpAddrProtoPort, IpAddrProtoPortC};
 use crate::container::two_tuple_proto_ipid_container::TwoTupleProtoIpidC;
 use crate::filters::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
 
@@ -51,7 +51,7 @@ pub fn convert_data_hs_to_src_ipaddr_proto_dst_port_container(
         .iter()
         .filter_map(|t| t.get_five_tuple_option())
         .map(|five_tuple| {
-            (
+            IpAddrProtoPort::new(
                 five_tuple.src,
                 IpNextHeaderProtocol::new(five_tuple.proto),
                 five_tuple.dst_port,
@@ -61,7 +61,7 @@ pub fn convert_data_hs_to_src_ipaddr_proto_dst_port_container(
         .iter()
         .filter_map(|t| t.get_five_tuple_option())
         .map(|five_tuple| {
-            (
+            IpAddrProtoPort::new(
                 five_tuple.dst,
                 IpNextHeaderProtocol::new(five_tuple.proto),
                 five_tuple.src_port,

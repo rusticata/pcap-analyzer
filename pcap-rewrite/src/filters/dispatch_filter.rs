@@ -6,16 +6,16 @@ use std::path::Path;
 use libpcap_tools::{Error, FiveTuple, ParseContext};
 use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
-use pnet_packet::ip::IpNextHeaderProtocol;
 use pnet_packet::PrimitiveValues;
 
 use crate::container::five_tuple_container::FiveTupleC;
 use crate::container::ipaddr_container::IpAddrC;
-use crate::container::ipaddr_proto_port_container::IpAddrProtoPortC;
+use crate::container::ipaddr_proto_port_container::{IpAddrProtoPort, IpAddrProtoPortC};
 use crate::filters::filter::{FResult, Filter, Verdict};
 use crate::filters::filter_utils;
 use crate::filters::filtering_action::FilteringAction;
 use crate::filters::filtering_key::FilteringKey;
+use crate::filters::ipaddr_pair::IpAddrPair;
 use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
 
@@ -157,12 +157,14 @@ impl DispatchFilterBuilder {
                 let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: KeepFn<IpAddrC, (IpAddr, IpAddr)> = match filtering_action {
-                    FilteringAction::Keep => Box::new(|c, ipaddr_tuple| {
-                        Ok(c.contains(&ipaddr_tuple.0) || c.contains(&ipaddr_tuple.1))
+                let keep: KeepFn<IpAddrC, IpAddrPair> = match filtering_action {
+                    FilteringAction::Keep => Box::new(|c, ipaddr_pair| {
+                        Ok(c.contains(ipaddr_pair.get_ipaddr_0())
+                            || c.contains(ipaddr_pair.get_ipaddr_1()))
                     }),
-                    FilteringAction::Drop => Box::new(|c, ipaddr_tuple| {
-                        Ok(!c.contains(&ipaddr_tuple.0) && !c.contains(&ipaddr_tuple.1))
+                    FilteringAction::Drop => Box::new(|c, ipaddr_pair| {
+                        Ok(!c.contains(ipaddr_pair.get_ipaddr_0())
+                            && !c.contains(ipaddr_pair.get_ipaddr_1()))
                     }),
                 };
 
@@ -178,15 +180,14 @@ impl DispatchFilterBuilder {
                     IpAddrProtoPortC::of_file_path(Path::new(key_file_path))
                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: KeepFn<IpAddrProtoPortC, (IpAddr, IpNextHeaderProtocol, u16)> =
-                    match filtering_action {
-                        FilteringAction::Keep => {
-                            Box::new(|c, tuple| Ok(c.contains(&tuple.0, &tuple.1, tuple.2)))
-                        }
-                        FilteringAction::Drop => {
-                            Box::new(|c, tuple| Ok(!c.contains(&tuple.0, &tuple.1, tuple.2)))
-                        }
-                    };
+                let keep: KeepFn<IpAddrProtoPortC, IpAddrProtoPort> = match filtering_action {
+                    FilteringAction::Keep => {
+                        Box::new(|c, ipaddr_proto_port| Ok(c.contains(ipaddr_proto_port)))
+                    }
+                    FilteringAction::Drop => {
+                        Box::new(|c, ipaddr_proto_port| Ok(!c.contains(ipaddr_proto_port)))
+                    }
+                };
 
                 Ok(Box::new(DispatchFilter::new(
                     ipaddr_proto_port_container,
