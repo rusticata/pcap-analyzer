@@ -11,6 +11,7 @@ use libpcap_tools::{Error, FiveTuple, ParseContext};
 
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+use crate::filters::ipaddr_pair::IpAddrPair;
 
 pub fn parse_src_ipaddr(_ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Error> {
     let ipv6 =
@@ -24,15 +25,12 @@ pub fn parse_dst_ipaddr(_ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, E
     Ok(IpAddr::V6(ipv6.get_destination()))
 }
 
-pub fn parse_src_dst_ipaddr(
-    _ctx: &ParseContext,
-    payload: &[u8],
-) -> Result<(IpAddr, IpAddr), Error> {
+pub fn parse_src_dst_ipaddr(_ctx: &ParseContext, payload: &[u8]) -> Result<IpAddrPair, Error> {
     let ipv6_packet =
         Ipv6Packet::new(payload).ok_or(Error::Pnet("Expected Ipv6 packet but could not parse"))?;
     let src_ipaddr = IpAddr::V6(ipv6_packet.get_source());
     let dst_ipaddr = IpAddr::V6(ipv6_packet.get_destination());
-    Result::Ok((src_ipaddr, dst_ipaddr))
+    Result::Ok(IpAddrPair::new(src_ipaddr, dst_ipaddr))
 }
 
 pub fn parse_src_ipaddr_proto_dst_port(
