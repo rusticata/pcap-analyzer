@@ -1,7 +1,6 @@
 use std::net::IpAddr;
 
 use log::warn;
-use pnet_packet::ip::IpNextHeaderProtocol;
 use pnet_packet::ip::IpNextHeaderProtocols;
 use pnet_packet::ipv4::Ipv4Packet;
 use pnet_packet::tcp::TcpPacket;
@@ -12,6 +11,7 @@ use libpcap_tools::{Error, FiveTuple, ParseContext};
 
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+use crate::container::ipaddr_proto_port_container::IpAddrProtoPort;
 
 pub fn parse_src_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Error> {
     let ipv4 = Ipv4Packet::new(payload).ok_or_else(|| {
@@ -35,10 +35,7 @@ pub fn parse_dst_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Er
     Result::Ok(IpAddr::V4(ipv4.get_destination()))
 }
 
-pub fn parse_src_dst_ipaddr(
-    ctx: &ParseContext,
-    payload: &[u8],
-) -> Result<(IpAddr, IpAddr), Error> {
+pub fn parse_src_dst_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<(IpAddr, IpAddr), Error> {
     let ipv4_packet = Ipv4Packet::new(payload).ok_or_else(|| {
         warn!(
             "Expected Ipv4 packet but could not parse at index {}",
@@ -54,7 +51,7 @@ pub fn parse_src_dst_ipaddr(
 pub fn parse_src_ipaddr_proto_dst_port(
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<(IpAddr, IpNextHeaderProtocol, u16), Error> {
+) -> Result<IpAddrProtoPort, Error> {
     let ipv4_packet = Ipv4Packet::new(payload).ok_or_else(|| {
         warn!(
             "Expected Ipv4 packet but could not parse at index {}",
@@ -71,7 +68,11 @@ pub fn parse_src_ipaddr_proto_dst_port(
             match TcpPacket::new(ipv4_payload) {
                 Some(ref tcp) => {
                     let dst_port = tcp.get_destination();
-                    Ok((src_ipaddr, IpNextHeaderProtocols::Tcp, dst_port))
+                    Ok(IpAddrProtoPort::new(
+                        src_ipaddr,
+                        IpNextHeaderProtocols::Tcp,
+                        dst_port,
+                    ))
                 }
                 None => {
                     warn!(
@@ -87,7 +88,11 @@ pub fn parse_src_ipaddr_proto_dst_port(
         IpNextHeaderProtocols::Udp => match UdpPacket::new(ipv4_packet.payload()) {
             Some(ref udp) => {
                 let dst_port = udp.get_destination();
-                Ok((src_ipaddr, IpNextHeaderProtocols::Udp, dst_port))
+                Ok(IpAddrProtoPort::new(
+                    src_ipaddr,
+                    IpNextHeaderProtocols::Udp,
+                    dst_port,
+                ))
             }
             None => {
                 warn!(
@@ -99,7 +104,11 @@ pub fn parse_src_ipaddr_proto_dst_port(
                 ))
             }
         },
-        _ => Ok((src_ipaddr, ipv4_packet.get_next_level_protocol(), 0)),
+        _ => Ok(IpAddrProtoPort::new(
+            src_ipaddr,
+            ipv4_packet.get_next_level_protocol(),
+            0,
+        )),
     }
 }
 

@@ -5,13 +5,12 @@ use std::net::IpAddr;
 use log::warn;
 use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
-use pnet_packet::ip::IpNextHeaderProtocol;
 
 use libpcap_tools::{Error, Packet, ParseContext};
 
 use crate::container::five_tuple_container::FiveTupleC;
 use crate::container::ipaddr_container::IpAddrC;
-use crate::container::ipaddr_proto_port_container::IpAddrProtoPortC;
+use crate::container::ipaddr_proto_port_container::{IpAddrProtoPort, IpAddrProtoPortC};
 use crate::container::two_tuple_proto_ipid_container::TwoTupleProtoIpidC;
 use crate::filters::filter::Filter;
 use crate::filters::filter::{FResult, Verdict};
@@ -319,15 +318,14 @@ impl FragmentationFilterBuilder {
             FilteringKey::SrcIpaddrProtoDstPort => {
                 let ipaddr_proto_port_container = IpAddrProtoPortC::new(HashSet::new());
 
-                let keep: KeepFn<IpAddrProtoPortC, (IpAddr, IpNextHeaderProtocol, u16)> =
-                    match filtering_action {
-                        FilteringAction::Keep => {
-                            |c, tuple| Ok(c.contains(&tuple.0, &tuple.1, tuple.2))
-                        }
-                        FilteringAction::Drop => {
-                            |c, tuple| Ok(!c.contains(&tuple.0, &tuple.1, tuple.2))
-                        }
-                    };
+                let keep: KeepFn<IpAddrProtoPortC, IpAddrProtoPort> = match filtering_action {
+                    FilteringAction::Keep => {
+                        |c: &IpAddrProtoPortC, ipaddr_proto_port| Ok(c.contains(ipaddr_proto_port))
+                    }
+                    FilteringAction::Drop => {
+                        |c, ipaddr_proto_port| Ok(!c.contains(ipaddr_proto_port))
+                    }
+                };
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
