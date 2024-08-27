@@ -38,7 +38,7 @@ libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
 log = { version = "0.4" }
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 lz4 = "1.23"
-pnet_packet = "0.34"
+pnet_packet = "0.35"
 simplelog = { version="0.12", default-features = false }
 xz2 = "0.1"
 
