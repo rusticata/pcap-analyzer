@@ -200,7 +200,7 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
         }
         IpNextHeaderProtocols::Udp => {
             let ipv4_payload = libpcap_analyzer::extract_payload_l3_ipv4(ctx, &ipv4_packet)?;
-            if ipv4_payload.len() >= 20 && ipv4_packet.get_fragment_offset() == 0 {
+            if ipv4_payload.len() >= 8 && ipv4_packet.get_fragment_offset() == 0 {
                 match UdpPacket::new(ipv4_payload) {
                     Some(ref udp) => {
                         let src_port = udp.get_source();
