@@ -56,12 +56,17 @@ impl<W: Write> Writer for PcapWriter<W> {
         }
     }
 
-    fn write_packet(&mut self, packet: &Packet, data: &[u8]) -> Result<usize, io::Error> {
+    fn write_packet(
+        &mut self,
+        packet: &Packet,
+        data: &[u8],
+        payload_length_offset: u32,
+    ) -> Result<usize, io::Error> {
         let record = LegacyPcapBlock {
             ts_sec: packet.ts.secs,
             ts_usec: packet.ts.micros,
-            caplen: data.len() as u32,  // packet.header.caplen,
-            origlen: data.len() as u32, // packet.header.len,
+            caplen: packet.caplen.saturating_sub(payload_length_offset), // packet.header.caplen,
+            origlen: packet.origlen.saturating_sub(payload_length_offset), // packet.header.len,
             data,
         };
         // debug!("rec_hdr: {:?}", rec_hdr);

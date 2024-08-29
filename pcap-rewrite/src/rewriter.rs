@@ -83,17 +83,20 @@ impl Rewriter {
     }
 }
 
-fn convert_layer<'p>(input: &'p PacketData, output_layer: usize) -> Result<&'p [u8], &'static str> {
+fn convert_layer<'p>(
+    input: &'p PacketData,
+    output_layer: usize,
+) -> Result<(&'p [u8], u32), &'static str> {
     match (input, output_layer) {
-        (PacketData::L2(data), 2) => Ok(data),
+        (PacketData::L2(data), 2) => Ok((data, 0)),
         (PacketData::L2(data), 3) => {
             if data.len() < 14 {
                 return Err("L2 data too small for ethernet");
             }
-            Ok(&data[14..])
+            Ok((&data[14..], 14))
         }
         (PacketData::L3(_, _), 2) => Err("Can't convert L3 data to L2"),
-        (PacketData::L3(_, data), 3) => Ok(data),
+        (PacketData::L3(_, data), 3) => Ok((data, 0)),
         (PacketData::L4(_, _), _) => Err("Input is L4 - don't know what to do"),
         (PacketData::Unsupported(_), _) => Err("Input link type not supported"),
         (_, _) => Err("Invalid layer conversion"),
@@ -161,7 +164,8 @@ impl PcapAnalyzer for Rewriter {
             Err(e) => panic!("Filter fatal error: {}", e),
         };
         // convert data
-        let data = convert_layer(&data, self.output_layer).map_err(Error::Generic)?;
+        let (data, payload_length_offset) =
+            convert_layer(&data, self.output_layer).map_err(Error::Generic)?;
         // truncate it to new snaplen
         let data = {
             if self.snaplen > 0 && data.len() > self.snaplen {
@@ -180,7 +184,9 @@ impl PcapAnalyzer for Rewriter {
             link_type,
             data.len()
         );
-        let written = self.writer.write_packet(packet, data)?;
+        let written = self
+            .writer
+            .write_packet(packet, data, payload_length_offset)?;
         self.stats.num_packets += 1;
         self.stats.num_bytes += written as u64;
 
