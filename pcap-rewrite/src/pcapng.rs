@@ -80,7 +80,12 @@ impl<W: Write> Writer for PcapNGWriter<W> {
         }
     }
 
-    fn write_packet(&mut self, packet: &Packet, data: &[u8]) -> Result<usize, io::Error> {
+    fn write_packet(
+        &mut self,
+        packet: &Packet,
+        data: &[u8],
+        payload_length_offset: u32,
+    ) -> Result<usize, io::Error> {
         let unit: u64 = 1_000_000;
         let ts = (u64::from(packet.ts.secs) * unit) + u64::from(packet.ts.micros);
         let mut epb = EnhancedPacketBlock {
@@ -89,8 +94,8 @@ impl<W: Write> Writer for PcapNGWriter<W> {
             if_id: 0,
             ts_high: (ts >> 32) as u32,
             ts_low: (ts & 0xffff_ffff) as u32,
-            caplen: data.len() as u32,
-            origlen: data.len() as u32,
+            caplen: packet.caplen.saturating_sub(payload_length_offset), // packet.header.caplen,
+            origlen: packet.origlen.saturating_sub(payload_length_offset), // packet.header.len,
             data,
             options: Vec::new(),
             block_len2: 32,
