@@ -1,11 +1,11 @@
 use std::net::IpAddr;
 
-use pnet_packet::ip::IpNextHeaderProtocol;
 use pnet_packet::ip::IpNextHeaderProtocols;
 use pnet_packet::ipv6::Ipv6Packet;
 use pnet_packet::tcp::TcpPacket;
 use pnet_packet::udp::UdpPacket;
 
+use crate::container::ipaddr_proto_port_container::IpAddrProtoPort;
 use crate::filters::ipv6_utils;
 use libpcap_tools::{Error, FiveTuple, ParseContext};
 
@@ -38,7 +38,7 @@ pub fn parse_src_dst_ipaddr(
 pub fn parse_src_ipaddr_proto_dst_port(
     _ctx: &ParseContext,
     payload: &[u8],
-) -> Result<(IpAddr, IpNextHeaderProtocol, u16), Error> {
+) -> Result<IpAddrProtoPort, Error> {
     let ipv6_packet =
         Ipv6Packet::new(payload).ok_or(Error::Pnet("Expected Ipv6 packet but could not parse"))?;
 
@@ -51,7 +51,7 @@ pub fn parse_src_ipaddr_proto_dst_port(
         IpNextHeaderProtocols::Tcp => match TcpPacket::new(payload) {
             Some(ref tcp) => {
                 let dst_port = tcp.get_destination();
-                Ok((src_ipaddr, IpNextHeaderProtocols::Tcp, dst_port))
+                Ok(IpAddrProtoPort::new(src_ipaddr, IpNextHeaderProtocols::Tcp, dst_port))
             }
             None => Err(Error::Pnet(
                 "Expected TCP packet in Ipv6 but could not parse",
@@ -60,13 +60,13 @@ pub fn parse_src_ipaddr_proto_dst_port(
         IpNextHeaderProtocols::Udp => match UdpPacket::new(payload) {
             Some(ref udp) => {
                 let dst_port = udp.get_destination();
-                Ok((src_ipaddr, IpNextHeaderProtocols::Udp, dst_port))
+                Ok(IpAddrProtoPort::new(src_ipaddr, IpNextHeaderProtocols::Udp, dst_port))
             }
             None => Err(Error::Pnet(
                 "Expected UDP packet in Ipv6 but could not parse",
             )),
         },
-        _ => Ok((src_ipaddr, l4_proto, 0)),
+        _ => Ok(IpAddrProtoPort::new(src_ipaddr, l4_proto, 0)),
     }
 }
 

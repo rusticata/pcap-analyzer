@@ -9,12 +9,29 @@ use std::str::FromStr;
 use csv::ReaderBuilder;
 use pnet_packet::ip::IpNextHeaderProtocol;
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct IpAddrProtoPort {
+    ipaddr: IpAddr,
+    proto: IpNextHeaderProtocol,
+    port: u16,
+}
+
+impl IpAddrProtoPort {
+    pub fn new(ipaddr: IpAddr, proto: IpNextHeaderProtocol, port: u16) -> IpAddrProtoPort {
+        IpAddrProtoPort {
+            ipaddr,
+            proto,
+            port,
+        }
+    }
+}
+
 pub struct IpAddrProtoPortC {
-    s: HashSet<(IpAddr, IpNextHeaderProtocol, u16)>,
+    s: HashSet<IpAddrProtoPort>,
 }
 
 impl IpAddrProtoPortC {
-    pub fn new(s: HashSet<(IpAddr, IpNextHeaderProtocol, u16)>) -> IpAddrProtoPortC {
+    pub fn new(s: HashSet<IpAddrProtoPort>) -> IpAddrProtoPortC {
         IpAddrProtoPortC { s }
     }
 
@@ -45,25 +62,16 @@ impl IpAddrProtoPortC {
                     .ok_or_else(|| "Missing port value in dispatch filter key file".to_string())?;
                 let port = port_s.parse()?;
 
-                Ok((ipaddr, protocol, port))
+                Ok(IpAddrProtoPort::new(ipaddr, protocol, port))
             })
-            .collect::<Result<Vec<(IpAddr, IpNextHeaderProtocol, u16)>, Box<dyn Error>>>()?;
+            .collect::<Result<Vec<IpAddrProtoPort>, Box<dyn Error>>>()?;
 
         let hs = HashSet::from_iter(ipaddr_proto_port_v.iter().cloned());
 
         Ok(IpAddrProtoPortC::new(hs))
     }
 
-    // pub fn is_empty(&self) -> bool {
-    //     self.s.is_empty()
-    // }
-
-    // pub fn len(&self) -> usize {
-    //     self.s.len()
-    // }
-
-    pub fn contains(&self, ipaddr: &IpAddr, proto: &IpNextHeaderProtocol, port: u16) -> bool {
-        let t = (*ipaddr, *proto, port);
-        self.s.contains(&t)
+    pub fn contains(&self, ipaddr_proto_port: &IpAddrProtoPort) -> bool {
+        self.s.contains(ipaddr_proto_port)
     }
 }
