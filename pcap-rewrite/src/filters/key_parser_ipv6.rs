@@ -203,7 +203,7 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
                     }
                     None => {
                         warn!(
-                            "Expected TCP packet in Ipv4 but could not parse at index {}",
+                            "Expected TCP packet in Ipv6 but could not parse at index {}",
                             ctx.pcap_index
                         );
                         Err(Error::Pnet(
@@ -226,7 +226,7 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
                 None => true,
                 Some(fragment_packet) => fragment_packet.get_fragment_offset() == 0,
             };
-            if payload.len() >= 20 && next_header_not_fragment_or_offset_is_zero {
+            if payload.len() >= 8 && next_header_not_fragment_or_offset_is_zero {
                 match UdpPacket::new(payload) {
                     Some(ref udp) => {
                         let src_port = udp.get_source();
@@ -241,7 +241,7 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
                     }
                     None => {
                         warn!(
-                            "Expected UDP packet in Ipv4 but could not parse at index {}",
+                            "Expected UDP packet in Ipv6 but could not parse at index {}",
                             ctx.pcap_index
                         );
                         Err(Error::Pnet(
