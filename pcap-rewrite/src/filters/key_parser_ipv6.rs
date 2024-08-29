@@ -63,48 +63,76 @@ pub fn parse_src_ipaddr_proto_dst_port(
 
     let src_ipaddr = IpAddr::V6(ipv6_packet.get_source());
 
-    let (_fragment_packet_option, l4_proto, payload) =
+    let (fragment_packet_option, l4_proto, payload) =
         ipv6_utils::get_fragment_packet_option_l4_protol4_payload(payload, &ipv6_packet)?;
 
     match l4_proto {
-        IpNextHeaderProtocols::Tcp => match TcpPacket::new(payload) {
-            Some(ref tcp) => {
-                let dst_port = tcp.get_destination();
+        IpNextHeaderProtocols::Tcp => {
+            let next_header_not_fragment_or_offset_is_zero = match fragment_packet_option {
+                None => true,
+                Some(fragment_packet) => fragment_packet.get_fragment_offset() == 0,
+            };
+            if payload.len() >= 20 && next_header_not_fragment_or_offset_is_zero {
+                match TcpPacket::new(payload) {
+                    Some(ref tcp) => {
+                        let dst_port = tcp.get_destination();
+                        Ok(IpAddrProtoPort::new(
+                            src_ipaddr,
+                            IpNextHeaderProtocols::Tcp,
+                            dst_port,
+                        ))
+                    }
+                    None => {
+                        warn!(
+                            "Expected TCP packet in Ipv4 but could not parse at index {}",
+                            ctx.pcap_index
+                        );
+                        Err(Error::Pnet(
+                            "Expected TCP packet in Ipv6 but could not parse",
+                        ))
+                    }
+                }
+            } else {
                 Ok(IpAddrProtoPort::new(
                     src_ipaddr,
-                    IpNextHeaderProtocols::Tcp,
-                    dst_port,
+                    IpNextHeaderProtocols::Ipv6Frag,
+                    0,
                 ))
             }
-            None => {
-                warn!(
-                    "Expected TCP packet in Ipv4 but could not parse at index {}",
-                    ctx.pcap_index
-                );
-                Err(Error::Pnet(
-                    "Expected TCP packet in Ipv6 but could not parse",
-                ))
-            }
-        },
-        IpNextHeaderProtocols::Udp => match UdpPacket::new(payload) {
-            Some(ref udp) => {
-                let dst_port = udp.get_destination();
+        }
+        IpNextHeaderProtocols::Udp => {
+            let next_header_not_fragment_or_offset_is_zero = match fragment_packet_option {
+                None => true,
+                Some(fragment_packet) => fragment_packet.get_fragment_offset() == 0,
+            };
+            if payload.len() >= 20 && next_header_not_fragment_or_offset_is_zero {
+                match UdpPacket::new(payload) {
+                    Some(ref udp) => {
+                        let dst_port = udp.get_destination();
+                        Ok(IpAddrProtoPort::new(
+                            src_ipaddr,
+                            IpNextHeaderProtocols::Udp,
+                            dst_port,
+                        ))
+                    }
+                    None => {
+                        warn!(
+                            "Expected UDP packet in Ipv4 but could not parse at index {}",
+                            ctx.pcap_index
+                        );
+                        Err(Error::Pnet(
+                            "Expected UDP packet in Ipv6 but could not parse",
+                        ))
+                    }
+                }
+            } else {
                 Ok(IpAddrProtoPort::new(
                     src_ipaddr,
-                    IpNextHeaderProtocols::Udp,
-                    dst_port,
+                    IpNextHeaderProtocols::Ipv6Frag,
+                    0,
                 ))
             }
-            None => {
-                warn!(
-                    "Expected UDP packet in Ipv4 but could not parse at index {}",
-                    ctx.pcap_index
-                );
-                Err(Error::Pnet(
-                    "Expected UDP packet in Ipv6 but could not parse",
-                ))
-            }
-        },
+        }
         _ => Ok(IpAddrProtoPort::new(src_ipaddr, l4_proto, 0)),
     }
 }
@@ -151,54 +179,86 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
     let src_ipaddr = IpAddr::V6(ipv6_packet.get_source());
     let dst_ipaddr = IpAddr::V6(ipv6_packet.get_destination());
 
-    let (_fragment_packet_option, l4_proto, payload) =
+    let (fragment_packet_option, l4_proto, payload) =
         ipv6_utils::get_fragment_packet_option_l4_protol4_payload(payload, &ipv6_packet)?;
 
     match l4_proto {
-        IpNextHeaderProtocols::Tcp => match TcpPacket::new(payload) {
-            Some(ref tcp) => {
-                let src_port = tcp.get_source();
-                let dst_port = tcp.get_destination();
+        IpNextHeaderProtocols::Tcp => {
+            let next_header_not_fragment_or_offset_is_zero = match fragment_packet_option {
+                None => true,
+                Some(fragment_packet) => fragment_packet.get_fragment_offset() == 0,
+            };
+            if payload.len() >= 20 && next_header_not_fragment_or_offset_is_zero {
+                match TcpPacket::new(payload) {
+                    Some(ref tcp) => {
+                        let src_port = tcp.get_source();
+                        let dst_port = tcp.get_destination();
+                        Ok(FiveTuple {
+                            src: src_ipaddr,
+                            dst: dst_ipaddr,
+                            proto: 6_u8,
+                            src_port,
+                            dst_port,
+                        })
+                    }
+                    None => {
+                        warn!(
+                            "Expected TCP packet in Ipv4 but could not parse at index {}",
+                            ctx.pcap_index
+                        );
+                        Err(Error::Pnet(
+                            "Expected TCP packet in Ipv6 but could not parse",
+                        ))
+                    }
+                }
+            } else {
                 Ok(FiveTuple {
                     src: src_ipaddr,
                     dst: dst_ipaddr,
-                    proto: 6_u8,
-                    src_port,
-                    dst_port,
+                    proto: 44_u8,
+                    src_port: 0,
+                    dst_port: 0,
                 })
             }
-            None => {
-                warn!(
-                    "Expected TCP packet in Ipv4 but could not parse at index {}",
-                    ctx.pcap_index
-                );
-                Err(Error::Pnet(
-                    "Expected TCP packet in Ipv6 but could not parse",
-                ))
-            }
-        },
-        IpNextHeaderProtocols::Udp => match UdpPacket::new(payload) {
-            Some(ref udp) => {
-                let src_port = udp.get_source();
-                let dst_port = udp.get_destination();
+        }
+        IpNextHeaderProtocols::Udp => {
+            let next_header_not_fragment_or_offset_is_zero = match fragment_packet_option {
+                None => true,
+                Some(fragment_packet) => fragment_packet.get_fragment_offset() == 0,
+            };
+            if payload.len() >= 20 && next_header_not_fragment_or_offset_is_zero {
+                match UdpPacket::new(payload) {
+                    Some(ref udp) => {
+                        let src_port = udp.get_source();
+                        let dst_port = udp.get_destination();
+                        Ok(FiveTuple {
+                            src: src_ipaddr,
+                            dst: dst_ipaddr,
+                            proto: 17_u8,
+                            src_port,
+                            dst_port,
+                        })
+                    }
+                    None => {
+                        warn!(
+                            "Expected UDP packet in Ipv4 but could not parse at index {}",
+                            ctx.pcap_index
+                        );
+                        Err(Error::Pnet(
+                            "Expected UDP packet in Ipv6 but could not parse",
+                        ))
+                    }
+                }
+            } else {
                 Ok(FiveTuple {
                     src: src_ipaddr,
                     dst: dst_ipaddr,
-                    proto: 17_u8,
-                    src_port,
-                    dst_port,
+                    proto: 44_u8,
+                    src_port: 0,
+                    dst_port: 0,
                 })
             }
-            None => {
-                warn!(
-                    "Expected UDP packet in Ipv4 but could not parse at index {}",
-                    ctx.pcap_index
-                );
-                Err(Error::Pnet(
-                    "Expected UDP packet in Ipv6 but could not parse",
-                ))
-            }
-        },
+        }
         _ => Ok(FiveTuple {
             src: src_ipaddr,
             dst: dst_ipaddr,
