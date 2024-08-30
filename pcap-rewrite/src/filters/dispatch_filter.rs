@@ -200,9 +200,13 @@ impl DispatchFilterBuilder {
                 let five_tuple_container = FiveTupleC::of_file_path(Path::new(key_file_path))
                     .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: KeepFn<FiveTupleC, FiveTuple> = match filtering_action {
-                    FilteringAction::Keep => Box::new(|c, five_tuple| Ok(c.contains(five_tuple))),
-                    FilteringAction::Drop => Box::new(|c, five_tuple| Ok(!c.contains(five_tuple))),
+                let keep: KeepFn<FiveTupleC, Option<FiveTuple>> = match filtering_action {
+                    FilteringAction::Keep => Box::new(|c, five_tuple_option| {
+                        Ok(five_tuple_option.as_ref().map_or(false, |five_tuple| c.contains(five_tuple)))
+                    }),
+                    FilteringAction::Drop => Box::new(|c, five_tuple_option| {
+                        Ok(five_tuple_option.as_ref().map_or(false, |five_tuple| !c.contains(five_tuple)))
+                    }),
                 };
 
                 Ok(Box::new(DispatchFilter::new(
