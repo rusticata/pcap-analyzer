@@ -51,7 +51,7 @@ fn generic_test(
         .arg(&trace_output_file_path);
 
     let _output = cmd.output().unwrap();
-    // println!("Output: {:?}", _output);
+    println!("Output: {}", std::str::from_utf8(&_output.stdout).unwrap());
 
     let output_nb_packet = count_packet_in_trace(&trace_output_file_path);
 
