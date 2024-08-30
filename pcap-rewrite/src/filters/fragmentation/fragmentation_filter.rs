@@ -6,6 +6,7 @@ use log::warn;
 use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
 
+use libpcap_tools::FiveTuple;
 use libpcap_tools::{Error, Packet, ParseContext};
 
 use crate::container::five_tuple_container::FiveTupleC;
@@ -18,7 +19,7 @@ use crate::filters::filter_utils;
 use crate::filters::filtering_action::FilteringAction;
 use crate::filters::filtering_key::FilteringKey;
 use crate::filters::fragmentation::fragmentation_test;
-use crate::filters::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+use crate::filters::fragmentation::two_tuple_proto_ipid_key::TwoTupleProtoIpidKey;
 use crate::filters::ipaddr_pair::IpAddrPair;
 use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
@@ -26,14 +27,14 @@ use crate::filters::key_parser_ipv6;
 use super::convert_fn;
 
 /// Function to convert TwoTupleProtoIpid/FiveTuple data to key container
-pub type ConvertFn<Container> = fn(&HashSet<TwoTupleProtoIpidFiveTuple>) -> Container;
+pub type ConvertFn<Container> = fn(&HashSet<TwoTupleProtoIpidKey<FiveTuple>>) -> Container;
 /// Function to extract key from data
 pub type GetKeyFn<Key> = fn(&ParseContext, &[u8]) -> Result<Key, Error>;
 /// Function to keep/drop extract key from container
 pub type KeepFn<Container, Key> = fn(&Container, &Key) -> Result<bool, Error>;
 
 pub struct FragmentationFilter<Container, Key> {
-    data_hs: HashSet<TwoTupleProtoIpidFiveTuple>,
+    data_hs: HashSet<TwoTupleProtoIpidKey<FiveTuple>>,
     convert_data_hs_c: ConvertFn<Container>,
     key_container: Container,
 
@@ -44,7 +45,7 @@ pub struct FragmentationFilter<Container, Key> {
 
 impl<Container, Key> FragmentationFilter<Container, Key> {
     pub fn new(
-        data_hs: HashSet<TwoTupleProtoIpidFiveTuple>,
+        data_hs: HashSet<TwoTupleProtoIpidKey<FiveTuple>>,
         convert_data_hs_c: ConvertFn<Container>,
         key_container: Container,
 
@@ -109,7 +110,7 @@ impl<Container, Key> FragmentationFilter<Container, Key> {
         };
 
         if is_first_fragment {
-            let data_option: Option<TwoTupleProtoIpidFiveTuple> = match packet.data {
+            let data_option: Option<TwoTupleProtoIpidKey<FiveTuple>> = match packet.data {
                 PacketData::L2(data) => {
                     if data.len() < 14 {
                         warn!("L2 data too small for ethernet at index {}", ctx.pcap_index);
@@ -235,7 +236,7 @@ impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
 
 pub fn test_two_tuple_proto_ipid_five_tuple_option_in_container(
     container_tuple: &(TwoTupleProtoIpidC, FiveTupleC),
-    two_tuple_proto_ipid_five_tuple: &TwoTupleProtoIpidFiveTuple,
+    two_tuple_proto_ipid_five_tuple: &TwoTupleProtoIpidKey<FiveTuple>,
 ) -> Result<bool, Error> {
     let (two_tuple_proto_ipid_c, five_tuple_c) = container_tuple;
 
@@ -244,7 +245,7 @@ pub fn test_two_tuple_proto_ipid_five_tuple_option_in_container(
         None => true,
     };
 
-    let in_1 = match two_tuple_proto_ipid_five_tuple.get_five_tuple_option() {
+    let in_1 = match two_tuple_proto_ipid_five_tuple.get_key_option() {
         Some(five_tuple) => five_tuple_c.contains(five_tuple),
         None => true,
     };
@@ -341,7 +342,7 @@ impl FragmentationFilterBuilder {
                     TwoTupleProtoIpidC::new(HashSet::new(), HashSet::new());
                 let five_tuple_container = FiveTupleC::new(HashSet::new(), HashSet::new());
 
-                let keep: KeepFn<(TwoTupleProtoIpidC, FiveTupleC), TwoTupleProtoIpidFiveTuple> =
+                let keep: KeepFn<(TwoTupleProtoIpidC, FiveTupleC), TwoTupleProtoIpidKey<FiveTuple>> =
                     match filtering_action {
                         FilteringAction::Keep => |c, two_tuple_proto_ipid_five_tuple| {
                             test_two_tuple_proto_ipid_five_tuple_option_in_container(

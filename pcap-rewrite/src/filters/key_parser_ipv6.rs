@@ -11,7 +11,7 @@ use crate::filters::ipv6_utils;
 use libpcap_tools::{Error, FiveTuple, ParseContext};
 
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
-use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+use super::fragmentation::two_tuple_proto_ipid_key::TwoTupleProtoIpidKey;
 use crate::filters::ipaddr_pair::IpAddrPair;
 
 pub fn parse_src_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Error> {
@@ -272,8 +272,8 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
 pub fn parse_two_tuple_proto_ipid_five_tuple(
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<TwoTupleProtoIpidFiveTuple, Error> {
-    Ok(TwoTupleProtoIpidFiveTuple::new(
+) -> Result<TwoTupleProtoIpidKey<FiveTuple>, Error> {
+    Ok(TwoTupleProtoIpidKey::new(
         parse_two_tuple_proto_ipid(ctx, payload)?,
         // TODO: replace by dedicated error type to distinguish between Ipv6Packet parsing error and TcpPacket/UdpPacket error related to fragmentation
         parse_five_tuple(ctx, payload).ok(),

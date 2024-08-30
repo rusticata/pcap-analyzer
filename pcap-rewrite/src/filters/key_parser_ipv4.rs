@@ -10,7 +10,7 @@ use pnet_packet::Packet;
 use libpcap_tools::{Error, FiveTuple, ParseContext};
 
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
-use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+use super::fragmentation::two_tuple_proto_ipid_key::TwoTupleProtoIpidKey;
 use crate::container::ipaddr_proto_port_container::IpAddrProtoPort;
 use crate::filters::ipaddr_pair::IpAddrPair;
 
@@ -246,10 +246,10 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
 pub fn parse_two_tuple_proto_ipid_five_tuple(
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<TwoTupleProtoIpidFiveTuple, Error> {
+) -> Result<TwoTupleProtoIpidKey<FiveTuple>, Error> {
     let two_tuple_proto_ipid = parse_two_tuple_proto_ipid(ctx, payload)?;
     let five_tuple = parse_five_tuple(ctx, payload)?;
     let two_tuple_proto_ipid_five_tuple =
-        TwoTupleProtoIpidFiveTuple::new(Some(two_tuple_proto_ipid), Some(five_tuple));
+    TwoTupleProtoIpidKey::new(Some(two_tuple_proto_ipid), Some(five_tuple));
     Ok(two_tuple_proto_ipid_five_tuple)
 }

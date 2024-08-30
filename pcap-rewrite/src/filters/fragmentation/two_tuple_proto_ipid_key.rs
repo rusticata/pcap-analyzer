@@ -1,21 +1,19 @@
-use libpcap_tools::FiveTuple;
-
 use crate::filters::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 
 #[derive(Debug, Default, PartialEq, Eq, Hash, Clone)]
-pub struct TwoTupleProtoIpidFiveTuple {
+pub struct TwoTupleProtoIpidKey<Key> {
     two_tuple_proto_ipid_option: Option<TwoTupleProtoIpid>,
-    five_tuple_option: Option<FiveTuple>,
+    key_option: Option<Key>,
 }
 
-impl TwoTupleProtoIpidFiveTuple {
+impl<Key> TwoTupleProtoIpidKey<Key> {
     pub fn new(
         two_tuple_proto_ipid_option: Option<TwoTupleProtoIpid>,
-        five_tuple_option: Option<FiveTuple>,
+        key_option: Option<Key>,
     ) -> Self {
-        TwoTupleProtoIpidFiveTuple {
+        TwoTupleProtoIpidKey {
             two_tuple_proto_ipid_option,
-            five_tuple_option,
+            key_option,
         }
     }
 
@@ -23,7 +21,7 @@ impl TwoTupleProtoIpidFiveTuple {
         self.two_tuple_proto_ipid_option.as_ref()
     }
 
-    pub fn get_five_tuple_option(&self) -> Option<&FiveTuple> {
-        self.five_tuple_option.as_ref()
+    pub fn get_key_option(&self) -> Option<&Key> {
+        self.key_option.as_ref()
     }
 }
