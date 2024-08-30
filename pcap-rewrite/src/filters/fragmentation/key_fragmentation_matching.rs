@@ -1,18 +1,16 @@
-use libpcap_tools::FiveTuple;
-
 use crate::filters::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 
 /// Contains either FiveTuple or TwoTupleProtoIpid.
 /// It is used to store data that will be matched against the data of the first fragment.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum KeyFragmentationMatching {
+pub enum KeyFragmentationMatching<Key> {
     /// Packet is either not a fragment, or the first one.
-    NotFragmentOrFirstFragment(FiveTuple),
+    NotFragmentOrFirstFragment(Key),
     /// Packet is a fragment, but not the first one.
     FragmentAfterFirst(TwoTupleProtoIpid),
 }
 
-impl KeyFragmentationMatching {
+impl<Key> KeyFragmentationMatching<Key> {
     pub fn get_two_tuple_proto_ipid_option(&self) -> Option<&TwoTupleProtoIpid> {
         match self {
             KeyFragmentationMatching::FragmentAfterFirst(two_tuple_proto_ipid) => {
@@ -22,10 +20,10 @@ impl KeyFragmentationMatching {
         }
     }
 
-    pub fn get_five_tuple_option(&self) -> Option<&FiveTuple> {
+    pub fn get_five_tuple_option(&self) -> Option<&Key> {
         match self {
             KeyFragmentationMatching::FragmentAfterFirst(_) => None,
-            KeyFragmentationMatching::NotFragmentOrFirstFragment(five_tuple) => Some(five_tuple),
+            KeyFragmentationMatching::NotFragmentOrFirstFragment(key) => Some(key),
         }
     }
 }

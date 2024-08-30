@@ -278,7 +278,7 @@ pub fn parse_two_tuple_proto_ipid_five_tuple(
 pub fn parse_key_fragmentation_transport(
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<KeyFragmentationMatching, Error> {
+) -> Result<KeyFragmentationMatching<FiveTuple>, Error> {
     match parse_five_tuple(ctx, payload)? {
         Some(five_tuple) => Ok(KeyFragmentationMatching::NotFragmentOrFirstFragment(
             five_tuple,

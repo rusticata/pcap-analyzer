@@ -24,6 +24,7 @@ use crate::filters::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProt
 use crate::filters::ipaddr_pair::IpAddrPair;
 use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
+use libpcap_tools::FiveTuple;
 
 /// Function to convert TwoTupleProtoIpid/FiveTuple data to key container
 pub type ConvertFn<Container> = fn(&HashSet<TwoTupleProtoIpidFiveTuple>) -> Container;
@@ -235,7 +236,7 @@ impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
 
 pub fn test_key_fragmentation_transport_in_container(
     container_tuple: &(TwoTupleProtoIpidC, FiveTupleC),
-    key_fragmentation_matching: &KeyFragmentationMatching,
+    key_fragmentation_matching: &KeyFragmentationMatching<FiveTuple>,
 ) -> Result<bool, Error> {
     let (two_tuple_proto_ipid_c, five_tuple_c) = container_tuple;
 
@@ -341,7 +342,7 @@ impl FragmentationFilterBuilder {
                     TwoTupleProtoIpidC::new(HashSet::new(), HashSet::new());
                 let five_tuple_container = FiveTupleC::new(HashSet::new(), HashSet::new());
 
-                let keep: KeepFn<(TwoTupleProtoIpidC, FiveTupleC), KeyFragmentationMatching> =
+                let keep: KeepFn<(TwoTupleProtoIpidC, FiveTupleC), KeyFragmentationMatching<_>> =
                     match filtering_action {
                         FilteringAction::Keep => |c, key_fragmentation_matching| {
                             test_key_fragmentation_transport_in_container(
