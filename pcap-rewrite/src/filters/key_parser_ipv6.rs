@@ -12,6 +12,7 @@ use libpcap_tools::{Error, FiveTuple, ParseContext};
 
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+use crate::filters::fragmentation::key_fragmentation_matching::KeyFragmentationMatching;
 use crate::filters::ipaddr_pair::IpAddrPair;
 
 pub fn parse_src_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Error> {
@@ -167,7 +168,9 @@ pub fn parse_two_tuple_proto_ipid(
     }
 }
 
-pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple, Error> {
+/// Extract a FiveTuple from a payload.
+/// The return type is an option to encode insufficent transport payload.
+pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<Option<FiveTuple>, Error> {
     let ipv6_packet = Ipv6Packet::new(payload).ok_or_else(|| {
         warn!(
             "Expected Ipv6 packet but could not parse at index {}",
@@ -193,13 +196,13 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
                     Some(ref tcp) => {
                         let src_port = tcp.get_source();
                         let dst_port = tcp.get_destination();
-                        Ok(FiveTuple {
+                        Ok(Some(FiveTuple {
                             src: src_ipaddr,
                             dst: dst_ipaddr,
                             proto: 6_u8,
                             src_port,
                             dst_port,
-                        })
+                        }))
                     }
                     None => {
                         warn!(
@@ -212,13 +215,7 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
                     }
                 }
             } else {
-                Ok(FiveTuple {
-                    src: src_ipaddr,
-                    dst: dst_ipaddr,
-                    proto: 44_u8,
-                    src_port: 0,
-                    dst_port: 0,
-                })
+                Ok(None)
             }
         }
         IpNextHeaderProtocols::Udp => {
@@ -231,13 +228,13 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
                     Some(ref udp) => {
                         let src_port = udp.get_source();
                         let dst_port = udp.get_destination();
-                        Ok(FiveTuple {
+                        Ok(Some(FiveTuple {
                             src: src_ipaddr,
                             dst: dst_ipaddr,
                             proto: 17_u8,
                             src_port,
                             dst_port,
-                        })
+                        }))
                     }
                     None => {
                         warn!(
@@ -250,25 +247,21 @@ pub fn parse_five_tuple(ctx: &ParseContext, payload: &[u8]) -> Result<FiveTuple,
                     }
                 }
             } else {
-                Ok(FiveTuple {
-                    src: src_ipaddr,
-                    dst: dst_ipaddr,
-                    proto: 44_u8,
-                    src_port: 0,
-                    dst_port: 0,
-                })
+                Ok(None)
             }
         }
-        _ => Ok(FiveTuple {
+        _ => Ok(Some(FiveTuple {
             src: src_ipaddr,
             dst: dst_ipaddr,
             proto: l4_proto.0,
             src_port: 0,
             dst_port: 0,
-        }),
+        })),
     }
 }
 
+/// Parse both TwoTupleProtoIpid and FiveTuple.
+/// This function is used when parsing the first fragment.
 pub fn parse_two_tuple_proto_ipid_five_tuple(
     ctx: &ParseContext,
     payload: &[u8],
@@ -276,6 +269,35 @@ pub fn parse_two_tuple_proto_ipid_five_tuple(
     Ok(TwoTupleProtoIpidFiveTuple::new(
         parse_two_tuple_proto_ipid(ctx, payload)?,
         // TODO: replace by dedicated error type to distinguish between Ipv6Packet parsing error and TcpPacket/UdpPacket error related to fragmentation
-        parse_five_tuple(ctx, payload).ok(),
+        parse_five_tuple(ctx, payload)?,
     ))
+}
+
+/// Parse FiveTuple and then, if FiveTuple parsing was not possible, parse TwoTupleProtoIpid.
+/// This functions is used when trying to find packet related to a first fragment.
+pub fn parse_key_fragmentation_transport(
+    ctx: &ParseContext,
+    payload: &[u8],
+) -> Result<KeyFragmentationMatching, Error> {
+    match parse_five_tuple(ctx, payload)? {
+        Some(five_tuple) => Ok(KeyFragmentationMatching::NotFragmentOrFirstFragment(
+            five_tuple,
+        )),
+        None => {
+            let two_tuple_proto_ipid = 
+                parse_two_tuple_proto_ipid(ctx, payload)?.ok_or_else(|| {
+                    warn!(
+                        "Could not parse FiveTuple, expected fragmented IPv6 packet but could not parse at index {}",
+                        ctx.pcap_index
+                    );
+                    Error::DataParser(
+                        "Could not parse FiveTuple, expected fragmented IPv6 packet but could not parse",
+                    )
+                }
+            )?;            
+            Ok(KeyFragmentationMatching::FragmentAfterFirst(
+                two_tuple_proto_ipid,
+            ))
+        }
+    }
 }
