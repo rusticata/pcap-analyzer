@@ -339,7 +339,7 @@ impl FragmentationFilterBuilder {
             }
             FilteringKey::SrcDstIpaddrProtoSrcDstPort => {
                 let two_tuple_proto_proto_ipid_c =
-                    TwoTupleProtoIpidC::new(HashSet::new(), HashSet::new());
+                    TwoTupleProtoIpidC::new(HashSet::new());
                 let five_tuple_container = FiveTupleC::new(HashSet::new(), HashSet::new());
 
                 let keep: KeepFn<(TwoTupleProtoIpidC, FiveTupleC), KeyFragmentationMatching<_>> =
