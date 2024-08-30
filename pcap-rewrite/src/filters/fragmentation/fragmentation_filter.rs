@@ -7,11 +7,13 @@ use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
 
 use libpcap_tools::{Error, Packet, ParseContext};
+use libpcap_tools::FiveTuple;
 
 use super::convert_fn;
 use crate::container::five_tuple_container::FiveTupleC;
 use crate::container::ipaddr_container::IpAddrC;
-use crate::container::ipaddr_proto_port_container::{IpAddrProtoPort, IpAddrProtoPortC};
+use crate::container::ipaddr_proto_port_container::IpAddrProtoPort;
+use crate::container::ipaddr_proto_port_container::IpAddrProtoPortC;
 use crate::container::two_tuple_proto_ipid_container::TwoTupleProtoIpidC;
 use crate::filters::filter::Filter;
 use crate::filters::filter::{FResult, Verdict};
@@ -24,7 +26,6 @@ use crate::filters::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProt
 use crate::filters::ipaddr_pair::IpAddrPair;
 use crate::filters::key_parser_ipv4;
 use crate::filters::key_parser_ipv6;
-use libpcap_tools::FiveTuple;
 
 /// Function to convert TwoTupleProtoIpid/FiveTuple data to key container
 pub type ConvertFn<Container> = fn(&HashSet<TwoTupleProtoIpidFiveTuple>) -> Container;
@@ -234,7 +235,27 @@ impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
     }
 }
 
-pub fn test_key_fragmentation_transport_in_container(
+pub fn test_key_fragmentation_transport_in_container<Container, Key>(
+    test_key_in_container: fn(&Container, &Key) -> bool,
+    container_tuple: &(TwoTupleProtoIpidC, Container),
+    key_fragmentation_matching: &KeyFragmentationMatching<Key>,
+) -> Result<bool, Error> {
+    let (two_tuple_proto_ipid_c, container) = container_tuple;
+
+    let in_0 = match key_fragmentation_matching.get_two_tuple_proto_ipid_option() {
+        Some(two_tuple_proto_ipid) => two_tuple_proto_ipid_c.contains(two_tuple_proto_ipid),
+        None => false,
+    };
+
+    let in_1 = match key_fragmentation_matching.get_five_tuple_option() {
+        Some(five_tuple) => test_key_in_container(container, five_tuple),
+        None => false,
+    };
+
+    Ok(in_0 || in_1)
+}
+
+pub fn test_key_fragmentation_transport_in_container_five_tuple(
     container_tuple: &(TwoTupleProtoIpidC, FiveTupleC),
     key_fragmentation_matching: &KeyFragmentationMatching<FiveTuple>,
 ) -> Result<bool, Error> {
@@ -338,20 +359,21 @@ impl FragmentationFilterBuilder {
                 )))
             }
             FilteringKey::SrcDstIpaddrProtoSrcDstPort => {
-                let two_tuple_proto_proto_ipid_c =
-                    TwoTupleProtoIpidC::new(HashSet::new());
+                let two_tuple_proto_proto_ipid_c = TwoTupleProtoIpidC::new(HashSet::new());
                 let five_tuple_container = FiveTupleC::new(HashSet::new(), HashSet::new());
 
                 let keep: KeepFn<(TwoTupleProtoIpidC, FiveTupleC), KeyFragmentationMatching<_>> =
                     match filtering_action {
                         FilteringAction::Keep => |c, key_fragmentation_matching| {
                             test_key_fragmentation_transport_in_container(
+                                |five_tuple_c, five_tuple| five_tuple_c.contains(five_tuple),
                                 c,
                                 key_fragmentation_matching,
                             )
                         },
                         FilteringAction::Drop => |c, key_fragmentation_matching| {
                             Ok(!(test_key_fragmentation_transport_in_container(
+                                |five_tuple_c, five_tuple| five_tuple_c.contains(five_tuple),
                                 c,
                                 key_fragmentation_matching,
                             )?))
@@ -360,10 +382,10 @@ impl FragmentationFilterBuilder {
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
-                    convert_fn::convert_data_hs_to_ctuple,
+                    convert_fn::convert_data_hs_to_two_tuple_proto_ipid_c_five_tuple_c,
                     (two_tuple_proto_proto_ipid_c, five_tuple_container),
-                    key_parser_ipv4::parse_key_fragmentation_transport,
-                    key_parser_ipv6::parse_key_fragmentation_transport,
+                    key_parser_ipv4::parse_key_fragmentation_transport_five_tuple,
+                    key_parser_ipv6::parse_key_fragmentation_transport_five_tuple,
                     keep,
                 )))
             }
