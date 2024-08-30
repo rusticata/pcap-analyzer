@@ -72,7 +72,7 @@ pub fn convert_data_hs_to_src_ipaddr_proto_dst_port_container(
     IpAddrProtoPortC::new(ipaddr_proto_port_hs)
 }
 
-pub fn convert_data_hs_to_ctuple(
+pub fn convert_data_hs_to_two_tuple_proto_ipid_c_five_tuple_c(
     data_hs: &HashSet<TwoTupleProtoIpidFiveTuple>,
 ) -> (TwoTupleProtoIpidC, FiveTupleC) {
     let two_tuple_proto_ipid_hs: HashSet<_> = data_hs

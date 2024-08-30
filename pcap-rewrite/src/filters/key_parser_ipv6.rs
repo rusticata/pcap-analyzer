@@ -96,7 +96,7 @@ pub fn parse_src_ipaddr_proto_dst_port(
             } else {
                 Ok(IpAddrProtoPort::new(
                     src_ipaddr,
-                    IpNextHeaderProtocols::Ipv6Frag,
+                    IpNextHeaderProtocols::Tcp,
                     0,
                 ))
             }
@@ -129,7 +129,7 @@ pub fn parse_src_ipaddr_proto_dst_port(
             } else {
                 Ok(IpAddrProtoPort::new(
                     src_ipaddr,
-                    IpNextHeaderProtocols::Ipv6Frag,
+                    IpNextHeaderProtocols::Udp,
                     0,
                 ))
             }
@@ -275,13 +275,14 @@ pub fn parse_two_tuple_proto_ipid_five_tuple(
 
 /// Parse FiveTuple and then, if FiveTuple parsing was not possible, parse TwoTupleProtoIpid.
 /// This functions is used when trying to find packet related to a first fragment.
-pub fn parse_key_fragmentation_transport(
+pub fn parse_key_fragmentation_transport<Key>(
+    key_parse: fn(&ParseContext, &[u8]) -> Result<Option<Key>, Error>,
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<KeyFragmentationMatching<FiveTuple>, Error> {
-    match parse_five_tuple(ctx, payload)? {
-        Some(five_tuple) => Ok(KeyFragmentationMatching::NotFragmentOrFirstFragment(
-            five_tuple,
+) -> Result<KeyFragmentationMatching<Key>, Error> {
+    match key_parse(ctx, payload)? {
+        Some(key) => Ok(KeyFragmentationMatching::NotFragmentOrFirstFragment(
+            key,
         )),
         None => {
             let two_tuple_proto_ipid = 
@@ -300,4 +301,11 @@ pub fn parse_key_fragmentation_transport(
             ))
         }
     }
+}
+
+pub fn parse_key_fragmentation_transport_five_tuple(
+    ctx: &ParseContext,
+    payload: &[u8],
+) -> Result<KeyFragmentationMatching<FiveTuple>, Error> {
+    parse_key_fragmentation_transport(parse_five_tuple, ctx, payload)
 }

@@ -202,10 +202,14 @@ impl DispatchFilterBuilder {
 
                 let keep: KeepFn<FiveTupleC, Option<FiveTuple>> = match filtering_action {
                     FilteringAction::Keep => Box::new(|c, five_tuple_option| {
-                        Ok(five_tuple_option.as_ref().map_or(false, |five_tuple| c.contains(five_tuple)))
+                        Ok(five_tuple_option
+                            .as_ref()
+                            .map_or(false, |five_tuple| c.contains(five_tuple)))
                     }),
                     FilteringAction::Drop => Box::new(|c, five_tuple_option| {
-                        Ok(five_tuple_option.as_ref().map_or(false, |five_tuple| !c.contains(five_tuple)))
+                        Ok(five_tuple_option
+                            .as_ref()
+                            .map_or(false, |five_tuple| !c.contains(five_tuple)))
                     }),
                 };
 
