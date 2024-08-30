@@ -3,19 +3,15 @@ use std::collections::HashSet;
 use crate::filters::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 
 pub struct TwoTupleProtoIpidC {
-    s0: HashSet<TwoTupleProtoIpid>,
-    s1: HashSet<TwoTupleProtoIpid>,
+    s: HashSet<TwoTupleProtoIpid>,
 }
 
 impl TwoTupleProtoIpidC {
-    pub fn new(
-        s0: HashSet<TwoTupleProtoIpid>,
-        s1: HashSet<TwoTupleProtoIpid>,
-    ) -> TwoTupleProtoIpidC {
-        TwoTupleProtoIpidC { s0, s1 }
+    pub fn new(s: HashSet<TwoTupleProtoIpid>) -> TwoTupleProtoIpidC {
+        TwoTupleProtoIpidC { s }
     }
 
     pub fn contains(&self, five_tuple: &TwoTupleProtoIpid) -> bool {
-        self.s0.contains(five_tuple) || self.s1.contains(five_tuple)
+        self.s.contains(five_tuple)
     }
 }

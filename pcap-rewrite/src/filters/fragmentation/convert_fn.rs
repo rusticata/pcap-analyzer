@@ -82,12 +82,8 @@ pub fn convert_data_hs_to_ctuple(
         })
         .cloned()
         .collect();
-    let two_tuple_proto_ipid_hs_reversed = two_tuple_proto_ipid_hs
-        .iter()
-        .map(|two_tuple_proto_ipid| two_tuple_proto_ipid.get_reverse())
-        .collect();
     let two_tuple_proto_ipid_container =
-        TwoTupleProtoIpidC::new(two_tuple_proto_ipid_hs, two_tuple_proto_ipid_hs_reversed);
+        TwoTupleProtoIpidC::new(two_tuple_proto_ipid_hs);
 
     let five_tuple_hs: HashSet<FiveTuple> = data_hs
         .iter()
