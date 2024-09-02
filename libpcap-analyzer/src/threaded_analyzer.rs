@@ -9,6 +9,7 @@ use std::cmp::min;
 use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Barrier};
 use std::thread;
+use tracing::{span, Level};
 
 pub enum Job<'a> {
     Exit,
@@ -88,6 +89,8 @@ impl<'a> ThreadedAnalyzer<'a> {
     }
 
     fn dispatch(&mut self, packet: Packet<'static>, ctx: &ParseContext) -> Result<(), Error> {
+        let span = span!(Level::DEBUG, "dispatch_packet", pcap_index = ctx.pcap_index);
+        let _enter = span.enter();
         match packet.data {
             PacketData::L2(data) => self.handle_l2(packet, ctx, data),
             PacketData::L3(ethertype, data) => {
@@ -298,6 +301,8 @@ fn worker(mut a: Analyzer, idx: usize, r: Receiver<Job>, barrier: Arc<Barrier>) 
                 }
                 Job::New(packet, ctx, data, ethertype) => {
                     pcap_index = ctx.pcap_index;
+                    let span = span!(Level::DEBUG, "worker", pcap_index);
+                    let _enter = span.enter();
                     trace!("thread {}: got a job", idx);
                     let h3_res = handle_l3(&packet, &ctx, data, ethertype, &mut a);
                     if h3_res.is_err() {
