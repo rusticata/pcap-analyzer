@@ -5,14 +5,17 @@ extern crate log;
 
 extern crate clap;
 use clap::{crate_version, Parser};
+use tracing::Level;
+use tracing_appender::rolling::{RollingFileAppender, Rotation};
+use tracing_subscriber::EnvFilter;
 
 extern crate flate2;
 extern crate lz4;
 extern crate xz2;
 
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
 use flate2::read::GzDecoder;
@@ -93,19 +96,20 @@ fn main() -> io::Result<()> {
 
     // Open log file
     let log_file = config.get("log_file").unwrap_or("pcap-analyzer.log");
-    let mut path_log = PathBuf::new();
-    if let Some(dir) = config.get("output_dir") {
-        path_log.push(dir);
-    }
-    path_log.push(log_file);
-    let f = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(&path_log)
-        .unwrap();
-
-    // let _ = simplelog::SimpleLogger::init(simplelog::LevelFilter::Info, simplelog::Config::default());
-    let _ = simplelog::WriteLogger::init(simplelog::LevelFilter::Info, simplelog::Config::default(), f);
+    let output_dir = config.get("output_dir").unwrap_or(".");
+    let file_appender = RollingFileAppender::new(Rotation::NEVER, output_dir, log_file);
+    let env_filter = EnvFilter::try_from_env("PCAP_ANALYZER_LOG")
+        .unwrap_or_else(|_| EnvFilter::from_default_env().add_directive(Level::INFO.into()));
+    tracing_subscriber::fmt()
+        .with_writer(file_appender)
+        .with_env_filter(env_filter)
+        //.json()
+        //.with_span_events(FmtSpan::ENTER)
+        //.with_thread_ids(true)
+        //.with_max_level(tracing::Level::TRACE)
+        .with_ansi(false)
+        .compact()
+        .init();
 
     // Now, really start
     info!("Pcap analyser {}", crate_version!());
@@ -114,15 +118,19 @@ fn main() -> io::Result<()> {
     let registry = if let Some(plugin_names) = args.plugins.as_ref() {
         debug!("Restricting plugins to: {}", plugin_names);
         let names: Vec<_> = plugin_names.split(',').collect();
-        factory.build_filter_plugins(
-            |n| {
-                debug!("n: {}", n);
-                names.iter().any(|&x| n.contains(x))
-            },
-            &config,
-        ).expect("Could not build factory")
+        factory
+            .build_filter_plugins(
+                |n| {
+                    debug!("n: {}", n);
+                    names.iter().any(|&x| n.contains(x))
+                },
+                &config,
+            )
+            .expect("Could not build factory")
     } else {
-        factory.build_plugins(&config).expect("Could not build factory")
+        factory
+            .build_plugins(&config)
+            .expect("Could not build factory")
     };
     // check if asked to list plugins
     if args.list_plugins {
@@ -133,13 +141,23 @@ fn main() -> io::Result<()> {
                 println!("  {}", p.name());
                 let t = p.plugin_type();
                 print!("    layers: ");
-                if t & PLUGIN_L2 != 0 { print!("  L2"); }
-                if t & PLUGIN_L3 != 0 { print!("  L3"); }
-                if t & PLUGIN_L4 != 0 { print!("  L4"); }
+                if t & PLUGIN_L2 != 0 {
+                    print!("  L2");
+                }
+                if t & PLUGIN_L3 != 0 {
+                    print!("  L3");
+                }
+                if t & PLUGIN_L4 != 0 {
+                    print!("  L4");
+                }
                 println!();
                 print!("    events: ");
-                if t & PLUGIN_FLOW_NEW != 0 { print!("  FLOW_NEW"); }
-                if t & PLUGIN_FLOW_DEL != 0 { print!("  FLOW_DEL"); }
+                if t & PLUGIN_FLOW_NEW != 0 {
+                    print!("  FLOW_NEW");
+                }
+                if t & PLUGIN_FLOW_DEL != 0 {
+                    print!("  FLOW_DEL");
+                }
                 println!();
             },
         );
@@ -159,7 +177,10 @@ fn main() -> io::Result<()> {
     let input_filename = match args.input.as_ref() {
         Some(s) => s.as_str(),
         None => {
-            return Err(io::Error::new(io::ErrorKind::NotFound, "Input file name cannot be empty"));
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Input file name cannot be empty",
+            ));
         }
     };
 
