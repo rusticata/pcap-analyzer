@@ -4,7 +4,6 @@ members = [
   "libpcap-analyzer",
   "explugin-example",
   "pcap-analyzer",
-  "pcap-cli",
   "pcap-info",
   "pcap-rewrite",
   "test-analyzer",
