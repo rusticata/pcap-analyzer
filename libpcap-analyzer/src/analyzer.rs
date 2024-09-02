@@ -15,6 +15,7 @@ use libpcap_tools::*;
 
 use pcap_parser::data::{get_packetdata_raw, PacketData};
 use pcap_parser::Linktype;
+use tracing::{span, Level};
 use std::cmp::min;
 use std::net::IpAddr;
 use std::ops::DerefMut;
@@ -1183,6 +1184,8 @@ impl PcapAnalyzer for Analyzer {
         if ctx.pcap_index < self.skip_index {
             return Ok(());
         }
+        let span = span!(Level::DEBUG, "handle_packet", pcap_index = ctx.pcap_index);
+        let _enter = span.enter();
         match packet.data {
             PacketData::L2(data) => self.handle_l2(packet, ctx, data),
             PacketData::L3(ethertype, data) => {
