@@ -4,6 +4,8 @@
 use clap::{crate_version, Parser};
 use libpcap_tools::Config;
 use log::{debug, error};
+use tracing::Level;
+use tracing_subscriber::EnvFilter;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -71,14 +73,23 @@ fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
-    let _ =
-        simplelog::SimpleLogger::init(simplelog::LevelFilter::Debug, simplelog::Config::default());
-    debug!("Pcap rewrite tool {}", crate_version!());
-
     let mut config = Config::default();
     if let Some(filename) = args.config.as_ref() {
         load_config(&mut config, filename)?;
     }
+
+    let env_filter = EnvFilter::try_from_env("PCAP_REWRITE_LOG")
+        .unwrap_or_else(|_| EnvFilter::from_default_env().add_directive(Level::INFO.into()));
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        //.json()
+        //.with_span_events(FmtSpan::ENTER)
+        //.with_thread_ids(true)
+        //.with_max_level(tracing::Level::TRACE)
+        .compact()
+        .init();
+
+    debug!("Pcap rewrite tool {}", crate_version!());
 
     let input_filename = args.input.as_str();
     let output_filename = args.output.as_str();

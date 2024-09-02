@@ -7,6 +7,8 @@ use log::{debug, error, info};
 use pcap_parser::data::*;
 use pcap_parser::Linktype;
 use pcap_parser::{Block, PcapBlockOwned};
+use tracing::span;
+use tracing::Level;
 use std::io::Write;
 
 #[derive(Copy, Clone, Debug)]
@@ -121,10 +123,13 @@ impl PcapAnalyzer for Rewriter {
     fn handle_block(
         &mut self,
         block: &PcapBlockOwned,
-        _block_ctx: &ParseBlockContext,
+        block_ctx: &ParseBlockContext,
     ) -> Result<(), Error> {
         // handle specific pcapng blocks
         if let PcapBlockOwned::NG(b) = block {
+            let span = span!(Level::DEBUG, "handle_block", block_index = block_ctx.block_index);
+            let _enter = span.enter();
+
             match b {
                 // skip data blocks, processed in `handle_packet`
                 Block::SimplePacket(_) | Block::EnhancedPacket(_) => (),
@@ -144,7 +149,11 @@ impl PcapAnalyzer for Rewriter {
         // let snaplen = if_info.snaplen;
         // debug!("snaplen: {}", snaplen);
 
+        let span = span!(Level::DEBUG, "handle_packet", pcap_index = ctx.pcap_index);
+        let _enter = span.enter();
+
         if self.run_pre_analysis {
+            span.record("pre-analysis", true);
             // run pre-analysis plugins
             for p in self.filters.iter_mut() {
                 if let Err(e) = p.pre_analyze(ctx, packet) {
