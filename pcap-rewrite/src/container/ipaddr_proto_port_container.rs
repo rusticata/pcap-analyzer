@@ -25,6 +25,7 @@ impl IpAddrProtoPort {
     }
 }
 
+#[derive(Debug)]
 pub struct IpAddrProtoPortC {
     s: HashSet<IpAddrProtoPort>,
 }
