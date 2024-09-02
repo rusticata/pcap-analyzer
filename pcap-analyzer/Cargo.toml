@@ -26,5 +26,7 @@ libpcap-analyzer = { version="0.1.0", path="../libpcap-analyzer" }
 libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
 log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
 lz4 = "1.23"
-simplelog = { version="0.12", default-features = false }
+tracing = { version="0.1", features=["log"] }
+tracing-appender = "0.2"
+tracing-subscriber = { version="0.3", features=["env-filter","fmt","json"] }
 xz2 = "0.1"
