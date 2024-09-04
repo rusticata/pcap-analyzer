@@ -7,7 +7,6 @@ use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes};
 
 use libpcap_tools::{Error, Packet, ParseContext};
-use libpcap_tools::FiveTuple;
 
 use super::convert_fn;
 use crate::container::five_tuple_container::FiveTupleC;
@@ -238,40 +237,26 @@ impl<Container, Key> Filter for FragmentationFilter<Container, Key> {
 pub fn test_key_fragmentation_transport_in_container<Container, Key>(
     test_key_in_container: fn(&Container, &Key) -> bool,
     container_tuple: &(TwoTupleProtoIpidC, Container),
-    key_fragmentation_matching: &KeyFragmentationMatching<Key>,
-) -> Result<bool, Error> {
+    key_fragmentation_matching: &KeyFragmentationMatching<Option<Key>>,
+) -> bool {
     let (two_tuple_proto_ipid_c, container) = container_tuple;
 
-    let in_0 = match key_fragmentation_matching.get_two_tuple_proto_ipid_option() {
-        Some(two_tuple_proto_ipid) => two_tuple_proto_ipid_c.contains(two_tuple_proto_ipid),
-        None => false,
-    };
-
-    let in_1 = match key_fragmentation_matching.get_five_tuple_option() {
-        Some(five_tuple) => test_key_in_container(container, five_tuple),
-        None => false,
-    };
-
-    Ok(in_0 || in_1)
-}
-
-pub fn test_key_fragmentation_transport_in_container_five_tuple(
-    container_tuple: &(TwoTupleProtoIpidC, FiveTupleC),
-    key_fragmentation_matching: &KeyFragmentationMatching<FiveTuple>,
-) -> Result<bool, Error> {
-    let (two_tuple_proto_ipid_c, five_tuple_c) = container_tuple;
-
-    let in_0 = match key_fragmentation_matching.get_two_tuple_proto_ipid_option() {
-        Some(two_tuple_proto_ipid) => two_tuple_proto_ipid_c.contains(two_tuple_proto_ipid),
-        None => false,
-    };
-
-    let in_1 = match key_fragmentation_matching.get_five_tuple_option() {
-        Some(five_tuple) => five_tuple_c.contains(five_tuple),
-        None => false,
-    };
-
-    Ok(in_0 || in_1)
+    match key_fragmentation_matching {
+        KeyFragmentationMatching::NotFragment(key_option) => match key_option {
+            Some(key) => test_key_in_container(container, key),
+            None => false,
+        },
+        KeyFragmentationMatching::FirstFragment(two_tuple_proto_ipid, key_option) => {
+            two_tuple_proto_ipid_c.contains(two_tuple_proto_ipid)
+                && match key_option {
+                    Some(key) => test_key_in_container(container, key),
+                    None => false,
+                }
+        }
+        KeyFragmentationMatching::FragmentAfterFirst(two_tuple_proto_ipid) => {
+            two_tuple_proto_ipid_c.contains(two_tuple_proto_ipid)
+        }
+    }
 }
 
 pub struct FragmentationFilterBuilder;
@@ -365,18 +350,18 @@ impl FragmentationFilterBuilder {
                 let keep: KeepFn<(TwoTupleProtoIpidC, FiveTupleC), KeyFragmentationMatching<_>> =
                     match filtering_action {
                         FilteringAction::Keep => |c, key_fragmentation_matching| {
-                            test_key_fragmentation_transport_in_container(
+                            Ok(test_key_fragmentation_transport_in_container(
                                 |five_tuple_c, five_tuple| five_tuple_c.contains(five_tuple),
                                 c,
                                 key_fragmentation_matching,
-                            )
+                            ))
                         },
                         FilteringAction::Drop => |c, key_fragmentation_matching| {
                             Ok(!(test_key_fragmentation_transport_in_container(
                                 |five_tuple_c, five_tuple| five_tuple_c.contains(five_tuple),
                                 c,
                                 key_fragmentation_matching,
-                            )?))
+                            )))
                         },
                     };
 

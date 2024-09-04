@@ -9,6 +9,7 @@ use pnet_packet::Packet;
 
 use libpcap_tools::{Error, FiveTuple, ParseContext};
 
+use super::fragmentation::fragmentation_test;
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
 use crate::container::ipaddr_proto_port_container::IpAddrProtoPort;
@@ -253,21 +254,39 @@ pub fn parse_key_fragmentation_transport<Key>(
     key_parse: fn(&ParseContext, &[u8]) -> Result<Option<Key>, Error>,
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<KeyFragmentationMatching<Key>, Error> {
-    match key_parse(ctx, payload)? {
-        Some(key) => Ok(KeyFragmentationMatching::NotFragmentOrFirstFragment(key)),
-        None => {
-            let two_tuple_proto_ipid = parse_two_tuple_proto_ipid(ctx, payload)?;
+) -> Result<KeyFragmentationMatching<Option<Key>>, Error> {
+    if fragmentation_test::is_ipv4_fragment(ctx, payload)? {
+        let two_tuple_proto_ipid = parse_two_tuple_proto_ipid(ctx, payload)?;
+        if fragmentation_test::is_ipv4_first_fragment(ctx, payload)? {
+            match key_parse(ctx, payload)? {
+                Some(key) => Ok(KeyFragmentationMatching::FirstFragment(
+                    two_tuple_proto_ipid,
+                    Some(key),
+                )),
+                // NB
+                // This case happens when the first fragment does have enough data to parse transport header.
+                // The clean approach would be to a full IP fragmentation reassembly.
+                // We hope this case is rare. :)
+                None => Ok(KeyFragmentationMatching::FirstFragment(
+                    two_tuple_proto_ipid,
+                    None,
+                )),
+            }
+        } else {
             Ok(KeyFragmentationMatching::FragmentAfterFirst(
                 two_tuple_proto_ipid,
             ))
         }
+    } else {
+        Ok(KeyFragmentationMatching::NotFragment(key_parse(
+            ctx, payload,
+        )?))
     }
 }
 
 pub fn parse_key_fragmentation_transport_five_tuple(
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<KeyFragmentationMatching<FiveTuple>, Error> {
+) -> Result<KeyFragmentationMatching<Option<FiveTuple>>, Error> {
     parse_key_fragmentation_transport(parse_five_tuple, ctx, payload)
 }
