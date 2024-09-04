@@ -14,6 +14,7 @@ use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
 use crate::filters::fragmentation::key_fragmentation_matching::KeyFragmentationMatching;
 use crate::filters::ipaddr_pair::IpAddrPair;
+use crate::filters::fragmentation::fragmentation_test;
 
 pub fn parse_src_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Error> {
     let ipv6 = Ipv6Packet::new(payload).ok_or_else(|| {
@@ -279,33 +280,52 @@ pub fn parse_key_fragmentation_transport<Key>(
     key_parse: fn(&ParseContext, &[u8]) -> Result<Option<Key>, Error>,
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<KeyFragmentationMatching<Key>, Error> {
-    match key_parse(ctx, payload)? {
-        Some(key) => Ok(KeyFragmentationMatching::NotFragmentOrFirstFragment(
-            key,
-        )),
-        None => {
-            let two_tuple_proto_ipid = 
-                parse_two_tuple_proto_ipid(ctx, payload)?.ok_or_else(|| {
-                    warn!(
-                        "Could not parse FiveTuple, expected fragmented IPv6 packet but could not parse at index {}",
-                        ctx.pcap_index
-                    );
-                    Error::DataParser(
-                        "Could not parse FiveTuple, expected fragmented IPv6 packet but could not parse",
-                    )
+) -> Result<KeyFragmentationMatching<Option<Key>>, Error> {
+    if fragmentation_test::is_ipv6_fragment(ctx, payload)? {
+        let two_tuple_proto_ipid = 
+            parse_two_tuple_proto_ipid(ctx, payload)?.ok_or_else(|| {
+                warn!(
+                    "Could not parse TwoTupleProtoId, expected fragmented IPv6 packet but could not parse at index {}",
+                    ctx.pcap_index
+                );
+                Error::DataParser(
+                    "Could not parse TwoTupleProtoId, expected fragmented IPv6 packet but could not parse",
+                )
+            }
+        )?;
+        if fragmentation_test::is_ipv6_first_fragment(ctx, payload)? {
+            match key_parse(ctx, payload)? {
+                Some(key) => {
+                    Ok(KeyFragmentationMatching::FirstFragment(
+                        two_tuple_proto_ipid,
+                        Some(key)
+                    ))
+                },
+                // NB
+                // This case happens when the first fragment does have enough data to parse transport header.
+                // The clean approach would be to a full IP fragmentation reassembly.
+                // We hope this case is rare. :)
+                None => {
+                    Ok(KeyFragmentationMatching::FragmentAfterFirst(
+                        two_tuple_proto_ipid,
+                    ))
                 }
-            )?;            
+            }
+        } else {
             Ok(KeyFragmentationMatching::FragmentAfterFirst(
                 two_tuple_proto_ipid,
             ))
         }
+    } else {
+        Ok(KeyFragmentationMatching::NotFragment(
+            key_parse(ctx, payload)?,
+        ))
     }
 }
 
 pub fn parse_key_fragmentation_transport_five_tuple(
     ctx: &ParseContext,
     payload: &[u8],
-) -> Result<KeyFragmentationMatching<FiveTuple>, Error> {
+) -> Result<KeyFragmentationMatching<Option<FiveTuple>>, Error> {
     parse_key_fragmentation_transport(parse_five_tuple, ctx, payload)
 }
