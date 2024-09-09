@@ -161,7 +161,7 @@ fn test_ipv4_src_ipaddr_proto_dst_port_keep() {
         "output_fragmentation_filter_ipv4_src_ipaddr_proto_dst_port_keep",
         "sipdp",
         "k",
-        3,
+        4,
     )
 }
 
@@ -172,7 +172,7 @@ fn test_ipv4_src_ipaddr_proto_dst_port_drop() {
         "output_fragmentation_filter_ipv4_src_ipaddr_proto_dst_port_drop",
         "sipdp",
         "d",
-        2,
+        1,
     )
 }
 

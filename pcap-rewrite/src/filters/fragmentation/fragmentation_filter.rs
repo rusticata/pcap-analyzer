@@ -11,7 +11,6 @@ use libpcap_tools::{Error, Packet, ParseContext};
 use super::convert_fn;
 use crate::container::five_tuple_container::FiveTupleC;
 use crate::container::ipaddr_container::IpAddrC;
-use crate::container::ipaddr_proto_port_container::IpAddrProtoPort;
 use crate::container::ipaddr_proto_port_container::IpAddrProtoPortC;
 use crate::container::two_tuple_proto_ipid_container::TwoTupleProtoIpidC;
 use crate::filters::filter::Filter;
@@ -323,23 +322,39 @@ impl FragmentationFilterBuilder {
                 )))
             }
             FilteringKey::SrcIpaddrProtoDstPort => {
+                let two_tuple_proto_proto_ipid_c = TwoTupleProtoIpidC::new(HashSet::new());
                 let ipaddr_proto_port_container = IpAddrProtoPortC::new(HashSet::new());
 
-                let keep: KeepFn<IpAddrProtoPortC, IpAddrProtoPort> = match filtering_action {
-                    FilteringAction::Keep => {
-                        |c: &IpAddrProtoPortC, ipaddr_proto_port| Ok(c.contains(ipaddr_proto_port))
-                    }
-                    FilteringAction::Drop => {
-                        |c, ipaddr_proto_port| Ok(!c.contains(ipaddr_proto_port))
-                    }
+                let keep: KeepFn<
+                    (TwoTupleProtoIpidC, IpAddrProtoPortC),
+                    KeyFragmentationMatching<_>,
+                > = match filtering_action {
+                    FilteringAction::Keep => |c, key_fragmentation_matching| {
+                        Ok(test_key_fragmentation_transport_in_container(
+                            |ipaddr_proto_port_c, ipaddr_proto_port| {
+                                ipaddr_proto_port_c.contains(ipaddr_proto_port)
+                            },
+                            c,
+                            key_fragmentation_matching,
+                        ))
+                    },
+                    FilteringAction::Drop => |c, key_fragmentation_matching| {
+                        Ok(!(test_key_fragmentation_transport_in_container(
+                            |ipaddr_proto_port_c, ipaddr_proto_port| {
+                                ipaddr_proto_port_c.contains(ipaddr_proto_port)
+                            },
+                            c,
+                            key_fragmentation_matching,
+                        )))
+                    },
                 };
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
-                    convert_fn::convert_data_hs_to_src_ipaddr_proto_dst_port_container,
-                    ipaddr_proto_port_container,
-                    key_parser_ipv4::parse_src_ipaddr_proto_dst_port,
-                    key_parser_ipv6::parse_src_ipaddr_proto_dst_port,
+                    convert_fn::convert_data_hs_to_sdipi_c_sipdp_c,
+                    (two_tuple_proto_proto_ipid_c, ipaddr_proto_port_container),
+                    key_parser_ipv4::parse_key_fragmentation_transport_src_ipaddr_proto_dst_port,
+                    key_parser_ipv6::parse_key_fragmentation_transport_src_ipaddr_proto_dst_port,
                     keep,
                 )))
             }
@@ -367,7 +382,7 @@ impl FragmentationFilterBuilder {
 
                 Ok(Box::new(FragmentationFilter::new(
                     HashSet::new(),
-                    convert_fn::convert_data_hs_to_two_tuple_proto_ipid_c_five_tuple_c,
+                    convert_fn::convert_data_hs_to_sdipi_c_five_tuple_c,
                     (two_tuple_proto_proto_ipid_c, five_tuple_container),
                     key_parser_ipv4::parse_key_fragmentation_transport_five_tuple,
                     key_parser_ipv6::parse_key_fragmentation_transport_five_tuple,

@@ -180,13 +180,18 @@ impl DispatchFilterBuilder {
                     IpAddrProtoPortC::of_file_path(Path::new(key_file_path))
                         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
-                let keep: KeepFn<IpAddrProtoPortC, IpAddrProtoPort> = match filtering_action {
-                    FilteringAction::Keep => {
-                        Box::new(|c, ipaddr_proto_port| Ok(c.contains(ipaddr_proto_port)))
-                    }
-                    FilteringAction::Drop => {
-                        Box::new(|c, ipaddr_proto_port| Ok(!c.contains(ipaddr_proto_port)))
-                    }
+                let keep: KeepFn<IpAddrProtoPortC, Option<IpAddrProtoPort>> = match filtering_action
+                {
+                    FilteringAction::Keep => Box::new(|c, ipaddr_proto_port_option| {
+                        Ok(ipaddr_proto_port_option
+                            .as_ref()
+                            .map_or(false, |ipaddr_proto_port| c.contains(ipaddr_proto_port)))
+                    }),
+                    FilteringAction::Drop => Box::new(|c, ipaddr_proto_port_option| {
+                        Ok(ipaddr_proto_port_option
+                            .as_ref()
+                            .map_or(false, |ipaddr_proto_port| !c.contains(ipaddr_proto_port)))
+                    }),
                 };
 
                 Ok(Box::new(DispatchFilter::new(
