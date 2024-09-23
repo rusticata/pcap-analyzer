@@ -5,6 +5,10 @@ use pcap_info::*;
 use clap::Parser;
 use pcap_parser::OptionCode;
 use time::UtcOffset;
+use tracing::debug;
+use tracing::warn;
+use tracing::Level;
+use tracing_subscriber::EnvFilter;
 
 use std::convert::TryInto;
 use std::fs;
@@ -27,6 +31,18 @@ struct Args {
 
 fn main() -> Result<(), io::Error> {
     let args = Args::parse();
+
+    let env_filter = EnvFilter::try_from_env("PCAP_INFO_LOG")
+        .unwrap_or_else(|_| EnvFilter::from_default_env().add_directive(Level::INFO.into()));
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        //.json()
+        //.with_span_events(FmtSpan::ENTER)
+        //.with_thread_ids(true)
+        //.with_max_level(tracing::Level::TRACE)
+        .compact()
+        .init();
+    debug!("pcap-info");
 
     let input_filename = &args.input;
     let options = Options {
@@ -216,7 +232,7 @@ fn pretty_print_idb_option(code: OptionCode, value: &[u8]) {
                 let mask = Ipv4Addr::from(mask_bytes);
                 println!("if_IPv4addr: {} / {}", ipv4, mask);
             } else {
-                eprintln!("INVALID if_IPv4addr: {:x?}", value);
+                warn!("INVALID if_IPv4addr: {:x?}", value);
             }
         }
         OptionCode(5) => {
@@ -226,7 +242,7 @@ fn pretty_print_idb_option(code: OptionCode, value: &[u8]) {
                 let ipv6 = Ipv6Addr::from(ipv6_bytes);
                 println!("if_IPv6addr: {} / {}", ipv6, rest[0]);
             } else {
-                eprintln!("INVALID if_IPv4addr: {:x?}", value);
+                warn!("INVALID if_IPv4addr: {:x?}", value);
             }
         }
         OptionCode(8) => {
@@ -234,14 +250,14 @@ fn pretty_print_idb_option(code: OptionCode, value: &[u8]) {
                 let int_bytes: [u8; 8] = value.try_into().unwrap();
                 println!("if_speed: {}", u64::from_le_bytes(int_bytes));
             } else {
-                eprintln!("INVALID if_speed: {:x?}", value);
+                warn!("INVALID if_speed: {:x?}", value);
             }
         }
         OptionCode::IfTsresol => {
             println!("Time resolution: 0x{:x}", value[0]);
             if value.len() != 1 {
-                eprintln!("INVALID if_tsresol: len={} val={:x?}", value.len(), value);
-                eprintln!("if_tsresol len should be 1");
+                warn!("INVALID if_tsresol: len={} val={:x?}", value.len(), value);
+                warn!("if_tsresol len should be 1");
             }
         }
         OptionCode(11) => {

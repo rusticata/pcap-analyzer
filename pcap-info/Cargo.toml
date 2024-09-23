@@ -39,6 +39,8 @@ sha-1 = "0.10"
 sha2 = "0.10"
 smart-default = "0.7"
 time = { version="0.3", features=["local-offset"] }
+tracing = { version="0.1", features=["log"] }
+tracing-subscriber = { version="0.3", features=["env-filter","fmt","json"] }
 xz2 = "0.1"
 
 [dependencies.pcap-parser]
