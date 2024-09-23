@@ -7,6 +7,7 @@ use std::io::{self, Error, ErrorKind};
 use std::path::Path;
 use std::str;
 use time::{Duration, OffsetDateTime};
+use tracing::{info, span, warn, Level};
 
 use flate2::read::GzDecoder;
 use xz2::read::XzDecoder;
@@ -241,8 +242,8 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapIn
             Err(PcapError::Eof) => break,
             Err(PcapError::Incomplete(_)) => {
                 if last_incomplete_index == ctx.block_index && reader.reader_exhausted() {
-                    eprintln!("Could not read complete data block.");
-                    eprintln!("Hint: the reader buffer size may be too small, or the input file may be truncated.");
+                    warn!("Could not read complete data block.");
+                    warn!("Hint: the reader buffer size may be too small, or the input file may be truncated.");
                     rc = 1;
                     break;
                 }
@@ -270,11 +271,11 @@ fn update_time(
         current_section.first_packet_ts = (ts_sec, ts_nanosec);
     }
     if dt < current_section.previous_packet_ts {
-        println!("** unordered file");
+        info!("** unordered file");
         ctx.strict_time_order = false;
     }
     if dt < current_section.first_packet_ts {
-        println!("** unordered file (before first packet)");
+        info!("** unordered file (before first packet)");
         ctx.strict_time_order = false;
         current_section.first_packet_ts = (ts_sec, ts_nanosec);
     }
@@ -289,6 +290,8 @@ fn handle_pcapblockowned(
     ctx: &mut PcapInfo,
     current_section: &mut SectionInfo,
 ) {
+    let span = span!(Level::INFO, "handle_block", block_index = ctx.block_index);
+    let _enter = span.enter();
     match b {
         PcapBlockOwned::NG(Block::SectionHeader(ref shb)) => {
             end_of_section(ctx, current_section);
@@ -300,7 +303,7 @@ fn handle_pcapblockowned(
             current_section.interfaces.push(if_info);
         }
         PcapBlockOwned::LegacyHeader(ref _hdr) => {
-            eprintln!("Unexpected legacy header block");
+            warn!("Unexpected legacy header block");
             end_of_section(ctx, current_section);
             // let precision = if hdr.is_nanosecond_precision() { 9 } else { 6 };
             // let if_info = InterfaceInfo {
@@ -336,7 +339,7 @@ fn handle_pcapblockowned(
             let if_info = &mut current_section.interfaces[epb.if_id as usize];
             if_info.num_packets += 1;
             if if_info.snaplen > 0 && epb.data.len() + 4 > if_info.snaplen as usize {
-                println!(
+                warn!(
                     "*** EPB block data len greater than snaplen in block {} ***",
                     ctx.block_index
                 );
@@ -346,7 +349,7 @@ fn handle_pcapblockowned(
                 pcap_parser::build_ts(epb.ts_high, epb.ts_low, if_info.if_tsoffset, unit);
             let ts_frac = ts_frac as u64;
             if ts_frac > unit {
-                println!(
+                info!(
                     "Time: fractionnal part is greater than unit in block {}",
                     ctx.block_index
                 );
@@ -380,7 +383,7 @@ fn handle_pcapblockowned(
                     NameRecordType::End => (),
                     NameRecordType::Ipv4 => current_section.num_ipv4_resolved += 1,
                     NameRecordType::Ipv6 => current_section.num_ipv6_resolved += 1,
-                    NameRecordType(n) => println!(
+                    NameRecordType(n) => warn!(
                         "*** invalid NameRecordType {} in NRB (block {})",
                         n, ctx.block_index
                     ),
@@ -403,7 +406,7 @@ fn handle_pcapblockowned(
             current_section.num_custom_blocks += 1;
         }
         PcapBlockOwned::NG(b) => {
-            eprintln!("*** Unsupported block type (magic={:08x}) ***", b.magic());
+            info!("*** Unsupported block type (magic={:08x}) ***", b.magic());
         }
     }
 }
