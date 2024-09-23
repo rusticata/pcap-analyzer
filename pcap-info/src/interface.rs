@@ -1,5 +1,6 @@
 use pcap_parser::*;
 use std::convert::TryFrom;
+use tracing::warn;
 
 /// Information related to a network interface used for capture
 pub struct InterfaceInfo {
@@ -68,7 +69,10 @@ pub fn pcapng_build_interface<'a>(
             }
             _ => (),
         }
-        options.push((opt.code, opt.value.to_vec()));
+        match opt.as_bytes() {
+            Some(value) => options.push((opt.code, value.to_vec())),
+            None => warn!("Option with code {} has invalid value", opt.code),
+        }
     }
     InterfaceInfo {
         if_index,
