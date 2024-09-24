@@ -203,8 +203,8 @@ fn pretty_print_shb_option(code: OptionCode, value: &[u8]) {
             println!("User Application: {}", s);
         }
         OptionCode(_) => {
-            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
-            println!("Option {}: {}", code, s);
+            print!("Option {}: ", code);
+            print_hex_dump(value, 32);
         }
     }
 }
@@ -269,8 +269,18 @@ fn pretty_print_idb_option(code: OptionCode, value: &[u8]) {
             println!("Operating System: {}", s);
         }
         OptionCode(_) => {
-            let s = str::from_utf8(value).unwrap_or("<Invalid UTF-8>");
-            println!("Option {}: {}", code, s);
+            print!("Option {}: ", code);
+            print_hex_dump(value, 32);
         }
     }
+}
+
+fn print_hex_dump(bytes: &[u8], max_len: usize) {
+    for &b in bytes.iter().take(max_len) {
+        print!("{:02X} ", b);
+    }
+    if bytes.len() > max_len {
+        print!("... <continued>");
+    }
+    println!();
 }
