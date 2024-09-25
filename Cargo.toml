@@ -8,6 +8,7 @@ members = [
   "pcap-rewrite",
   "test-analyzer",
 ]
+resolver = "2"
 
 [profile.release]
 opt-level = 'z'  # Optimize for size.
