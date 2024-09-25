@@ -13,5 +13,6 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/audit@v1
-        name: Audit Rust Dependencies
+      - uses: rustsec/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
