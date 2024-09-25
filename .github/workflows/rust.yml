@@ -40,10 +40,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - run: cargo test ${{ matrix.features }}
 
-  # XXX: action currently disabled (need huge commit to fmt)
   fmt:
     name: Rustfmt
-    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
