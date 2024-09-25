@@ -59,7 +59,7 @@ impl<'a> MplsPacket<'a> {
             if ptr.len() < 4 || packet.len() < stack_size || stack_size < 4 {
                 return None;
             }
-            use ::pnet_macros_support::packet::PacketData;
+            use pnet_macros_support::packet::PacketData;
             Some(MplsPacket {
                 packet: PacketData::Borrowed(packet),
                 stack_size,

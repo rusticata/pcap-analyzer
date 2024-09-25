@@ -41,7 +41,11 @@ impl<'a> From<Err<PcapError<&'a [u8]>>> for Error {
     fn from(err: Err<PcapError<&'a [u8]>>) -> Self {
         match err {
             Err::Incomplete(needed) => {
-                let sz = if let Needed::Size(sz) = needed { usize::from(sz) } else { 0 };
+                let sz = if let Needed::Size(sz) = needed {
+                    usize::from(sz)
+                } else {
+                    0
+                };
                 Error::Pcap(PcapError::Incomplete(sz))
             }
             Err::Error(e) | Err::Failure(e) => Error::Pcap(e.to_owned_vec()),

@@ -7,9 +7,8 @@ use log::{debug, error, info};
 use pcap_parser::data::*;
 use pcap_parser::Linktype;
 use pcap_parser::{Block, PcapBlockOwned};
-use tracing::span;
-use tracing::Level;
 use std::io::Write;
+use tracing::{span, Level};
 
 #[derive(Copy, Clone, Debug)]
 pub enum FileFormat {
@@ -127,7 +126,11 @@ impl PcapAnalyzer for Rewriter {
     ) -> Result<(), Error> {
         // handle specific pcapng blocks
         if let PcapBlockOwned::NG(b) = block {
-            let span = span!(Level::DEBUG, "handle_block", block_index = block_ctx.block_index);
+            let span = span!(
+                Level::DEBUG,
+                "handle_block",
+                block_index = block_ctx.block_index
+            );
             let _enter = span.enter();
 
             match b {

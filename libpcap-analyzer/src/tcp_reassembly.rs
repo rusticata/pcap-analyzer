@@ -9,8 +9,7 @@ use std::num::Wrapping;
 
 const EARLY_DETECT_OVERLAP: bool = false;
 
-#[derive(Debug, Eq, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Eq, PartialEq, Default)]
 #[allow(dead_code)]
 pub enum TcpStatus {
     #[default]

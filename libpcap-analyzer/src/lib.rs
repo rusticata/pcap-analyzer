@@ -12,12 +12,13 @@ pub use layers::*;
 pub use packet_info::*;
 
 mod plugin;
-#[macro_use] mod plugin_registry;
+#[macro_use]
+mod plugin_registry;
 pub use plugin::*;
 pub use plugin_registry::*;
 
-pub mod plugins;
 pub mod output;
+pub mod plugins;
 
 mod analyzer;
 mod threaded_analyzer;

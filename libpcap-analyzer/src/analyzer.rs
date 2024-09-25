@@ -15,11 +15,11 @@ use libpcap_tools::*;
 
 use pcap_parser::data::{get_packetdata_raw, PacketData};
 use pcap_parser::Linktype;
-use tracing::{span, Level};
 use std::cmp::min;
 use std::net::IpAddr;
 use std::ops::DerefMut;
 use std::sync::Arc;
+use tracing::{span, Level};
 
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use pnet_packet::gre::GrePacket;

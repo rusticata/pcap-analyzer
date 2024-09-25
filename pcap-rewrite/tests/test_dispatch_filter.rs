@@ -163,7 +163,6 @@ fn test_filter_ipv6_src_ipaddr_proto_dst_port() {
     )
 }
 
-
 #[test]
 fn test_filter_ipv6_five_tuple() {
     generic_test(
