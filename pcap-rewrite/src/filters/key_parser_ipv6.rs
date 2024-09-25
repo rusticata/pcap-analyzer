@@ -12,9 +12,9 @@ use libpcap_tools::{Error, FiveTuple, ParseContext};
 
 use super::fragmentation::two_tuple_proto_ipid::TwoTupleProtoIpid;
 use super::fragmentation::two_tuple_proto_ipid_five_tuple::TwoTupleProtoIpidFiveTuple;
+use crate::filters::fragmentation::fragmentation_test;
 use crate::filters::fragmentation::key_fragmentation_matching::KeyFragmentationMatching;
 use crate::filters::ipaddr_pair::IpAddrPair;
-use crate::filters::fragmentation::fragmentation_test;
 
 pub fn parse_src_ipaddr(ctx: &ParseContext, payload: &[u8]) -> Result<IpAddr, Error> {
     let ipv6 = Ipv6Packet::new(payload).ok_or_else(|| {
@@ -274,7 +274,7 @@ pub fn parse_key_fragmentation_transport<Key>(
     payload: &[u8],
 ) -> Result<KeyFragmentationMatching<Option<Key>>, Error> {
     if fragmentation_test::is_ipv6_fragment(ctx, payload)? {
-        let two_tuple_proto_ipid = 
+        let two_tuple_proto_ipid =
             parse_two_tuple_proto_ipid(ctx, payload)?.ok_or_else(|| {
                 warn!(
                     "Could not parse TwoTupleProtoId, expected fragmented IPv6 packet but could not parse at index {}",
@@ -287,21 +287,17 @@ pub fn parse_key_fragmentation_transport<Key>(
         )?;
         if fragmentation_test::is_ipv6_first_fragment(ctx, payload)? {
             match key_parse(ctx, payload)? {
-                Some(key) => {
-                    Ok(KeyFragmentationMatching::FirstFragment(
-                        two_tuple_proto_ipid,
-                        Some(key)
-                    ))
-                },
+                Some(key) => Ok(KeyFragmentationMatching::FirstFragment(
+                    two_tuple_proto_ipid,
+                    Some(key),
+                )),
                 // NB
                 // This case happens when the first fragment does have enough data to parse transport header.
                 // The clean approach would be to a full IP fragmentation reassembly.
                 // We hope this case is rare. :)
-                None => {
-                    Ok(KeyFragmentationMatching::FragmentAfterFirst(
-                        two_tuple_proto_ipid,
-                    ))
-                }
+                None => Ok(KeyFragmentationMatching::FragmentAfterFirst(
+                    two_tuple_proto_ipid,
+                )),
             }
         } else {
             Ok(KeyFragmentationMatching::FragmentAfterFirst(
@@ -309,9 +305,9 @@ pub fn parse_key_fragmentation_transport<Key>(
             ))
         }
     } else {
-        Ok(KeyFragmentationMatching::NotFragment(
-            key_parse(ctx, payload)?,
-        ))
+        Ok(KeyFragmentationMatching::NotFragment(key_parse(
+            ctx, payload,
+        )?))
     }
 }
 

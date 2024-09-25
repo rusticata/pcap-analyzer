@@ -40,7 +40,9 @@ pub fn get_fragment_packet_option_l4_protol4_payload<'a>(
         if data.len() >= 40 {
             payload = &data[40..];
         } else {
-            return Err(Error::DataParser("IPv6 length is 0, but frame is too short for an IPv6 header"));
+            return Err(Error::DataParser(
+                "IPv6 length is 0, but frame is too short for an IPv6 header",
+            ));
         }
     }
 

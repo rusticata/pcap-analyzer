@@ -206,40 +206,30 @@ impl OspfLog {
                     l.metric, l.destination_router_id
                 );
             }
-            Ospfv3LinkStateAdvertisement::ASExternal(l) |
-            Ospfv3LinkStateAdvertisement::NSSA(l) => {
-                debug!(
-                    "    type={} metric={}",
-                    l.header.link_state_type,
-                    l.metric
-                );
+            Ospfv3LinkStateAdvertisement::ASExternal(l) | Ospfv3LinkStateAdvertisement::NSSA(l) => {
+                debug!("    type={} metric={}", l.header.link_state_type, l.metric);
             }
             Ospfv3LinkStateAdvertisement::Link(l) => {
                 debug!(
                     "    LinksLSA link_local_interface_address={:x?} #prefixes={}",
-                    &l.link_local_interface_address,
-                    l.num_prefixes,
+                    &l.link_local_interface_address, l.num_prefixes,
                 );
                 for prefix in &l.address_prefixes {
                     debug!(
                         "        IPv6 prefix {:02x?}/{}",
-                        prefix.address_prefix,
-                        prefix.prefix_length,
+                        prefix.address_prefix, prefix.prefix_length,
                     );
                 }
             }
             Ospfv3LinkStateAdvertisement::IntraAreaPrefix(l) => {
                 debug!(
                     "    IntraAreaPrefixLSA referenced_ls_type={} #prefixes={}",
-                    l.referenced_ls_type,
-                    l.num_prefixes,
+                    l.referenced_ls_type, l.num_prefixes,
                 );
                 for prefix in &l.address_prefixes {
                     debug!(
                         "        IPv6 prefix {:02x?}/{} metric={}",
-                        prefix.address_prefix,
-                        prefix.prefix_length,
-                        prefix.reserved,
+                        prefix.address_prefix, prefix.prefix_length, prefix.reserved,
                     );
                 }
             }

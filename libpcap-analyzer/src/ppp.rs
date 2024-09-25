@@ -29,7 +29,7 @@ impl<'a> PppPacket<'a> {
             if packet[0] == 0xff && packet[1] == 0x03 && packet.len() < 4 {
                 return None;
             }
-            use ::pnet_macros_support::packet::PacketData;
+            use pnet_macros_support::packet::PacketData;
             Some(PppPacket {
                 packet: PacketData::Borrowed(packet),
             })

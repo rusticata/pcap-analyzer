@@ -12,7 +12,9 @@ pub struct VxlanFlag(pub u16);
 
 impl VxlanFlag {
     /// Create a new `VxlanFlag` instance.
-    pub fn new(value: u16) -> VxlanFlag { VxlanFlag(value) }
+    pub fn new(value: u16) -> VxlanFlag {
+        VxlanFlag(value)
+    }
 }
 
 /// Vxlan flags as defined in RFC7348
@@ -25,21 +27,26 @@ pub mod VxlanFlags {
     pub const VNI: VxlanFlag = VxlanFlag(0x0800);
 }
 
-
-impl <'a> VxlanPacket<'a> {
+impl<'a> VxlanPacket<'a> {
     /// Constructs a new VxlanPacket. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
     pub fn new(packet: &[u8]) -> Option<VxlanPacket> {
         if packet.len() >= VxlanPacket::minimum_packet_size() {
-            use ::pnet_macros_support::packet::PacketData;
-            Some(VxlanPacket{packet: PacketData::Borrowed(packet),})
-        } else { None }
+            use pnet_macros_support::packet::PacketData;
+            Some(VxlanPacket {
+                packet: PacketData::Borrowed(packet),
+            })
+        } else {
+            None
+        }
     }
     /// The minimum size (in bytes) a packet of this type can be. It's based on the total size
     /// of the fixed-size fields.
     #[inline]
-    pub const fn minimum_packet_size() -> usize { 8 }
+    pub const fn minimum_packet_size() -> usize {
+        8
+    }
     /// Get the flags field. This field is always stored big-endian
     /// within the struct, but this accessor returns host order.
     #[inline]

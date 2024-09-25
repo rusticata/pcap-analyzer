@@ -14,7 +14,7 @@ impl<'a> GenevePacket<'a> {
     #[inline]
     pub fn new(packet: &[u8]) -> Option<GenevePacket> {
         if packet.len() >= GenevePacket::minimum_packet_size() {
-            use ::pnet_macros_support::packet::PacketData;
+            use pnet_macros_support::packet::PacketData;
             Some(GenevePacket {
                 packet: PacketData::Borrowed(packet),
             })
@@ -157,7 +157,7 @@ impl<'a> GeneveOptionPacket<'a> {
     #[inline]
     pub fn new(packet: &'_ [u8]) -> Option<GeneveOptionPacket<'_>> {
         if packet.len() >= GeneveOptionPacket::minimum_packet_size() {
-            use ::pnet_macros_support::packet::PacketData;
+            use pnet_macros_support::packet::PacketData;
             Some(GeneveOptionPacket {
                 packet: PacketData::Borrowed(packet),
             })

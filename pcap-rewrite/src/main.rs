@@ -4,11 +4,11 @@
 use clap::{crate_version, Parser};
 use libpcap_tools::Config;
 use log::{debug, error};
-use tracing::Level;
-use tracing_subscriber::EnvFilter;
 use std::fs::File;
 use std::io;
 use std::path::Path;
+use tracing::Level;
+use tracing_subscriber::EnvFilter;
 
 use pcap_rewrite::filters::dispatch_filter::DispatchFilterBuilder;
 use pcap_rewrite::filters::filtering_action::FilteringAction;
@@ -32,18 +32,18 @@ struct Args {
     /// -f Source:192.168.1.1
     /// -f Dispatch:fk%fa%path
     /// -f Dispatch:fk%fa
-    /// 
+    ///
     /// fk: filtering key=si|di|sdi|sipdp|sdipsdp
     /// with si: src IP
     ///      di: dst IP
     ///      sdi: srd/dst IP
     ///      sipdp: src IP, proto, dst port
     ///      sdipsdp: src/dst IP, proto, src/dst port
-    /// 
+    ///
     /// fa: filtering action=k|d
     /// with k: keep
     ///      d: drop
-    /// 
+    ///
     /// path: path to a csv formatted file without header that contains filtering keys
     #[clap(verbatim_doc_comment)]
     #[arg(short, long)]

@@ -149,7 +149,7 @@ impl DefragEngine for IPDefragEngine {
                                 }
                                 Ordering::Less => {
                                     // not fully covered - leave it
-                                },
+                                }
                             }
                         }
                     }

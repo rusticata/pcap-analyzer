@@ -50,13 +50,17 @@ impl PluginsFactory {
 
         for b in &self.list {
             b.build(&mut registry, config)?;
-        };
+        }
 
         Ok(registry)
     }
 
     /// Instantiate plugins if they match predicate
-    pub fn build_filter_plugins<P>(&self, predicate: P, config: &Config) -> Result<PluginRegistry, PluginBuilderError>
+    pub fn build_filter_plugins<P>(
+        &self,
+        predicate: P,
+        config: &Config,
+    ) -> Result<PluginRegistry, PluginBuilderError>
     where
         P: Fn(&str) -> bool,
     {
@@ -66,7 +70,7 @@ impl PluginsFactory {
             if predicate(b.name()) {
                 b.build(&mut registry, config)?;
             }
-        };
+        }
 
         Ok(registry)
     }
@@ -76,9 +80,7 @@ impl PluginsFactory {
     where
         Op: Fn(&str),
     {
-        self.list.iter().for_each(|b| {
-            op(b.name())
-        });
+        self.list.iter().for_each(|b| op(b.name()));
     }
 }
 
@@ -88,7 +90,7 @@ impl Default for PluginsFactory {
         let mut v: Vec<Box<dyn PluginBuilder>> = vec![
             Box::new(basic_stats::BasicStatsBuilder),
             Box::new(flows::FlowsInfoBuilder),
-            ];
+        ];
 
         #[cfg(feature = "plugin_community_id")]
         v.push(Box::new(community_id::CommunityIDBuilder));

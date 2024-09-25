@@ -12,7 +12,7 @@ impl<'a> PppoeSessionPacket<'a> {
     #[inline]
     pub fn new(packet: &[u8]) -> Option<PppoeSessionPacket> {
         if packet.len() >= PppoeSessionPacket::minimum_packet_size() {
-            use ::pnet_macros_support::packet::PacketData;
+            use pnet_macros_support::packet::PacketData;
             Some(PppoeSessionPacket {
                 packet: PacketData::Borrowed(packet),
             })

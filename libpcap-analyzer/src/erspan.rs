@@ -12,7 +12,7 @@ impl<'a> ErspanPacket<'a> {
     #[inline]
     pub fn new(packet: &[u8]) -> Option<ErspanPacket> {
         if packet.len() >= ErspanPacket::minimum_packet_size() {
-            use ::pnet_macros_support::packet::PacketData;
+            use pnet_macros_support::packet::PacketData;
             Some(ErspanPacket {
                 packet: PacketData::Borrowed(packet),
             })

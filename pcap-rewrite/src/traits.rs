@@ -7,5 +7,10 @@ pub trait Writer {
 
     fn write_block(&mut self, _block: &PcapBlockOwned) -> Result<usize, io::Error>;
 
-    fn write_packet(&mut self, packet: &Packet, data: &[u8], payload_length_offset: u32) -> Result<usize, io::Error>;
+    fn write_packet(
+        &mut self,
+        packet: &Packet,
+        data: &[u8],
+        payload_length_offset: u32,
+    ) -> Result<usize, io::Error>;
 }

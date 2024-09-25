@@ -16,7 +16,7 @@ impl Plugin for HexDump {
         "HexDump"
     }
     fn plugin_type(&self) -> u16 {
-        PLUGIN_L3|PLUGIN_L4
+        PLUGIN_L3 | PLUGIN_L4
     }
 
     fn handle_layer_network<'s, 'i>(
@@ -44,15 +44,20 @@ impl Plugin for HexDump {
         debug!("    l3_type: 0x{:x}", pinfo.l3_type);
         debug!("    l4_data_len: {}", pinfo.l4_data.len());
         debug!("    l4_type: {}", pinfo.l4_type);
-        debug!("    l4_payload_len: {}", pinfo.l4_payload.map_or(0, |d| d.len()));
+        debug!(
+            "    l4_payload_len: {}",
+            pinfo.l4_payload.map_or(0, |d| d.len())
+        );
         if let Some(flow) = pinfo.flow {
             let five_tuple = &flow.five_tuple;
-            debug!("    flow: [{}]:{} -> [{}]:{} [{}]",
-                   five_tuple.src,
-                   five_tuple.src_port,
-                   five_tuple.dst,
-                   five_tuple.dst_port,
-                   five_tuple.proto);
+            debug!(
+                "    flow: [{}]:{} -> [{}]:{} [{}]",
+                five_tuple.src,
+                five_tuple.src_port,
+                five_tuple.dst,
+                five_tuple.dst_port,
+                five_tuple.proto
+            );
         }
         if let Some(d) = pinfo.l4_payload {
             debug!("    l4_payload:\n{}", d.to_hex(16));
