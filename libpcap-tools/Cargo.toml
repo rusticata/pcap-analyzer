@@ -3,6 +3,7 @@ name = "libpcap-tools"
 version = "0.1.0"
 authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 edition = "2018"
+rust-version = "1.74"
 
 description = "Library for creating of Pcap file analyzers"
 categories = ["network-programming"]

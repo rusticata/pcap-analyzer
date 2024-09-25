@@ -4,6 +4,7 @@ description = "Example of libpcap-analyzer plugin, in an external directory"
 version = "0.1.0"
 authors = ["Pierre Chifflier <chifflier@wzdftpd.net>"]
 edition = "2018"
+rust-version = "1.74"
 
 [dependencies]
 libpcap-analyzer = { path="../libpcap-analyzer" }
