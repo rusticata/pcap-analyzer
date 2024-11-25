@@ -210,6 +210,7 @@ pub(crate) fn extern_dispatch_l3<'a>(
     let n_workers = jobs.len();
     let i = fan_out(data, ethertype, n_workers);
     debug_assert!(i < n_workers);
+    // trace!("sending job to worker {i}");
     jobs[i]
         .send(Job::New(packet, ctx.clone(), data, ethertype))
         .or(Err(Error::Generic("Error while sending job")))
@@ -296,21 +297,21 @@ fn worker(mut a: Analyzer, idx: usize, r: Receiver<Job>, barrier: Arc<Barrier>) 
                 Job::Exit => break,
                 Job::PrintDebug => {
                     {
-                        debug!("thread {}: hash table size: {}", idx, a.flows.len());
+                        debug!("worker {}: flow table size: {}", idx, a.flows.len());
                     };
                 }
                 Job::New(packet, ctx, data, ethertype) => {
                     pcap_index = ctx.pcap_index;
                     let span = span!(Level::DEBUG, "worker", pcap_index);
                     let _enter = span.enter();
-                    trace!("thread {}: got a job", idx);
+                    trace!("worker {}: got a job", idx);
                     let h3_res = handle_l3(&packet, &ctx, data, ethertype, &mut a);
                     if h3_res.is_err() {
                         warn!("thread {}: handle_l3 failed", idx);
                     }
                 }
                 Job::Wait => {
-                    trace!("Thread {}: waiting at barrier", idx);
+                    trace!("worker {}: waiting at barrier", idx);
                     barrier.wait();
                 }
             }
