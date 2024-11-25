@@ -6,6 +6,7 @@ use libpcap_tools::*;
 use pcap_parser::data::PacketData;
 use pnet_packet::ethernet::{EtherType, EtherTypes, EthernetPacket};
 use std::cmp::min;
+use std::hash::Hasher;
 use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Barrier};
 use std::thread;
@@ -208,7 +209,7 @@ pub(crate) fn extern_dispatch_l3<'a>(
     ethertype: EtherType,
 ) -> Result<(), Error> {
     let n_workers = jobs.len();
-    let i = softrss_xor_xxhash32(data, ethertype, n_workers);
+    let i = softrss_xor_fnv(data, ethertype, n_workers);
     debug_assert!(i < n_workers);
     // trace!("sending job to worker {i}");
     jobs[i]
@@ -282,13 +283,13 @@ fn softrss_toeplitz(data: &[u8], ethertype: EtherType, n_workers: usize) -> usiz
     }
 }
 
-// Receive-Side Scaling (RSS) based on XOR function and XxHash32 hash function
+// Receive-Side Scaling (RSS) based on XOR function and Fowler–Noll–Vo (FNV) hash function
 // NOTE: This seems to be balanced less evenly than toeplitz hash, but still good
 #[allow(dead_code)]
-fn softrss_xor_xxhash32(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
+fn softrss_xor_fnv(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
     // This seed is just random data. It has no cryptographic value, it is just used to
-    // seed the XxHash32::oneshot function
-    const SEED: u32 = 1;
+    // seed the hash function
+    const SEED: u64 = 0x3d58_216b_caff_e84b;
 
     match ethertype {
         EtherTypes::Ipv4 => {
@@ -312,7 +313,10 @@ fn softrss_xor_xxhash32(data: &[u8], ethertype: EtherType, n_workers: usize) -> 
                 //         sz = 12;
                 //     }
                 // }
-                let hash = twox_hash::XxHash32::oneshot(SEED, &buf[..sz]);
+
+                let mut hasher = fnv::FnvHasher::with_key(SEED);
+                hasher.write(&buf[..sz]);
+                let hash = hasher.finish();
 
                 // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
                 // ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
@@ -344,7 +348,9 @@ fn softrss_xor_xxhash32(data: &[u8], ethertype: EtherType, n_workers: usize) -> 
                 //         sz += 4;
                 //     }
                 // }
-                let hash = twox_hash::XxHash32::oneshot(SEED, &buf[..sz]);
+                let mut hasher = fnv::FnvHasher::with_key(SEED);
+                hasher.write(&buf[..sz]);
+                let hash = hasher.finish();
 
                 // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
                 // ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
