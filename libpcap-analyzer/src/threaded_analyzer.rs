@@ -1,7 +1,6 @@
 use crate::analyzer::{handle_l3, run_plugins_v2_link, run_plugins_v2_physical, Analyzer};
 use crate::layers::LinkLayerType;
 use crate::plugin_registry::PluginRegistry;
-use crate::toeplitz;
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use libpcap_tools::*;
 use pcap_parser::data::PacketData;
@@ -209,7 +208,7 @@ pub(crate) fn extern_dispatch_l3<'a>(
     ethertype: EtherType,
 ) -> Result<(), Error> {
     let n_workers = jobs.len();
-    let i = fan_out(data, ethertype, n_workers);
+    let i = softrss_xor_xxhash32(data, ethertype, n_workers);
     debug_assert!(i < n_workers);
     // trace!("sending job to worker {i}");
     jobs[i]
@@ -217,11 +216,14 @@ pub(crate) fn extern_dispatch_l3<'a>(
         .or(Err(Error::Generic("Error while sending job")))
 }
 
-fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
+#[allow(dead_code)]
+fn softrss_toeplitz(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
+    use crate::toeplitz::{toeplitz_hash_aligned32_v2, AlignedU8, SYMMETRIC_KEY_U32BE};
     match ethertype {
         EtherTypes::Ipv4 => {
             if data.len() >= 20 {
-                let mut buf: [u8; 20] = [0; 20];
+                let mut aligned = AlignedU8([0; 20]);
+                let buf = &mut aligned.0;
                 let sz = 8;
                 let src_dst_addrs = &data[12..20];
                 buf[0..sz].copy_from_slice(src_dst_addrs);
@@ -238,7 +240,7 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
                 //         sz = 12;
                 //     }
                 // }
-                let hash = toeplitz::toeplitz_hash(toeplitz::SYMMETRIC_KEY, &buf[..sz]);
+                let hash = toeplitz_hash_aligned32_v2(SYMMETRIC_KEY_U32BE, &buf[..sz]);
 
                 // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
                 // ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
@@ -249,7 +251,8 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
         }
         EtherTypes::Ipv6 => {
             if data.len() >= 40 {
-                let mut buf: [u8; 40] = [0; 40];
+                let mut aligned = AlignedU8([0; 40]);
+                let buf = &mut aligned.0;
                 let sz = 40;
                 let src_dst_addrs = &data[8..40];
                 buf[0..sz].copy_from_slice(src_dst_addrs);
@@ -266,7 +269,82 @@ fn fan_out(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
                 //         sz += 4;
                 //     }
                 // }
-                let hash = toeplitz::toeplitz_hash(toeplitz::SYMMETRIC_KEY, &buf[..sz]);
+                let hash = toeplitz_hash_aligned32_v2(SYMMETRIC_KEY_U32BE, &buf[..sz]);
+
+                // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
+                // ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
+                hash as usize % n_workers
+            } else {
+                n_workers - 1
+            }
+        }
+        _ => 0,
+    }
+}
+
+// Receive-Side Scaling (RSS) based on XOR function and XxHash32 hash function
+// NOTE: This seems to be balanced less evenly than toeplitz hash, but still good
+#[allow(dead_code)]
+fn softrss_xor_xxhash32(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize {
+    // This seed is just random data. It has no cryptographic value, it is just used to
+    // seed the XxHash32::oneshot function
+    const SEED: u32 = 1;
+
+    match ethertype {
+        EtherTypes::Ipv4 => {
+            if data.len() >= 20 {
+                let mut buf: [u8; 20] = [0; 20];
+                let sz = 4;
+                buf[0] = data[12] ^ data[16];
+                buf[1] = data[13] ^ data[17];
+                buf[2] = data[14] ^ data[18];
+                buf[3] = data[15] ^ data[19];
+                // we may append source and destination ports
+                // XXX breaks fragmentation
+                // if data[9] == crate::plugin::TRANSPORT_TCP || data[9] == crate::plugin::TRANSPORT_UDP {
+                //     if data.len() >= 24 {
+                //         // source port, in network-order
+                //         buf[8] = data[20];
+                //         buf[9] = data[21];
+                //         // destination port, in network-order
+                //         buf[10] = data[22];
+                //         buf[11] = data[23];
+                //         sz = 12;
+                //     }
+                // }
+                let hash = twox_hash::XxHash32::oneshot(SEED, &buf[..sz]);
+
+                // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
+                // ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
+                hash as usize % n_workers
+            } else {
+                n_workers - 1
+            }
+        }
+        EtherTypes::Ipv6 => {
+            if data.len() >= 40 {
+                let mut buf: [u8; 40] = [0; 40];
+                // let sz = 32;
+                // source IP + destination IP, in network-order
+                // buf[0..32].copy_from_slice(&data[8..40]);
+                let sz = 16;
+                for i in 0..16 {
+                    buf[i] = data[8 + i] ^ data[24 + i];
+                }
+                // we may append source and destination ports
+                // XXX breaks fragmentation
+                // if data[6] == crate::plugin::TRANSPORT_TCP || data[6] == crate::plugin::TRANSPORT_UDP {
+                //     if data.len() >= 44 {
+                //         // source port, in network-order
+                //         buf[33] = data[40];
+                //         buf[34] = data[41];
+                //         // destination port, in network-order
+                //         buf[35] = data[42];
+                //         buf[36] = data[43];
+                //         sz += 4;
+                //     }
+                // }
+                let hash = twox_hash::XxHash32::oneshot(SEED, &buf[..sz]);
 
                 // debug!("{:?} -- hash --> 0x{:x}", buf, hash);
                 // ((hash >> 24) ^ (hash & 0xff)) as usize % n_workers
