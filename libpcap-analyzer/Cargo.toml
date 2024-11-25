@@ -53,7 +53,6 @@ serde_json = "1.0"
 sha1 = { version="0.10", features=["std"], optional=true }
 tls-parser = { version="0.12", optional=true }
 tracing = { version="0.1", features=["log"] }
-twox-hash = { version="2.0", default-features=false, features=["xxhash32"] }
 
 [dependencies.rusticata]
 # path = "../../rusticata"
