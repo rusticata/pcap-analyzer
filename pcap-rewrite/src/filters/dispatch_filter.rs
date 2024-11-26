@@ -185,12 +185,12 @@ impl DispatchFilterBuilder {
                     FilteringAction::Keep => Box::new(|c, ipaddr_proto_port_option| {
                         Ok(ipaddr_proto_port_option
                             .as_ref()
-                            .map_or(false, |ipaddr_proto_port| c.contains(ipaddr_proto_port)))
+                            .is_some_and(|ipaddr_proto_port| c.contains(ipaddr_proto_port)))
                     }),
                     FilteringAction::Drop => Box::new(|c, ipaddr_proto_port_option| {
                         Ok(ipaddr_proto_port_option
                             .as_ref()
-                            .map_or(false, |ipaddr_proto_port| !c.contains(ipaddr_proto_port)))
+                            .is_some_and(|ipaddr_proto_port| !c.contains(ipaddr_proto_port)))
                     }),
                 };
 
@@ -209,12 +209,12 @@ impl DispatchFilterBuilder {
                     FilteringAction::Keep => Box::new(|c, five_tuple_option| {
                         Ok(five_tuple_option
                             .as_ref()
-                            .map_or(false, |five_tuple| c.contains(five_tuple)))
+                            .is_some_and(|five_tuple| c.contains(five_tuple)))
                     }),
                     FilteringAction::Drop => Box::new(|c, five_tuple_option| {
                         Ok(five_tuple_option
                             .as_ref()
-                            .map_or(false, |five_tuple| !c.contains(five_tuple)))
+                            .is_some_and(|five_tuple| !c.contains(five_tuple)))
                     }),
                 };
 
