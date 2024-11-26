@@ -37,7 +37,7 @@ pub struct ThreadedAnalyzer<'a> {
     barrier: Arc<Barrier>,
 }
 
-impl<'a> ThreadedAnalyzer<'a> {
+impl ThreadedAnalyzer<'_> {
     pub fn new(registry: PluginRegistry, config: &Config) -> Self {
         let n_workers = config
             .get_usize("num_threads")
@@ -162,7 +162,7 @@ impl<'a> ThreadedAnalyzer<'a> {
     }
 }
 
-impl<'a> PcapAnalyzer for ThreadedAnalyzer<'a> {
+impl PcapAnalyzer for ThreadedAnalyzer<'_> {
     fn init(&mut self) -> Result<(), Error> {
         self.registry.run_plugins(|_| true, |p| p.pre_process());
 

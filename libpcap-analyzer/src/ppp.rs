@@ -20,7 +20,7 @@ pub struct PppPacket<'p> {
     packet: ::pnet_macros_support::packet::PacketData<'p>,
 }
 
-impl<'a> PppPacket<'a> {
+impl PppPacket<'_> {
     /// Constructs a new PPP packet. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
@@ -69,7 +69,7 @@ impl<'a> PppPacket<'a> {
     }
 }
 
-impl<'a> ::pnet_macros_support::packet::Packet for PppPacket<'a> {
+impl ::pnet_macros_support::packet::Packet for PppPacket<'_> {
     #[inline]
     fn packet(&self) -> &[u8] {
         &self.packet[..]

@@ -26,7 +26,7 @@ pub struct TlsStats<'a> {
 // plugin_builder!(TlsStats, TlsStatsBuilder);
 plugin_builder!(TlsStats, TlsStatsBuilder);
 
-impl<'a> Plugin for TlsStats<'a> {
+impl Plugin for TlsStats<'_> {
     fn name(&self) -> &'static str {
         "TlsStats"
     }
@@ -85,7 +85,7 @@ impl<'a> Plugin for TlsStats<'a> {
     }
 }
 
-impl<'a> TlsStats<'a> {
+impl TlsStats<'_> {
     fn get_results_json(&mut self) -> Value {
         let mut map = serde_json::Map::new();
         //

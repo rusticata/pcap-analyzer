@@ -39,7 +39,7 @@ pub struct MplsPacket<'p> {
     stack_size: usize,
 }
 
-impl<'a> MplsPacket<'a> {
+impl MplsPacket<'_> {
     /// Constructs a new PPP packet. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
@@ -113,7 +113,7 @@ impl<'a> MplsPacket<'a> {
     }
 }
 
-impl<'a> ::pnet_macros_support::packet::Packet for MplsPacket<'a> {
+impl ::pnet_macros_support::packet::Packet for MplsPacket<'_> {
     #[inline]
     fn packet(&self) -> &[u8] {
         &self.packet[..]

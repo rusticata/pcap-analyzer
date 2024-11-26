@@ -8,7 +8,7 @@ pub struct GenevePacket<'p> {
     packet: ::pnet_macros_support::packet::PacketData<'p>,
 }
 
-impl<'a> GenevePacket<'a> {
+impl GenevePacket<'_> {
     /// Constructs a new GENEVE packet. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
@@ -102,7 +102,7 @@ impl<'a> GenevePacket<'a> {
     }
 }
 
-impl<'a> ::pnet_macros_support::packet::Packet for GenevePacket<'a> {
+impl ::pnet_macros_support::packet::Packet for GenevePacket<'_> {
     #[inline]
     fn packet(&self) -> &[u8] {
         &self.packet[..]
@@ -151,11 +151,11 @@ pub struct GeneveOptionPacket<'p> {
     packet: ::pnet_macros_support::packet::PacketData<'p>,
 }
 
-impl<'a> GeneveOptionPacket<'a> {
+impl GeneveOptionPacket<'_> {
     /// Constructs a new GeneveOptionPacket. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
-    pub fn new(packet: &'_ [u8]) -> Option<GeneveOptionPacket<'_>> {
+    pub fn new(packet: &[u8]) -> Option<GeneveOptionPacket> {
         if packet.len() >= GeneveOptionPacket::minimum_packet_size() {
             use pnet_macros_support::packet::PacketData;
             Some(GeneveOptionPacket {
@@ -188,7 +188,7 @@ impl<'a> GeneveOptionPacket<'a> {
     }
 }
 
-impl<'a> ::pnet_macros_support::packet::Packet for GeneveOptionPacket<'a> {
+impl ::pnet_macros_support::packet::Packet for GeneveOptionPacket<'_> {
     #[inline]
     fn packet(&self) -> &[u8] {
         &self.packet[..]
@@ -202,13 +202,13 @@ impl<'a> ::pnet_macros_support::packet::Packet for GeneveOptionPacket<'a> {
     }
 }
 
-impl<'a> ::pnet_macros_support::packet::PacketSize for GeneveOptionPacket<'a> {
+impl ::pnet_macros_support::packet::PacketSize for GeneveOptionPacket<'_> {
     fn packet_size(&self) -> usize {
         4 + 4 * (self.get_option_length() as usize)
     }
 }
 
-impl<'p> ::pnet_macros_support::packet::FromPacket for GeneveOptionPacket<'p> {
+impl ::pnet_macros_support::packet::FromPacket for GeneveOptionPacket<'_> {
     type T = GeneveOption;
     #[inline]
     fn from_packet(&self) -> GeneveOption {

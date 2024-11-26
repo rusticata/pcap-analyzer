@@ -6,7 +6,7 @@ pub struct ErspanPacket<'p> {
     packet: ::pnet_macros_support::packet::PacketData<'p>,
 }
 
-impl<'a> ErspanPacket<'a> {
+impl ErspanPacket<'_> {
     /// Constructs a new ErspanPacket. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
@@ -78,7 +78,7 @@ impl<'a> ErspanPacket<'a> {
         b0 | b1
     }
 }
-impl<'a> ::pnet_macros_support::packet::Packet for ErspanPacket<'a> {
+impl ::pnet_macros_support::packet::Packet for ErspanPacket<'_> {
     #[inline]
     fn packet(&self) -> &[u8] {
         &self.packet[..]

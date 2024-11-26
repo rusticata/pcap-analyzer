@@ -6,7 +6,7 @@ pub struct PppoeSessionPacket<'p> {
     packet: ::pnet_macros_support::packet::PacketData<'p>,
 }
 
-impl<'a> PppoeSessionPacket<'a> {
+impl PppoeSessionPacket<'_> {
     /// Constructs a new PppoeSession. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
@@ -61,7 +61,7 @@ impl<'a> PppoeSessionPacket<'a> {
     }
 }
 
-impl<'a> ::pnet_macros_support::packet::Packet for PppoeSessionPacket<'a> {
+impl ::pnet_macros_support::packet::Packet for PppoeSessionPacket<'_> {
     #[inline]
     fn packet(&self) -> &[u8] {
         &self.packet[..]

@@ -27,7 +27,7 @@ pub mod VxlanFlags {
     pub const VNI: VxlanFlag = VxlanFlag(0x0800);
 }
 
-impl<'a> VxlanPacket<'a> {
+impl VxlanPacket<'_> {
     /// Constructs a new VxlanPacket. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
@@ -70,7 +70,7 @@ impl<'a> VxlanPacket<'a> {
         b0 | b1 | b2
     }
 }
-impl<'a> ::pnet_macros_support::packet::Packet for VxlanPacket<'a> {
+impl ::pnet_macros_support::packet::Packet for VxlanPacket<'_> {
     #[inline]
     fn packet(&self) -> &[u8] {
         &self.packet[..]
