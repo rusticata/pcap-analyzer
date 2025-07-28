@@ -170,7 +170,7 @@ impl Plugin for Rusticata {
                 ParseResult::ProtocolChanged => {
                     // recurse to call probing function
                     // TODO risk of infinite loop?
-                    info!("Protocol change for flow 0x{:x}", flow_id);
+                    info!("Protocol change for flow 0x{flow_id:x}");
                     return self.handle_layer_transport(_packet, pinfo);
                 }
                 ParseResult::Error => {
@@ -236,7 +236,7 @@ impl Rusticata {
             // debug!("trying probe {}", name);
             match probe(i, l4_info) {
                 ProbeResult::Certain | ProbeResult::Reverse => {
-                    trace!("probe {} MATCHED", name);
+                    trace!("probe {name} MATCHED");
                     let proto = (*name).to_string();
                     self.flow_probes.remove(&flow_id);
                     return Some(proto);
@@ -246,10 +246,7 @@ impl Rusticata {
                 }
                 ProbeResult::NotForUs => (),
                 ProbeResult::Fatal => {
-                    warn!(
-                        "Probe {} returned fatal error for flow ID 0x{:x}",
-                        name, flow_id
-                    );
+                    warn!("Probe {name} returned fatal error for flow ID 0x{flow_id:x}");
                     // XXX disable probe if too many errors?
                 }
             }
@@ -277,13 +274,13 @@ impl Rusticata {
         };
         let maybe_s = self.probe(data, flow_id, &l4_info);
         if let Some(parser_name) = maybe_s {
-            debug!("Protocol recognized as {}", parser_name);
+            debug!("Protocol recognized as {parser_name}");
             // warn!("Protocol recognized as {} (5t: {})", parser_name, pinfo.five_tuple);
             if let Some(builder) = self.builder_map.get((&parser_name) as &str) {
                 self.flow_parsers.insert(flow_id, builder.build());
                 self.flow_parsers.get_mut(&flow_id)
             } else {
-                warn!("Could not build parser for proto {}", parser_name);
+                warn!("Could not build parser for proto {parser_name}");
                 self.flow_bypass.insert(flow_id);
                 None
             }

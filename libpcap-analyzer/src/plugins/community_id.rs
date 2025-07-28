@@ -96,7 +96,7 @@ fn hash_community_id(five_tuple: &FiveTuple, l4_type: u8, seed: u16) -> String {
     } else {
         base16ct::lower::encode_string(&hash)
     };
-    format!("{}:{}", community_id_version, digest)
+    format!("{community_id_version}:{digest}")
 }
 
 impl Plugin for CommunityID {

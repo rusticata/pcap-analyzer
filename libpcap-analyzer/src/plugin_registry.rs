@@ -178,11 +178,7 @@ impl PluginRegistry {
         if plugin_id >= self.plugins_all.len() {
             return Err("Invalid Plugin ID");
         }
-        trace!(
-            "registering plugin for layer={} filter=0x{:04x}",
-            layer,
-            layer_filter
-        );
+        trace!("registering plugin for layer={layer} filter=0x{layer_filter:04x}");
         let plugin = &self.plugins_all[plugin_id];
         let plugin_info = PluginInfo {
             layer,
