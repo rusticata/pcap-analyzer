@@ -1,0 +1,10 @@
+[package]
+name = "libpcap-analyzer-live"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libpcap-analyzer = { path="../libpcap-analyzer" }
+libpcap-tools = { path="../libpcap-tools" }
+pcap = "2.3"
+tracing = { version="0.1", features=["log"] }

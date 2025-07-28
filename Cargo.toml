@@ -2,6 +2,7 @@
 members = [
   "libpcap-tools",
   "libpcap-analyzer",
+  "libpcap-analyzer-live",
   "explugin-example",
   "pcap-analyzer",
   "pcap-info",

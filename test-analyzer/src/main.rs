@@ -21,6 +21,19 @@ use xz2::read::XzDecoder;
 mod display;
 use display::*;
 
+#[derive(Debug, clap::Args)]
+#[group(required = true, multiple = false)]
+pub struct InputGroup {
+    /// Input file
+    // #[clap(short, long)]
+    input: Option<String>,
+
+    #[cfg(feature = "live")]
+    /// Live Mode
+    #[clap(short, long)]
+    interface: Option<String>,
+}
+
 /// Pcap analyzer test tool
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -41,8 +54,9 @@ struct Args {
     #[arg(short, long, default_value_t = 0)]
     skip: u32,
 
-    /// Input file
-    input: String,
+    /// Input
+    #[clap(flatten)]
+    input_group: InputGroup,
 }
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
@@ -75,7 +89,6 @@ fn main() -> Result<(), io::Error> {
     if let Some(filename) = args.config {
         load_config(&mut config, &filename)?;
     }
-    let input_filename = &args.input;
 
     config.set("skip_index", args.skip);
 
@@ -132,34 +145,62 @@ fn main() -> Result<(), io::Error> {
     //     _ => Box::new(ThreadedAnalyzer::new(registry, &config)),
     // };
 
-    let mut input_reader: Box<dyn io::Read + Send> = if input_filename == "-" {
-        Box::new(io::stdin())
-    } else {
-        let path = Path::new(&input_filename);
-        let file = File::open(path)?;
-        if input_filename.ends_with(".gz") {
-            Box::new(GzDecoder::new(file))
-        } else if input_filename.ends_with(".xz") {
-            Box::new(XzDecoder::new(file))
-        } else if input_filename.ends_with(".lz4") {
-            Box::new(lz4::Decoder::new(file)?)
+    // FIXME: let input_filename = &args.input;
+    if let Some(input_filename) = args.input_group.input {
+        let mut input_reader: Box<dyn io::Read + Send> = if input_filename == "-" {
+            Box::new(io::stdin())
         } else {
-            Box::new(file) as Box<dyn io::Read + Send>
-        }
-    };
+            let path = Path::new(&input_filename);
+            let file = File::open(path)?;
+            if input_filename.ends_with(".gz") {
+                Box::new(GzDecoder::new(file))
+            } else if input_filename.ends_with(".xz") {
+                Box::new(XzDecoder::new(file))
+            } else if input_filename.ends_with(".lz4") {
+                Box::new(lz4::Decoder::new(file)?)
+            } else {
+                Box::new(file) as Box<dyn io::Read + Send>
+            }
+        };
 
-    let num_threads = config.get_usize("num_threads").unwrap_or(1);
-    if num_threads == 1 {
-        let analyzer = Analyzer::new(Arc::new(registry), &config);
-        let mut engine = PcapDataEngine::new(analyzer, &config);
-        engine.run(&mut input_reader).expect("run analyzer");
-        show_results(engine.data_analyzer());
+        let num_threads = config.get_usize("num_threads").unwrap_or(1);
+        if num_threads == 1 {
+            let analyzer = Analyzer::new(Arc::new(registry), &config);
+            let mut engine = PcapDataEngine::new(analyzer, &config);
+            engine.run(&mut input_reader).expect("run analyzer");
+            show_results(engine.data_analyzer());
+        } else {
+            let analyzer = ThreadedAnalyzer::new(registry, &config);
+            let mut engine = PcapDataEngine::new(analyzer, &config);
+            engine.run(&mut input_reader).expect("run analyzer");
+            let threaded_data_analyzer = engine.data_analyzer();
+            show_results(threaded_data_analyzer.inner_analyzer());
+        }
     } else {
-        let analyzer = ThreadedAnalyzer::new(registry, &config);
-        let mut engine = PcapDataEngine::new(analyzer, &config);
-        engine.run(&mut input_reader).expect("run analyzer");
-        let threaded_data_analyzer = engine.data_analyzer();
-        show_results(threaded_data_analyzer.inner_analyzer());
+        #[cfg(feature = "live")]
+        if let Some(interface_name) = args.input_group.interface {
+            use libpcap_analyzer_live::create_engine_live;
+            use std::sync::atomic::{AtomicBool, Ordering};
+
+            let mut engine =
+                create_engine_live(&interface_name, &config).map_err(io::Error::other)?;
+            let running = Arc::new(AtomicBool::new(true));
+            let r = running.clone();
+            ctrlc::set_handler(move || {
+                debug!("Receiving SIGINT, exiting (this can take a few seconds)");
+                r.store(false, Ordering::SeqCst);
+            })
+            .expect("Error setting Ctrl-C handler");
+
+            engine.run(running).expect("live analyzer failed");
+            show_results(engine.data_analyzer());
+        }
+        #[cfg(not(feature = "live"))]
+        {
+            // This is not supposed to be possible, if clap checks arguments
+            error!("No input was provided");
+            std::process::exit(1);
+        }
     }
 
     info!("test-analyzer: done");
