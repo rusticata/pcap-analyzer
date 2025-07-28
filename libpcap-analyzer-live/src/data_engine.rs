@@ -75,6 +75,10 @@ impl<A: PcapAnalyzer> PcapLiveDataEngine<A> {
         &mut self.analyzer
     }
 
+    pub fn set_filter(&mut self, filter: &str) -> Result<(), pcap::Error> {
+        self.cap.filter(filter, true)
+    }
+
     pub fn run(&mut self, stop: Arc<AtomicBool>) -> Result<(), Error> {
         debug!("Live mode: waiting for packets");
         let cap = &mut self.cap;
