@@ -59,8 +59,8 @@ pub fn pcap_rewrite_file<S1: AsRef<str>, S2: AsRef<str>>(
         // check that we are not using stdin
         if input_filename == "-" {
             const MSG: &str = "Plugins with pre-analysis pass cannot be run on stdin";
-            error!("{}", MSG);
-            return Err(io::Error::new(io::ErrorKind::Other, MSG));
+            error!("{MSG}");
+            return Err(io::Error::other(MSG));
         }
         info!("Running pre-analysis pass");
         engine.data_analyzer_mut().set_run_pre_analysis(true);
@@ -86,7 +86,7 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read + Send>> {
     } else {
         let path = Path::new(&input_filename);
         let mut file = File::open(path).map_err(|e| {
-            error!("Could not open input file '{}'", input_filename);
+            error!("Could not open input file '{input_filename}'");
             e
         })?;
 
@@ -169,7 +169,7 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read + Send>> {
             }
             "custom/pcap" => Ok(Box::new(file)),
             _ => {
-                warn!("Could not infer file type '{}'", input_filename);
+                warn!("Could not infer file type '{input_filename}'");
                 if input_filename.ends_with(".gz") {
                     Ok(Box::new(GzDecoder::new(file)))
                 } else if input_filename.ends_with(".xz") {
