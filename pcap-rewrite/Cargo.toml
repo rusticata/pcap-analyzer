@@ -8,17 +8,17 @@ rust-version = "1.74"
 description = "Pcap file conversion/rewrite tool"
 categories = ["network-programming"]
 
-keywords    = ["pcap", "network", "tools"]
-readme      = "../README.md"
-license     = "MIT/Apache-2.0"
+keywords = ["pcap", "network", "tools"]
+readme = "../README.md"
+license = "MIT/Apache-2.0"
 
-repository    = "https://github.com/rusticata/pcap-analyzer.git"
-homepage      = "https://github.com/rusticata/pcap-analyzer"
+repository = "https://github.com/rusticata/pcap-analyzer.git"
+homepage = "https://github.com/rusticata/pcap-analyzer"
 
 [badges]
-travis-ci                         = { repository = "rusticata/pcap-analyzer" }
-is-it-maintained-open-issues      = { repository = "rusticata/pcap-analyzer" }
-maintenance                       = { status     = "actively-developed" }
+travis-ci = { repository = "rusticata/pcap-analyzer" }
+is-it-maintained-open-issues = { repository = "rusticata/pcap-analyzer" }
+maintenance = { status = "actively-developed" }
 
 [lib]
 name = "pcap_rewrite"
@@ -32,21 +32,18 @@ doc = false
 
 [dependencies]
 csv = "1.1.6"
-clap = { version = "4.4", features = ["cargo", "derive"] }
+clap = { workspace = true }
 infer = "0.19.0"
-libpcap-analyzer = { version="0.1.0", path="../libpcap-analyzer" }
-libpcap-tools = { version="0.1.0", path="../libpcap-tools" }
+libpcap-analyzer = { version = "0.1.0", path = "../libpcap-analyzer" }
+libpcap-tools = { version = "0.1.0", path = "../libpcap-tools" }
 log = { version = "0.4" }
 flate2 = { version = "1.0", features = ["zlib"], default-features = false }
 lz4 = "1.23"
+pcap-parser = { workspace = true, features = ["serialize"] }
 pnet_packet = "0.35"
-tracing = { version="0.1", features=["log"] }
-tracing-subscriber = { version="0.3", features=["env-filter","fmt","json"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 xz2 = "0.1"
-
-[dependencies.pcap-parser]
-version = "0.17"
-features = ["data", "serialize"]
 
 [dev-dependencies]
 assert_cmd = "2.0"

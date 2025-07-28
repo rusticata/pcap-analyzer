@@ -11,8 +11,18 @@ members = [
 ]
 resolver = "2"
 
+[workspace.dependencies]
+clap = { version = "4.4", features = ["cargo", "derive"] }
+pcap-parser = { version = "0.17", features = ["data"] }
+tracing = { version = "0.1", features = ["log"] }
+tracing-subscriber = { version = "0.3", features = [
+  "env-filter",
+  "fmt",
+  "json",
+] }
+
 [profile.release]
-opt-level = 'z'  # Optimize for size.
+opt-level = 'z'     # Optimize for size.
 lto = true
 codegen-units = 1
 incremental = false
