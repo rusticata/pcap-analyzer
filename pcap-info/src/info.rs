@@ -251,7 +251,7 @@ pub(crate) fn process_file(name: &str, options: &Options) -> Result<(i32, PcapIn
                 reader.refill().expect("Refill failed");
                 continue;
             }
-            Err(e) => panic!("Error while reading: {:?}", e),
+            Err(e) => panic!("Error while reading: {e:?}"),
         }
     }
 

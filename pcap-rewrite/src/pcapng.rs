@@ -3,7 +3,7 @@ use libpcap_tools::Packet;
 use pcap_parser::pcapng::*;
 use pcap_parser::ToVec;
 use pcap_parser::{Linktype, PcapBlockOwned};
-use std::io::{self, Error, ErrorKind, Write};
+use std::io::{self, Error, Write};
 
 /// Writer for the legacy pcap format
 pub struct PcapNGWriter<W>
@@ -33,10 +33,9 @@ impl<W: Write> Writer for PcapNGWriter<W> {
             block_len2: 28,
         };
         #[allow(clippy::or_fun_call)]
-        let v = shb.to_vec_raw().or(Err(Error::new(
-            ErrorKind::Other,
-            "SHB serialization failed",
-        )))?;
+        let v = shb
+            .to_vec_raw()
+            .or(Err(Error::other("SHB serialization failed")))?;
         let sz1 = self.w.write(&v)?;
         let mut idb = InterfaceDescriptionBlock {
             block_type: IDB_MAGIC,
@@ -51,10 +50,9 @@ impl<W: Write> Writer for PcapNGWriter<W> {
         };
         // to_vec will add options automatically
         #[allow(clippy::or_fun_call)]
-        let v = idb.to_vec().or(Err(Error::new(
-            ErrorKind::Other,
-            "IDB serialization failed",
-        )))?;
+        let v = idb
+            .to_vec()
+            .or(Err(Error::other("IDB serialization failed")))?;
         let sz2 = self.w.write(&v)?;
         Ok(sz1 + sz2)
     }
@@ -70,7 +68,7 @@ impl<W: Write> Writer for PcapNGWriter<W> {
                     // other blocks are copied
                     _ => {
                         let v = b.to_vec_raw().map_err(|_| {
-                            Error::new(ErrorKind::Other, "Block serialization failed")
+                            Error::other("Block serialization failed")
                         })?;
                         self.w.write(&v)
                     }
@@ -102,10 +100,9 @@ impl<W: Write> Writer for PcapNGWriter<W> {
         };
         // to_vec will adjust length
         #[allow(clippy::or_fun_call)]
-        let v = epb.to_vec().or(Err(Error::new(
-            ErrorKind::Other,
-            "EPB serialization failed",
-        )))?;
+        let v = epb
+            .to_vec()
+            .or(Err(Error::other("EPB serialization failed")))?;
         self.w.write(&v)
     }
 }

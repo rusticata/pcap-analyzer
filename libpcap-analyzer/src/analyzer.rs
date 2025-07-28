@@ -73,7 +73,7 @@ impl Analyzer {
         let do_checksums = config.get_bool("do_checksums").unwrap_or(true);
         let skip_index = config.get_usize("skip_index").unwrap_or(0);
         if skip_index > 0 {
-            debug!("Will skip to index {}", skip_index);
+            debug!("Will skip to index {skip_index}");
         }
         let output_dir = config.get("output_dir").map(|s| s.to_owned());
         Analyzer {
@@ -388,7 +388,7 @@ fn handle_l3_ipv6(
         let ext = ExtensionPacket::new(payload)
             .ok_or("Could not build IPv6 Extension packet from payload")?;
         let next_header = ext.get_next_header();
-        trace!("option header: {}", l4_proto);
+        trace!("option header: {l4_proto}");
         if l4_proto == IpNextHeaderProtocols::Ipv6Frag {
             if frag_ext.is_some() {
                 warn!("multiple IPv6Frag extensions idx={}", ctx.pcap_index);
@@ -588,7 +588,7 @@ fn handle_l4_tcp(
 
     // XXX begin copy/paste of handle_l4_common
     let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
-    trace!("5-t: {}", five_tuple);
+    trace!("5-t: {five_tuple}");
     let now = packet.ts;
 
     let flow_id = {
@@ -688,7 +688,7 @@ fn handle_l4_tcp(
             });
         }
         Err(e) => {
-            warn!("Tcp steam reassembly error: {:?}", e);
+            warn!("Tcp steam reassembly error: {e:?}");
         }
     }
 
@@ -864,7 +864,7 @@ fn handle_l4_gre(
     } else {
         gre.payload()
     };
-    trace!("GRE: type=0x{:x}", next_proto);
+    trace!("GRE: type=0x{next_proto:x}");
 
     handle_l3(packet, ctx, data, EtherType(next_proto), analyzer)
 }
@@ -899,12 +899,7 @@ fn handle_l4_ipv6frag(
     let frag_offset = frag_info.get_fragment_offset() as usize;
     let frag_id = frag_info.get_id();
     let last_fragment = frag_info.is_last_fragment();
-    trace!(
-        "IPv6 Fragment frag_offset={} id={} last_fragment={}",
-        frag_offset,
-        frag_id,
-        last_fragment
-    );
+    trace!("IPv6 Fragment frag_offset={frag_offset} id={frag_id} last_fragment={last_fragment}");
 
     let defrag = {
         // check IP fragmentation before calling handle_l4
@@ -937,7 +932,7 @@ fn handle_l4_ipv6frag(
         IpNextHeaderProtocols::Udp => handle_l4_udp(packet, ctx, data, l3_info, analyzer),
         IpNextHeaderProtocols::Icmp => handle_l4_icmp(packet, ctx, data, l3_info, analyzer),
         _ => {
-            warn!("IPv6Fragment: Unsupported L4 proto {}", l4_proto);
+            warn!("IPv6Fragment: Unsupported L4 proto {l4_proto}");
             handle_l4_generic(packet, ctx, data, l3_info, analyzer)
         }
     }
@@ -977,7 +972,7 @@ fn handle_l4_common(
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     let five_tuple = FiveTuple::from_three_tuple(&l3_info.three_tuple, src_port, dst_port);
-    trace!("5-t: {}", five_tuple);
+    trace!("5-t: {five_tuple}");
     let now = packet.ts;
 
     let flow_id = {
@@ -1053,11 +1048,7 @@ fn run_plugins_v2<'i, F>(
 where
     F: for<'p> Fn(&'p mut dyn Plugin) -> PluginResult<'i>,
 {
-    trace!(
-        "running plugins for layer={} filter=0x{:04x}",
-        layer,
-        layer_filter
-    );
+    trace!("running plugins for layer={layer} filter=0x{layer_filter:04x}");
     // clone the registry (which is an Arc)
     // so analyzer is not borrowed for the plugins loop
     let registry = analyzer.registry.clone();
@@ -1082,7 +1073,7 @@ where
             PluginResult::None => continue,
             PluginResult::Error(e) => {
                 // XXX ignore error in plugins ? just log ?
-                warn!("Plugin returned error {:?}", e);
+                warn!("Plugin returned error {e:?}");
                 continue;
             }
             PluginResult::L2(e, payload) => {

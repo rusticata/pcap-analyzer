@@ -61,10 +61,10 @@ struct Args {
 }
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
-    debug!("Loading configuration {}", filename);
+    debug!("Loading configuration {filename}");
     let path = Path::new(&filename);
     let file = File::open(path).map_err(|e| {
-        error!("Could not open config file '{}'", filename);
+        error!("Could not open config file '{filename}'");
         e
     })?;
     config.load_config(file)
@@ -106,7 +106,7 @@ fn main() -> io::Result<()> {
     let mut filters: Vec<Box<dyn filters::filter::Filter>> = Vec::new();
     let filter_names = &args.filters;
     for name in filter_names {
-        eprintln!("adding filter: {}", name);
+        eprintln!("adding filter: {name}");
         let args: Vec<_> = name.splitn(2, ':').collect();
         match args[0] {
             "IP" => {
@@ -124,10 +124,9 @@ fn main() -> io::Result<()> {
                 let dispatch_data = args[1];
                 let args: Vec<_> = dispatch_data.split('%').collect();
                 assert_eq!(args.len(), 3);
-                let filtering_key = FilteringKey::of_string(args[0])
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                let filtering_action = FilteringAction::of_string(args[1])
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let filtering_key = FilteringKey::of_string(args[0]).map_err(io::Error::other)?;
+                let filtering_action =
+                    FilteringAction::of_string(args[1]).map_err(io::Error::other)?;
                 let key_file_path = args[2];
 
                 let f = DispatchFilterBuilder::from_args(
@@ -142,15 +141,13 @@ fn main() -> io::Result<()> {
                 let dispatch_data = args[1];
                 let args: Vec<_> = dispatch_data.split('%').collect();
                 if args.len() != 2 {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::other(
                         "More than two arguments provided to fragmentation filter.".to_string(),
                     ));
                 };
-                let filtering_key = FilteringKey::of_string(args[0])
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-                let filtering_action = FilteringAction::of_string(args[1])
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let filtering_key = FilteringKey::of_string(args[0]).map_err(io::Error::other)?;
+                let filtering_action =
+                    FilteringAction::of_string(args[1]).map_err(io::Error::other)?;
 
                 let f = FragmentationFilterBuilder::from_args(filtering_key, filtering_action)?;
                 filters.push(f);

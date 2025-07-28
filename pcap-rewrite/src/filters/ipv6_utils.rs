@@ -58,7 +58,7 @@ pub fn get_fragment_packet_option_l4_protol4_payload<'a>(
         let ext = ExtensionPacket::new(payload)
             .expect("Could not build IPv6 Extension packet from payload");
         let next_header = ext.get_next_header();
-        trace!("option header: {}", l4_proto);
+        trace!("option header: {l4_proto}");
         if l4_proto == IpNextHeaderProtocols::Ipv6Frag {
             if fragment_packet_option.is_some() {
                 return Err(Error::DataParser("multiple IPv6Frag extensions"));

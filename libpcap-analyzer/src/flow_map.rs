@@ -56,14 +56,14 @@ impl FlowMap {
         let rev_id = self.flows_id.get(&five_t.get_reverse()).copied();
         if let Some(id) = rev_id {
             // insert reverse flow ID
-            trace!("Inserting reverse flow ID 0x{:x}", id);
+            trace!("Inserting reverse flow ID 0x{id:x}");
             self.flows_id.insert(five_t, id);
             return id;
         }
         // get a new flow index (XXX currently: random number)
         let id = self.trng.gen();
-        trace!("Inserting new flow (id=0x{:x})", id);
-        trace!("    flow: {:?}", flow);
+        trace!("Inserting new flow (id=0x{id:x})");
+        trace!("    flow: {flow:?}");
         self.flows.insert(id, flow);
         self.flows_id.insert(five_t, id);
         id
