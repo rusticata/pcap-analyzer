@@ -127,6 +127,38 @@ In particular:
 - even if several packets are concurrently handled by several workers, a single plugin will not be
   called concurrently. However, different plugins can execute concurrently.
 
+## Live mode
+
+Experimental support for live capture of packets is available, based on the `pcap` library.
+
+To use it, install the required dependencies and enable the "live" feature during compilation:
+
+```
+sudo apt-get install libpcap-dev
+cargo build --features "live"
+```
+
+The `--interface NAME` option (required) can be used after to specify the capture interface, and the
+`--filter FILTER_STRING` can be used to limit captured packets to those matching the filter:
+
+```
+pcap-analyzer -c conf/pcap-analyzer.conf -i eth0
+```
+
+Set the configuration file for options relative to live capture.
+
+### Permissions
+
+Live mode requires `CAP_NET_RAW` (and possibly `CAP_NET_ADMIN` to list interfaces?), so the
+executable file requires either to be run using `sudo` or similar, or to have the file capabilities
+set.
+
+Developer note: to run the file with `sudo` when using `cargo`, use the `target."cfg(all())".runner`
+option, for example:
+```
+cargo run --config 'target."cfg(all())".runner="sudo -E"' -- -c conf/pcap-analyzer.conf -i eth0
+```
+
 ## Notes
 
 - pcap file parsing is completely reimplemented from scratch. This is the result of most existing
