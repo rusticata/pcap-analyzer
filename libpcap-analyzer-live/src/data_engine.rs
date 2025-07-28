@@ -87,7 +87,6 @@ impl<A: PcapAnalyzer> PcapLiveDataEngine<A> {
         while stop.load(Ordering::SeqCst) {
             match cap.next_packet() {
                 Ok(packet) => {
-                    debug!("Live: receiving packet, handling block");
                     block_ctx.block_index += 1;
                     let header = &packet.header;
                     let ts_sec = header.ts.tv_sec as u32;
@@ -107,7 +106,6 @@ impl<A: PcapAnalyzer> PcapLiveDataEngine<A> {
                     let blen = header.caplen as usize;
                     let data = pcap_parser::data::get_packetdata(packet.data, self.link_type, blen)
                         .ok_or(Error::Generic("Parsing PacketData failed (Legacy Packet)"))?;
-                    debug!("Live: receiving packet, handling packet {}", ctx.pcap_index);
                     let ts = if self.precision == Precision::Micro {
                         Duration::new(ts_sec, ts_usec)
                     } else {
