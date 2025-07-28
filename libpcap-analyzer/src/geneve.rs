@@ -12,7 +12,7 @@ impl GenevePacket<'_> {
     /// Constructs a new GENEVE packet. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
-    pub fn new(packet: &[u8]) -> Option<GenevePacket> {
+    pub fn new(packet: &[u8]) -> Option<GenevePacket<'_>> {
         if packet.len() >= GenevePacket::minimum_packet_size() {
             use pnet_macros_support::packet::PacketData;
             Some(GenevePacket {
@@ -96,7 +96,7 @@ impl GenevePacket<'_> {
     /// Get the value of the options field as iterator
     #[inline]
     #[allow(trivial_numeric_casts)]
-    pub fn get_options_iter(&self) -> GeneveOptionIterable {
+    pub fn get_options_iter(&self) -> GeneveOptionIterable<'_> {
         let buf = self.get_options_raw();
         GeneveOptionIterable { buf }
     }
@@ -155,7 +155,7 @@ impl GeneveOptionPacket<'_> {
     /// Constructs a new GeneveOptionPacket. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
-    pub fn new(packet: &[u8]) -> Option<GeneveOptionPacket> {
+    pub fn new(packet: &[u8]) -> Option<GeneveOptionPacket<'_>> {
         if packet.len() >= GeneveOptionPacket::minimum_packet_size() {
             use pnet_macros_support::packet::PacketData;
             Some(GeneveOptionPacket {

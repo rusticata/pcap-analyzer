@@ -10,7 +10,7 @@ impl ErspanPacket<'_> {
     /// Constructs a new ErspanPacket. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
-    pub fn new(packet: &[u8]) -> Option<ErspanPacket> {
+    pub fn new(packet: &[u8]) -> Option<ErspanPacket<'_>> {
         if packet.len() >= ErspanPacket::minimum_packet_size() {
             use pnet_macros_support::packet::PacketData;
             Some(ErspanPacket {
