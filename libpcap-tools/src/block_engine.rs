@@ -47,7 +47,7 @@ impl<A: BlockAnalyzer> BlockEngine<A> {
     }
 
     /// Main function: given a reader, read all pcap data and call analyzer for each Packet
-    pub fn run(&mut self, reader: &mut dyn Read) -> Result<(), Error> {
+    pub fn run(&mut self, reader: &mut (dyn Read + Send)) -> Result<(), Error> {
         let mut reader = pcap_parser::create_reader(self.capacity, reader)?;
 
         self.analyzer.init()?;
@@ -86,7 +86,7 @@ impl<A: BlockAnalyzer> BlockEngine<A> {
                 }
                 Err(e) => {
                     let e = e.to_owned_vec();
-                    error!("error while reading: {:?}", e);
+                    error!("error while reading: {e:?}");
                     error!(
                         "  Buffer: consumed={} position={}",
                         reader.consumed(),

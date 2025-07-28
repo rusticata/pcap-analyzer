@@ -44,5 +44,5 @@ tracing-subscriber = { version="0.3", features=["env-filter","fmt","json"] }
 xz2 = "0.1"
 
 [dependencies.pcap-parser]
-version = "0.16"
+version = "0.17"
 features = ["data", "serialize"]

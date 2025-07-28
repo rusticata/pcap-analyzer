@@ -94,10 +94,7 @@ impl Config {
                 self.value = value;
                 Ok(())
             }
-            _ => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "Load configuration failed",
-            )),
+            _ => Err(io::Error::other("Load configuration failed")),
         }
     }
 }

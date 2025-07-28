@@ -80,7 +80,7 @@ pub fn pcap_rewrite_file<S1: AsRef<str>, S2: AsRef<str>>(
     Ok(())
 }
 
-fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
+fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read + Send>> {
     let input_reader = if input_filename == "-" {
         Box::new(io::stdin())
     } else {
@@ -148,7 +148,7 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
         let kind = info.get(&buf).unwrap();
 
         file.seek(SeekFrom::Start(0))?;
-        let b: Result<Box<dyn Read>, Error> = match kind.mime_type() {
+        let b: Result<Box<dyn Read + Send>, Error> = match kind.mime_type() {
             "application/gz" => {
                 if !input_filename.ends_with(".gz") {
                     warn!("Inferred file type is gz but file extension is not gz")
@@ -167,7 +167,7 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
                 };
                 Ok(Box::new(lz4::Decoder::new(file)?))
             }
-            "custom/pcap" => Ok(Box::new(file) as Box<dyn io::Read>),
+            "custom/pcap" => Ok(Box::new(file)),
             _ => {
                 warn!("Could not infer file type '{}'", input_filename);
                 if input_filename.ends_with(".gz") {
@@ -177,7 +177,7 @@ fn get_reader(input_filename: &str) -> io::Result<Box<dyn Read>> {
                 } else if input_filename.ends_with(".lz4") {
                     Ok(Box::new(lz4::Decoder::new(file)?))
                 } else {
-                    Ok(Box::new(file) as Box<dyn io::Read>)
+                    Ok(Box::new(file))
                 }
             }
         };

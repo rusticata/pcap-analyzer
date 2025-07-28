@@ -82,7 +82,7 @@ impl<A: PcapAnalyzer> PcapDataAnalyzer<A> {
 }
 
 impl<A: PcapAnalyzer> PcapEngine for PcapDataEngine<A> {
-    fn run(&mut self, reader: &mut dyn Read) -> Result<(), Error> {
+    fn run(&mut self, reader: &mut (dyn Read + Send)) -> Result<(), Error> {
         self.engine.run(reader)
     }
 }

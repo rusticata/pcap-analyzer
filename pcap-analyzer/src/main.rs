@@ -196,7 +196,7 @@ fn main() -> io::Result<()> {
         } else if input_filename.ends_with(".lz4") {
             Box::new(lz4::Decoder::new(file)?)
         } else {
-            Box::new(file) as Box<dyn io::Read>
+            Box::new(file) as Box<dyn io::Read + Send>
         }
     };
 
