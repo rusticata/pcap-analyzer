@@ -1,5 +1,4 @@
 use std::io;
-use std::str::FromStr;
 
 pub struct Config {
     value: toml::Value,
@@ -89,12 +88,15 @@ impl Config {
     pub fn load_config<R: io::Read>(&mut self, mut config: R) -> Result<(), io::Error> {
         let mut s = String::new();
         config.read_to_string(&mut s)?;
-        match toml::Value::from_str(&s) {
+        match s.parse::<toml::Table>() {
             Ok(value) => {
-                self.value = value;
+                self.value = toml::Value::Table(value);
                 Ok(())
             }
-            _ => Err(io::Error::other("Load configuration failed")),
+            Err(e) => {
+                error!("Could not load configuration:\n{e:?}");
+                Err(io::Error::other("Load configuration failed"))
+            }
         }
     }
 }
