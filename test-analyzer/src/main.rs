@@ -145,13 +145,7 @@ fn main() -> Result<(), io::Error> {
         },
     );
 
-    // let analyzer: Box<dyn PcapAnalyzer> = match config.get_usize("num_threads") {
-    //     Some(1) => Box::new(Analyzer::new(registry, &config)),
-    //     _ => Box::new(ThreadedAnalyzer::new(registry, &config)),
-    // };
-
-    // FIXME: let input_filename = &args.input;
-    if let Some(input_filename) = args.input_group.input {
+    if let Some(input_filename) = args.input_group.input.as_ref() {
         let mut input_reader: Box<dyn io::Read + Send> = if input_filename == "-" {
             Box::new(io::stdin())
         } else {
