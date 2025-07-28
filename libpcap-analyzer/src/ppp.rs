@@ -24,7 +24,7 @@ impl PppPacket<'_> {
     /// Constructs a new PPP packet. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
-    pub fn new(packet: &[u8]) -> Option<PppPacket> {
+    pub fn new(packet: &[u8]) -> Option<PppPacket<'_>> {
         if packet.len() >= PppPacket::minimum_packet_size() {
             if packet[0] == 0xff && packet[1] == 0x03 && packet.len() < 4 {
                 return None;

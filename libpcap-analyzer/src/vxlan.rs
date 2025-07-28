@@ -31,7 +31,7 @@ impl VxlanPacket<'_> {
     /// Constructs a new VxlanPacket. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
-    pub fn new(packet: &[u8]) -> Option<VxlanPacket> {
+    pub fn new(packet: &[u8]) -> Option<VxlanPacket<'_>> {
         if packet.len() >= VxlanPacket::minimum_packet_size() {
             use pnet_macros_support::packet::PacketData;
             Some(VxlanPacket {

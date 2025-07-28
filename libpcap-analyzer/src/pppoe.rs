@@ -10,7 +10,7 @@ impl PppoeSessionPacket<'_> {
     /// Constructs a new PppoeSession. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
-    pub fn new(packet: &[u8]) -> Option<PppoeSessionPacket> {
+    pub fn new(packet: &[u8]) -> Option<PppoeSessionPacket<'_>> {
         if packet.len() >= PppoeSessionPacket::minimum_packet_size() {
             use pnet_macros_support::packet::PacketData;
             Some(PppoeSessionPacket {

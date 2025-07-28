@@ -83,13 +83,13 @@ impl FlowMap {
 
     /// An iterator visiting all flows in arbitrary order.
     #[inline]
-    pub fn values(&self) -> Values<FlowID, Flow> {
+    pub fn values(&self) -> Values<'_, FlowID, Flow> {
         self.flows.values()
     }
 
     /// Gets the given key's corresponding entry in the map for in-place manipulation.
     #[inline]
-    pub fn entry(&mut self, flow_id: FlowID) -> Entry<FlowID, Flow> {
+    pub fn entry(&mut self, flow_id: FlowID) -> Entry<'_, FlowID, Flow> {
         self.flows.entry(flow_id)
     }
 

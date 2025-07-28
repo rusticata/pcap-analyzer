@@ -43,7 +43,7 @@ impl MplsPacket<'_> {
     /// Constructs a new PPP packet. If the provided buffer is less than the minimum required
     /// packet size, this will return None.
     #[inline]
-    pub fn new(packet: &[u8]) -> Option<MplsPacket> {
+    pub fn new(packet: &[u8]) -> Option<MplsPacket<'_>> {
         if packet.len() >= MplsPacket::minimum_packet_size() {
             let mut stack_size = 0;
             let mut ptr = packet;
