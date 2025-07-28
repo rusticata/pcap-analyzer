@@ -312,10 +312,7 @@ impl TcpStream {
                     // ignore
                     return Ok(None);
                 }
-                warn!(
-                    "Received unexpected data in SYN_RCV state idx={}",
-                    pcap_index
-                );
+                warn!("Received unexpected data in SYN_RCV state idx={pcap_index}");
             }
             _ => unreachable!(),
         }
@@ -347,10 +344,7 @@ impl TcpStream {
         );
 
         if tcp_flags & TcpFlags::ACK == 0 && tcp.get_acknowledgement() != 0 {
-            warn!(
-                "EST/ packet without ACK (broken TCP implementation or attack) idx={}",
-                pcap_index
-            );
+            warn!("EST/ packet without ACK (broken TCP implementation or attack) idx={pcap_index}");
             // ignore segment
             return Ok(None);
         }
@@ -401,13 +395,12 @@ impl TcpStream {
         let has_fin = tcp_flags & TcpFlags::FIN != 0;
 
         let ret = if has_ack {
-            trace!("ACKing segments up to {}", rel_ack);
+            trace!("ACKing segments up to {rel_ack}");
             send_peer_segments(destination, rel_ack)
         } else {
             if tcp.get_acknowledgement() != 0 {
                 warn!(
-                    "EST/ packet without ACK (broken TCP implementation or attack) idx={}",
-                    pcap_index
+                    "EST/ packet without ACK (broken TCP implementation or attack) idx={pcap_index}"
                 );
                 // ignore segment
                 return None;
@@ -761,10 +754,7 @@ fn handle_overlap_first_last(peer: &mut TcpPeer, segment: &mut TcpSegment) {
     while let Some(next) = peer.segments.front() {
         if let Some(overlap_offset) = segment.overlap_offset(next) {
             let next_pcap_index = next.pcap_index;
-            warn!(
-                "segments overlaps next candidate (offset={})",
-                overlap_offset
-            );
+            warn!("segments overlaps next candidate (offset={overlap_offset})");
             trace!("segment idx={}", segment.pcap_index);
             // split segment at overlapping_offset
             let mut segment_right = segment.split_off(overlap_offset);
@@ -905,11 +895,11 @@ impl TcpStreamReassembly {
             .entry(flow.flow_id)
             .or_insert_with(|| TcpStream::new(flow));
         trace!("stream state: {:?}", stream.status);
-        trace!("to_server: {}", to_server);
+        trace!("to_server: {to_server}");
 
         // check time delay with previous packet before updating
         if stream.last_seen_ts > flow.last_seen {
-            info!("packet received in past of stream idx={}", pcap_index);
+            info!("packet received in past of stream idx={pcap_index}");
         } else if flow.last_seen - stream.last_seen_ts > self.timeout {
             warn!("TCP stream received packet after timeout");
             stream.expire();
@@ -950,14 +940,11 @@ impl TcpStreamReassembly {
     pub(crate) fn check_expired_connections(&mut self, now: Duration) {
         for (flow_id, stream) in self.m.iter_mut() {
             if now < stream.last_seen_ts {
-                warn!(
-                    "stream.last_seen_ts is in the future for flow id {:x}",
-                    flow_id
-                );
+                warn!("stream.last_seen_ts is in the future for flow id {flow_id:x}");
                 continue;
             }
             if now - stream.last_seen_ts > self.timeout {
-                warn!("TCP stream timeout reached for flow {:x}", flow_id);
+                warn!("TCP stream timeout reached for flow {flow_id:x}");
                 stream.expire();
             }
         }
@@ -969,7 +956,7 @@ pub(crate) fn finalize_tcp_streams(analyzer: &mut crate::analyzer::Analyzer) {
     for (flow_id, _stream) in analyzer.tcp_defrag.m.iter() {
         // TODO do we have anything to do?
         if let Some(flow) = analyzer.flows.get_flow(*flow_id) {
-            debug!("  flow: {:?}", flow);
+            debug!("  flow: {flow:?}");
         }
     }
     analyzer.tcp_defrag.m.clear();
@@ -997,7 +984,7 @@ fn debug_print_tcp_flags(tcp_flags: u8) {
             s += "A"
         }
         s += "]";
-        trace!("{}", s);
+        trace!("{s}");
     }
 }
 

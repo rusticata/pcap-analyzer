@@ -161,7 +161,7 @@ impl DefragEngine for IPDefragEngine {
             if (!more_fragments || f.next_is_complete) && f.next_offset.is_none() {
                 match self.ip_fragments.remove(&id) {
                     Some(f) => {
-                        warn!("defrag: done for id {}", id);
+                        warn!("defrag: done for id {id}");
                         return Fragment::Complete(f.buffer);
                     }
                     None => {

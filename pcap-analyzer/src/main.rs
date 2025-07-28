@@ -65,7 +65,7 @@ struct Args {
 }
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
-    debug!("Loading configuration {}", filename);
+    debug!("Loading configuration {filename}");
     let path = Path::new(&filename);
     let file = File::open(path)?;
     config.load_config(file)
@@ -79,7 +79,7 @@ fn main() -> io::Result<()> {
     // check if asked to list plugin builders
     if args.list_builders {
         println!("pcap-analyzer available plugin builders:");
-        factory.iter_builders(|name| println!("    {}", name));
+        factory.iter_builders(|name| println!("    {name}"));
         ::std::process::exit(0);
     }
     // load config
@@ -116,12 +116,12 @@ fn main() -> io::Result<()> {
 
     // instantiate all plugins
     let registry = if let Some(plugin_names) = args.plugins.as_ref() {
-        debug!("Restricting plugins to: {}", plugin_names);
+        debug!("Restricting plugins to: {plugin_names}");
         let names: Vec<_> = plugin_names.split(',').collect();
         factory
             .build_filter_plugins(
                 |n| {
-                    debug!("n: {}", n);
+                    debug!("n: {n}");
                     names.iter().any(|&x| n.contains(x))
                 },
                 &config,

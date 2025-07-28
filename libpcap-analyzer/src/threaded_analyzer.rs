@@ -49,7 +49,7 @@ impl ThreadedAnalyzer<'_> {
         let mut workers = Vec::new();
         let mut local_jobs = Vec::new();
         for idx in 0..n_workers {
-            let n = format!("worker {}", idx);
+            let n = format!("worker {idx}");
             let a = Analyzer::new(registry.clone(), config);
             let (sender, receiver) = unbounded();
             // NOTE: remove job queue from lifetime management, it must be made 'static
@@ -364,7 +364,7 @@ fn softrss_xor_fnv(data: &[u8], ethertype: EtherType, n_workers: usize) -> usize
 }
 
 fn worker(mut a: Analyzer, idx: usize, r: Receiver<Job>, barrier: Arc<Barrier>) {
-    debug!("worker thread {} starting", idx);
+    debug!("worker thread {idx} starting");
     let mut pcap_index = 0;
     let res = ::std::panic::catch_unwind(AssertUnwindSafe(|| loop {
         if let Ok(msg) = r.recv() {
@@ -379,21 +379,21 @@ fn worker(mut a: Analyzer, idx: usize, r: Receiver<Job>, barrier: Arc<Barrier>) 
                     pcap_index = ctx.pcap_index;
                     let span = span!(Level::DEBUG, "worker", pcap_index);
                     let _enter = span.enter();
-                    trace!("worker {}: got a job", idx);
+                    trace!("worker {idx}: got a job");
                     let h3_res = handle_l3(&packet, &ctx, data, ethertype, &mut a);
                     if h3_res.is_err() {
-                        warn!("thread {}: handle_l3 failed", idx);
+                        warn!("thread {idx}: handle_l3 failed");
                     }
                 }
                 Job::Wait => {
-                    trace!("worker {}: waiting at barrier", idx);
+                    trace!("worker {idx}: waiting at barrier");
                     barrier.wait();
                 }
             }
         }
     }));
     if let Err(panic) = res {
-        warn!("thread {} panicked (idx={})\n{:?}", idx, pcap_index, panic);
+        warn!("thread {idx} panicked (idx={pcap_index})\n{panic:?}");
         // match panic.downcast::<String>() {
         //     Ok(panic_msg) => {
         //         println!("panic happened: {}", panic_msg);

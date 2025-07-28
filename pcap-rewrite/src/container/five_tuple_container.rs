@@ -47,7 +47,7 @@ impl FiveTupleC {
                 })?;
                 let protocol_u8 = protocol_s
                     .parse()
-                    .map_err(|e| format!("Error parsing protocol: {}", e))?;
+                    .map_err(|e| format!("Error parsing protocol: {e}"))?;
 
                 let src_port_s: &str = record.get(3).ok_or_else(|| {
                     "Missing src port value in dispatch filter key file".to_string()

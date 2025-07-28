@@ -77,7 +77,7 @@ impl Plugin for TlsStats<'_> {
         let results = self.get_results_json();
         // save data to file
         for (name, stats) in results.as_object().unwrap() {
-            let filename = format!("{}.json", name);
+            let filename = format!("{name}.json");
             let file = output::create_file(path, &filename).or(Err("Cannot create output file"))?;
             serde_json::to_writer(file, stats).or(Err("Cannot save results to file"))?;
         }
