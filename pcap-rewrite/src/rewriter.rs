@@ -160,7 +160,7 @@ impl PcapAnalyzer for Rewriter {
             // run pre-analysis plugins
             for p in self.filters.iter_mut() {
                 if let Err(e) = p.pre_analyze(ctx, packet) {
-                    error!("Pre-analysis plugin returned fatal error {}", e);
+                    error!("Pre-analysis plugin returned fatal error {e}");
                     return Err(Error::Generic("Pre-analysis fatal error"));
                 }
             }
@@ -173,7 +173,7 @@ impl PcapAnalyzer for Rewriter {
             Ok(Verdict::Drop) => {
                 return Ok(());
             }
-            Err(e) => panic!("Filter fatal error: {}", e),
+            Err(e) => panic!("Filter fatal error: {e}"),
         };
         // convert data
         let (data, payload_length_offset) =
@@ -213,8 +213,7 @@ impl PcapAnalyzer for Rewriter {
             for filter in self.filters.iter_mut() {
                 if let Err(e) = filter.preanalysis_done() {
                     error!(
-                        "Pre-analysis filter returned fatal error in post preanalysis function {}",
-                        e
+                        "Pre-analysis filter returned fatal error in post preanalysis function {e}"
                     );
                     return Err(Error::Generic("pre-analysis pass failed"));
                 }

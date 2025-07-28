@@ -16,8 +16,7 @@ impl FilteringKey {
             "sipdp" => Ok(FilteringKey::SrcIpaddrProtoDstPort),
             "sdipsdp" => Ok(FilteringKey::SrcDstIpaddrProtoSrcDstPort),
             _ => Err(format!(
-                "Invalid string as input to build filtering criterion: {} not among si|di|sdi|sipdp|sdipsdp",
-                s
+                "Invalid string as input to build filtering criterion: {s} not among si|di|sdi|sipdp|sdipsdp"
             )),
         }
     }

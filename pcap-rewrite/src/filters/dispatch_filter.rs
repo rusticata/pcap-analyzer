@@ -121,7 +121,7 @@ impl DispatchFilterBuilder {
         match filtering_key {
             FilteringKey::SrcIpaddr => {
                 let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| io::Error::other(e.to_string()))?;
 
                 let keep: KeepFn<IpAddrC, IpAddr> = match filtering_action {
                     FilteringAction::Keep => Box::new(|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr))),
@@ -139,7 +139,7 @@ impl DispatchFilterBuilder {
             }
             FilteringKey::DstIpaddr => {
                 let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| io::Error::other(e.to_string()))?;
 
                 let keep: KeepFn<IpAddrC, IpAddr> = match filtering_action {
                     FilteringAction::Keep => Box::new(|c: &IpAddrC, ipaddr| Ok(c.contains(ipaddr))),
@@ -157,7 +157,7 @@ impl DispatchFilterBuilder {
             }
             FilteringKey::SrcDstIpaddr => {
                 let ipaddr_container = IpAddrC::of_file_path(Path::new(key_file_path))
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| io::Error::other(e.to_string()))?;
 
                 let keep: KeepFn<IpAddrC, IpAddrPair> = match filtering_action {
                     FilteringAction::Keep => Box::new(|c, ipaddr_pair| {
@@ -178,7 +178,7 @@ impl DispatchFilterBuilder {
             FilteringKey::SrcIpaddrProtoDstPort => {
                 let ipaddr_proto_port_container =
                     IpAddrProtoPortC::of_file_path(Path::new(key_file_path))
-                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                        .map_err(|e| io::Error::other(e.to_string()))?;
 
                 let keep: KeepFn<IpAddrProtoPortC, Option<IpAddrProtoPort>> = match filtering_action
                 {
@@ -203,7 +203,7 @@ impl DispatchFilterBuilder {
             }
             FilteringKey::SrcDstIpaddrProtoSrcDstPort => {
                 let five_tuple_container = FiveTupleC::of_file_path(Path::new(key_file_path))
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| io::Error::other(e.to_string()))?;
 
                 let keep: KeepFn<FiveTupleC, Option<FiveTuple>> = match filtering_action {
                     FilteringAction::Keep => Box::new(|c, five_tuple_option| {

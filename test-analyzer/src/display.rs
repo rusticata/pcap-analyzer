@@ -86,10 +86,10 @@ pub fn display_json_rusticata(any: Box<dyn Any>) {
     info!("Rusticata:");
     if let Some(map) = results.as_object() {
         for (flow_id, m) in map {
-            info!("  Flow {}:", flow_id);
+            info!("  Flow {flow_id}:");
             let m = m.as_object().unwrap();
             for (k, v) in m {
-                info!("    {}: {}", k, v);
+                info!("    {k}: {v}");
             }
         }
     }
@@ -100,7 +100,7 @@ pub fn display_json_tlsstats(any: Box<dyn Any>) {
     info!("TLS Stats:");
     if let Some(map) = results.as_object() {
         for (k, v) in map {
-            info!("  {}: {}", k, v);
+            info!("  {k}: {v}");
         }
     }
 }

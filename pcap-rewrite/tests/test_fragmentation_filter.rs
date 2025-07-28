@@ -24,7 +24,7 @@ fn count_packet_in_trace(trace_file_path: &Path) -> u32 {
             count
         }
     } else {
-        panic!("{:#?} does not exists!", trace_file_path)
+        panic!("{trace_file_path:#?} does not exists!")
     }
 }
 
@@ -44,8 +44,7 @@ fn generic_test(
     let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap();
     cmd.arg("-f")
         .arg(format!(
-            "Fragmentation:{}%{}",
-            filtering_key_s, filtering_action_s
+            "Fragmentation:{filtering_key_s}%{filtering_action_s}"
         ))
         .arg(&trace_input_file_path)
         .arg(&trace_output_file_path);
