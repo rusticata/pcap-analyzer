@@ -8,51 +8,56 @@ rust-version = "1.74"
 description = "Pcap Analysis Library (main library)"
 categories = ["network-programming"]
 
-keywords    = ["pcap", "network", "tools"]
-readme      = "../README.md"
-license     = "MIT/Apache-2.0"
+keywords = ["pcap", "network", "tools"]
+readme = "../README.md"
+license = "MIT/Apache-2.0"
 
-repository    = "https://github.com/rusticata/pcap-analyzer.git"
-homepage      = "https://github.com/rusticata/pcap-analyzer"
+repository = "https://github.com/rusticata/pcap-analyzer.git"
+homepage = "https://github.com/rusticata/pcap-analyzer"
 
 [badges]
-travis-ci                         = { repository = "rusticata/pcap-analyzer" }
-is-it-maintained-open-issues      = { repository = "rusticata/pcap-analyzer" }
-maintenance                       = { status     = "actively-developed" }
+travis-ci = { repository = "rusticata/pcap-analyzer" }
+is-it-maintained-open-issues = { repository = "rusticata/pcap-analyzer" }
+maintenance = { status = "actively-developed" }
 
 [features]
 default = ["release"]
-release = ["plugin_community_id", "plugin_ospf", "plugin_rusticata", "plugin_tls_stats"]
+release = [
+    "plugin_community_id",
+    "plugin_ospf",
+    "plugin_rusticata",
+    "plugin_tls_stats",
+]
 all = ["release", "plugins_debug", "plugin_examples"]
 plugin_community_id = ["sha1", "base16ct", "base64ct"]
 plugins_debug = []
 plugin_examples = []
 plugin_ospf = ["ospf-parser"]
 plugin_rusticata = ["rusticata"]
-plugin_tls_stats = ["rusticata","tls-parser"]
+plugin_tls_stats = ["rusticata", "tls-parser"]
 
 [dependencies]
-base16ct = { version="0.2", features=["alloc"], optional=true }
-base64ct = { version="=1.6", features=["alloc"], optional=true }
+base16ct = { version = "0.2", features = ["alloc"], optional = true }
+base64ct = { version = "=1.6", features = ["alloc"], optional = true }
 crossbeam-channel = "0.5"
 fnv = "1.0"
-indexmap = { version="2.2", features=["serde"] }
+indexmap = { version = "2.2", features = ["serde"] }
 lazy_static = "1.2"
-libpcap-tools = { path="../libpcap-tools" }
+libpcap-tools = { path = "../libpcap-tools" }
 log = "0.4"
 multimap = "0.10"
 num_cpus = "1.10"
-ospf-parser = { version="0.5", optional=true }
+ospf-parser = { version = "0.5", optional = true }
 pnet_base = "0.35"
 pnet_macros_support = "0.35"
 pnet_packet = "0.35"
-rand="0.9"
+rand = "0.9"
 rand_chacha = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sha1 = { version="0.10", features=["std"], optional=true }
-tls-parser = { version="0.12", optional=true }
-tracing = { version="0.1", features=["log"] }
+sha1 = { version = "0.10", features = ["std"], optional = true }
+tls-parser = { version = "0.12", optional = true }
+tracing = { workspace = true }
 
 [dependencies.rusticata]
 # path = "../../rusticata"
