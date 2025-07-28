@@ -46,7 +46,7 @@ struct Args {
 }
 
 fn load_config(config: &mut Config, filename: &str) -> Result<(), io::Error> {
-    debug!("Loading configuration {}", filename);
+    debug!("Loading configuration {filename}");
     let path = Path::new(&filename);
     let file = File::open(path)?;
     config.load_config(file)
@@ -83,12 +83,12 @@ fn main() -> Result<(), io::Error> {
     config.set("num_threads", args.jobs);
 
     let registry = if let Some(plugin_names) = args.plugins {
-        debug!("Restricting plugins to: {}", plugin_names);
+        debug!("Restricting plugins to: {plugin_names}");
         let names: Vec<_> = plugin_names.split(',').collect();
         factory
             .build_filter_plugins(
                 |n| {
-                    debug!("n: {}", n);
+                    debug!("n: {n}");
                     names.iter().any(|&x| n.contains(x))
                 },
                 &config,
@@ -115,7 +115,7 @@ fn main() -> Result<(), io::Error> {
             if t & PLUGIN_L4 != 0 {
                 s += "  L4";
             }
-            debug!("{}", s);
+            debug!("{s}");
             let mut s = "    events: ".to_owned();
             if t & PLUGIN_FLOW_NEW != 0 {
                 s += "  FLOW_NEW";
@@ -123,7 +123,7 @@ fn main() -> Result<(), io::Error> {
             if t & PLUGIN_FLOW_DEL != 0 {
                 s += "  FLOW_DEL";
             }
-            debug!("{}", s);
+            debug!("{s}");
         },
     );
 

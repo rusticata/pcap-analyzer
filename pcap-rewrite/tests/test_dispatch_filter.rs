@@ -24,7 +24,7 @@ fn count_packet_in_trace(trace_file_path: &Path) -> u32 {
             count
         }
     } else {
-        panic!("{:#?} does not exists!", trace_file_path)
+        panic!("{trace_file_path:#?} does not exists!")
     }
 }
 

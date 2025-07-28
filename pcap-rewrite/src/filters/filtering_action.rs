@@ -10,8 +10,7 @@ impl FilteringAction {
             "k" => Ok(FilteringAction::Keep),
             "d" => Ok(FilteringAction::Drop),
             _ => Err(format!(
-                "Invalid string as input to build filtering mode: {} not among k|d",
-                s
+                "Invalid string as input to build filtering mode: {s} not among k|d"
             )),
         }
     }
