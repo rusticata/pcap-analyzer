@@ -27,6 +27,8 @@ jobs:
           toolchain: ${{ matrix.rust }}
       - name: Cargo update
         run: cargo update
+      - name: Install libpcap-dev
+        run: sudo apt install -y libpcap-dev
       - run: RUSTFLAGS="-D warnings" cargo check --all-targets ${{ matrix.features }}
 
   test:
@@ -41,6 +43,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Install libpcap-dev
+        run: sudo apt install -y libpcap-dev
       - run: cargo test ${{ matrix.features }}
 
   fmt:
@@ -61,6 +65,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
+      - name: Install libpcap-dev
+        run: sudo apt install -y libpcap-dev
       - run: cargo clippy -- -D warnings
       - run: cargo clippy --all-features -- -D warnings
       - run: cargo clippy --no-default-features -- -D warnings
