@@ -132,7 +132,7 @@ fn main() -> Result<(), io::Error> {
     //     _ => Box::new(ThreadedAnalyzer::new(registry, &config)),
     // };
 
-    let mut input_reader: Box<dyn io::Read> = if input_filename == "-" {
+    let mut input_reader: Box<dyn io::Read + Send> = if input_filename == "-" {
         Box::new(io::stdin())
     } else {
         let path = Path::new(&input_filename);
@@ -144,7 +144,7 @@ fn main() -> Result<(), io::Error> {
         } else if input_filename.ends_with(".lz4") {
             Box::new(lz4::Decoder::new(file)?)
         } else {
-            Box::new(file) as Box<dyn io::Read>
+            Box::new(file) as Box<dyn io::Read + Send>
         }
     };
 

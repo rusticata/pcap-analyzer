@@ -148,8 +148,8 @@ impl SectionInfo {
     }
 }
 
-fn open_file(name: &str) -> Result<Box<dyn io::Read>, io::Error> {
-    let input_reader: Box<dyn io::Read> = if name == "-" {
+fn open_file(name: &str) -> Result<Box<dyn io::Read + Send>, io::Error> {
+    let input_reader: Box<dyn io::Read + Send> = if name == "-" {
         Box::new(io::stdin())
     } else {
         let path = Path::new(&name);

@@ -70,8 +70,8 @@ pub fn pcapng_build_interface<'a>(
             _ => (),
         }
         match opt.as_bytes() {
-            Some(value) => options.push((opt.code, value.to_vec())),
-            None => warn!("Option with code {} has invalid value", opt.code),
+            Ok(value) => options.push((opt.code, value.to_vec())),
+            Err(_) => warn!("Option with code {} has invalid value", opt.code),
         }
     }
     InterfaceInfo {
