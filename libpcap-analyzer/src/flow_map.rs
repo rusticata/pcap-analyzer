@@ -18,7 +18,7 @@ pub struct FlowMap {
 impl Default for FlowMap {
     fn default() -> Self {
         FlowMap {
-            trng: ChaChaRng::from_rng(rand::thread_rng()).unwrap(),
+            trng: ChaChaRng::from_rng(&mut rand::rng()),
             flows: FnvHashMap::default(),
             flows_id: HashMap::new(),
         }
@@ -61,7 +61,7 @@ impl FlowMap {
             return id;
         }
         // get a new flow index (XXX currently: random number)
-        let id = self.trng.gen();
+        let id = self.trng.random();
         trace!("Inserting new flow (id=0x{id:x})");
         trace!("    flow: {flow:?}");
         self.flows.insert(id, flow);
