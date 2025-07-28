@@ -527,6 +527,15 @@ fn queue_segment(peer: &mut TcpPeer, segment: TcpSegment) {
     if segment.data.is_empty() && segment.flags & TcpFlags::FIN == 0 {
         return;
     }
+
+    if segment.rel_seq < peer.next_rel_seq {
+        warn!(
+            "Segment with rel_seq {} is too old (next_rel_seq={})",
+            segment.rel_seq, peer.next_rel_seq
+        );
+        return;
+    }
+
     // // DEBUG
     // for (n, s) in peer.segments.iter().enumerate() {
     //     debug!(
