@@ -17,6 +17,9 @@ jobs:
           - stable
           - 1.74.0
           - nightly
+        features:
+          - --features=default
+          - --all-features
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -24,7 +27,7 @@ jobs:
           toolchain: ${{ matrix.rust }}
       - name: Cargo update
         run: cargo update
-      - run: RUSTFLAGS="-D warnings" cargo check --all-targets
+      - run: RUSTFLAGS="-D warnings" cargo check --all-targets ${{ matrix.features }}
 
   test:
     name: Test Suite
