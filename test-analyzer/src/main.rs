@@ -54,6 +54,11 @@ struct Args {
     #[arg(short, long, default_value_t = 0)]
     skip: u32,
 
+    #[cfg(feature = "live")]
+    /// Filter used to match packets
+    #[arg(short, long)]
+    filter: Option<String>,
+
     /// Input
     #[clap(flatten)]
     input_group: InputGroup,
@@ -184,6 +189,11 @@ fn main() -> Result<(), io::Error> {
 
             let mut engine =
                 create_engine_live(&interface_name, &config).map_err(io::Error::other)?;
+
+            if let Some(filter) = args.filter.as_ref() {
+                engine.set_filter(filter).map_err(io::Error::other)?;
+            }
+
             let running = Arc::new(AtomicBool::new(true));
             let r = running.clone();
             ctrlc::set_handler(move || {
