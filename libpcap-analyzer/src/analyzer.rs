@@ -844,10 +844,10 @@ fn handle_l4_gre(
 
     let next_proto = gre.get_protocol_type();
     // XXX can panic: 'Source routed GRE packets not supported' in gre_routing_length()
-    // if gre.get_routing_present() != 1 {
-    //     warn!("Source routed GRE packets not supported");
-    //     return Ok(());
-    // }
+    if gre.get_routing_present() != 0 {
+        warn!("Source routed GRE packets not supported");
+        return Ok(());
+    }
     let data = if next_proto == 0x880b {
         // PPTP GRE is slightly different, and pnet_packet offset is wrong
         // See https://en.wikipedia.org/wiki/Generic_Routing_Encapsulation
