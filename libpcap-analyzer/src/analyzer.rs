@@ -64,6 +64,7 @@ pub struct Analyzer {
 
     defrag_count: usize,
     do_checksums: bool,
+    tolerate_truncation: bool,
     skip_index: usize,
     output_dir: Option<String>,
 }
@@ -71,6 +72,7 @@ pub struct Analyzer {
 impl Analyzer {
     pub fn new(registry: Arc<PluginRegistry>, config: &Config) -> Analyzer {
         let do_checksums = config.get_bool("do_checksums").unwrap_or(true);
+        let tolerate_truncation = config.get_bool("populate_payloads").unwrap_or(false);
         let skip_index = config.get_usize("skip_index").unwrap_or(0);
         if skip_index > 0 {
             debug!("Will skip to index {skip_index}");
@@ -84,6 +86,7 @@ impl Analyzer {
             tcp_defrag: TcpStreamReassembly::default(),
             defrag_count: 0,
             do_checksums,
+            tolerate_truncation,
             skip_index,
             output_dir,
         }
@@ -205,22 +208,38 @@ pub(crate) fn handle_l3(
         return Ok(());
     }
 
+    let b_data = if analyzer.tolerate_truncation && packet.is_truncated() {
+        trace!(
+            " packet.origlen: {}, packet.caplen: {}",
+            packet.origlen,
+            packet.caplen
+        );
+        const HOLE_CHAR: u8 = b'.';
+        let data_extension = vec![HOLE_CHAR; (packet.origlen - packet.caplen) as usize];
+        let r = vec![data, &data_extension].concat();
+        trace!("handle_l3: new data len: {}", r.len());
+        r
+    } else {
+        let r = data.to_vec();
+        r
+    };
+
     // see https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
     match ethertype {
         // Transparent Ethernet Bridging (RFC 1701)
-        EtherType(0x6558) => handle_l2(packet, ctx, data, analyzer),
-        EtherTypes::Ipv4 => handle_l3_ipv4(packet, ctx, data, analyzer),
-        EtherTypes::Ipv6 => handle_l3_ipv6(packet, ctx, data, analyzer),
-        EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, data, analyzer),
+        EtherType(0x6558) => handle_l2(packet, ctx, &b_data, analyzer),
+        EtherTypes::Ipv4 => handle_l3_ipv4(packet, ctx, &b_data, analyzer),
+        EtherTypes::Ipv6 => handle_l3_ipv6(packet, ctx, &b_data, analyzer),
+        EtherTypes::Vlan => handle_l3_vlan_801q(packet, ctx, &b_data, analyzer),
         // ignore ARP packets
         EtherTypes::Arp => Ok(()),
         // 0x880b: PPP (rfc7042)
-        EtherType(0x880b) => handle_l3_ppp(packet, ctx, data, analyzer),
+        EtherType(0x880b) => handle_l3_ppp(packet, ctx, &b_data, analyzer),
         // 0x8847: MPLS (RFC5332)
         // 0x8848: MPLS with upstream-assigned label (RFC5332)
-        EtherTypes::Mpls | EtherTypes::MplsMcast => handle_l3_mpls(packet, ctx, data, analyzer),
-        EtherType(0x88be) => handle_l3_erspan(packet, ctx, data, analyzer),
-        EtherTypes::PppoeSession => handle_l3_pppoesession(packet, ctx, data, analyzer),
+        EtherTypes::Mpls | EtherTypes::MplsMcast => handle_l3_mpls(packet, ctx, &b_data, analyzer),
+        EtherType(0x88be) => handle_l3_erspan(packet, ctx, &b_data, analyzer),
+        EtherTypes::PppoeSession => handle_l3_pppoesession(packet, ctx, &b_data, analyzer),
 
         e => {
             warn!(
@@ -359,7 +378,18 @@ fn handle_l3_ipv6(
     analyzer: &mut Analyzer,
 ) -> Result<(), Error> {
     trace!("handle_l3_ipv6 (idx={})", ctx.pcap_index);
-    let ipv6 = Ipv6Packet::new(data).ok_or("Could not build IPv6 packet from data")?;
+    let ipv6_packet = Ipv6Packet::new(data);
+    let ipv6 = match ipv6_packet {
+        Some(p) => Ok(p),
+        None => {
+            if analyzer.tolerate_truncation && packet.is_truncated() {
+                warn!(" skipping ipv6 packet because probably not enough data");
+                return Ok(());
+            } else {
+                Err("Could not build IPv6 packet from data")
+            }
+        }
+    }?;
 
     let mut payload = ipv6.payload();
     let mut l4_proto = ipv6.get_next_header();
@@ -581,7 +611,18 @@ fn handle_l4_tcp(
 ) -> Result<(), Error> {
     trace!("handle_l4_tcp (idx={})", ctx.pcap_index);
     trace!("    l4_data len: {}", l4_data.len());
-    let tcp = TcpPacket::new(l4_data).ok_or("Could not build TCP packet from data")?;
+    let tcp_packet = TcpPacket::new(l4_data);
+    let tcp = match tcp_packet {
+        Some(p) => Ok(p),
+        None => {
+            if analyzer.tolerate_truncation && packet.is_truncated() {
+                warn!(" skipping tcp packet because probably not enough data");
+                return Ok(());
+            } else {
+                Err("Could not build TCP packet from data")
+            }
+        }
+    }?;
 
     let src_port = tcp.get_source();
     let dst_port = tcp.get_destination();
@@ -840,7 +881,18 @@ fn handle_l4_gre(
     trace!("handle_l4_gre (idx={})", ctx.pcap_index);
     let l3_data = data;
 
-    let gre = GrePacket::new(l3_data).ok_or("Could not build GRE packet from data")?;
+    let gre_packet = GrePacket::new(l3_data);
+    let gre = match gre_packet {
+        Some(p) => Ok(p),
+        None => {
+            if analyzer.tolerate_truncation && packet.is_truncated() {
+                warn!(" skipping gre packet because probably not enough data");
+                return Ok(());
+            } else {
+                Err("Could not build GRE packet from data")
+            }
+        }
+    }?;
 
     let next_proto = gre.get_protocol_type();
     // XXX can panic: 'Source routed GRE packets not supported' in gre_routing_length()
