@@ -11,3 +11,9 @@ pub struct Packet<'a> {
     pub origlen: u32,
     pub pcap_index: usize,
 }
+
+impl<'a> Packet<'a> {
+    pub fn is_truncated(&self) -> bool {
+        self.origlen > self.caplen
+    }
+}
