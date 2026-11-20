@@ -283,6 +283,19 @@ fn handle_l3_ipv4(
     // eprintln!("ABORT pkt {:?}", ipv4);
     let orig_len = data.len();
 
+    let ip_len = ipv4.get_total_length() as usize;
+
+    // remove padding
+    let (data, ipv4) = {
+        if ip_len < data.len() && ip_len > 0 {
+            let d = &data[..ip_len];
+            let ipv4 = Ipv4Packet::new(d).ok_or("Could not build IPv4 packet from data")?;
+            (d, ipv4)
+        } else {
+            (data, ipv4)
+        }
+    };
+
     let payload = extract_payload_l3_ipv4(ctx, &ipv4)?;
 
     let l4_proto = ipv4.get_next_level_protocol().0;
